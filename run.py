@@ -57,11 +57,36 @@ def runSubject (bids_dir, label, output_prefix):
   lib.app.makeTempDir()
 
   # Need to perform an initial import of JSON data using mrconvert; so let's grab the diffusion gradient table as well
+  # If no bvec/bval present, need to go down the directory listing
+  # Only try to import JSON file if it's actually present
+  grad_prefix = os.path.join(bids_dir, label, 'dwi', label + '_dwi'
+  if os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec'):
+    grad_prefix = os.path.join(bids_dir, 'dwi')
+    if not (os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec')):
+      errorMessage('Unable to locate valid diffusion gradient table');
+  grad_import_option = ' -fslgrad ' + grad_prefix + '.bvec ' + grad_prefix + '.bval'
+  json_path = os.path.join(bids_dir, label, 'dwi', label + '_dwi.json')
+  if os.path.isfile(json_path):
+    json_import_option = ' -json_import ' + json_path
+  else:
+    json_import_option = ''
   runCommand('mrconvert ' + os.path.join(bids_dir, label, 'dwi', label + '_dwi.nii.gz')
-             + ' -fslgrad ' + os.path.join(bids_dir, label, 'dwi', label + '_dwi.bvec') + ' '
-             + os.path.join(bids_dir, label, 'dwi', label + '_dwi.bval')
-             + ' -json ' + os.path.join(bids_dir, label, 'dwi', label + '_dwi.json') + ' '
-             + os.path.join(lib.app.tempDir, 'input.mif'))
+             + grad_import_option + json_import_option
+             + ' ' + os.path.join(lib.app.tempDir, 'input.mif'))
+  
+  # Go hunting for reversed phase-encode data
+  # TODO Should ideally have compatibility with fieldmap data also
+  fmap_dir = os.path.join(bids_dir, label, 'fmap')
+  if not os.path.isdir(fmap_dir):
+    errorMessage('Subject does not possess fmap data necessary for EPI distortion correction')
+  fmap_index = 0;
+  while (1):
+    prefix = os.path.join(fmap_dir, label + '_dir-' + str(fmap_index))
+    if os.path.isfile(prefix + '.nii.gz') and os.path.isfile(prefix + '.json'):
+      runCommand('mrconvert ' + prefix + '.nii.gz -json_import ' + prefix + '.json ' + os.path.join(lib.app.tempDir, 'RPE' + str(fmap_index) + '.mif'))
+    else:
+      break
+    fmap_index += 1
 
   runCommand('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' + os.path.join(lib.app.tempDir, 'T1.mif'))
   
@@ -74,6 +99,24 @@ def runSubject (bids_dir, label, output_prefix):
   
   # Step 2: Distortion correction
   # TODO Need to assess presence of reversed phase-encoding data and act accordingly
+  
+  if fmap_index < 2:
+    errorMessage('Inadequate number of images in fmap directory for inhomogeneity estimation')
+  dwi_pe = getHeaderProperty('dwi_denoised.mif', 'PhaseEncodingDirection')
+  if not dwi_pe:
+    errorMessage('Phase encoding direction of DWI not defined')
+  fmap_pe = [ ]
+  for index in range(0, fmap_index):
+    pe = getHeaderProperty('RPE' + str(index) + 'mif', 'PhaseEncodingDirection')
+    if not pe:
+      errorMessage('Field mapping images do not all contain phase encoding information')
+    pe = getPEDir(pe)
+    if not getPEDir(dwi_pe)[0] == pe[0]:
+      errorMessage('Non-collinear phase encoding directions not currently supported')
+    fmap_pe.append(pe)
+  # Need to detect 'RPE*' volumes with equivalent phase-encoding directions, and concatenate them
+  # Either that, or start working on the dwipreproc interface...
+  
   runCommand('dwipreproc dwi_denoised.mif dwi_denoised_preprocessed.mif')
   delFile('dwi_denoised.mif')
     
@@ -239,6 +282,9 @@ if lib.app.args.participant_label:
   subjects_to_analyze = [ 'sub-' + i for i in index_list ]
   for dir in subjects_to_analyze:
     if not os.path.isdir(os.path.join(lib.app.args.bids_dir, dir)):
+      print (os.cwd)
+      print (lib.app.args.bids_dir)
+      print (dir)
       errorMessage('Unable to find directory for subject: ' + dir)
 # Run all subjects sequentially
 else:
@@ -369,7 +415,6 @@ elif lib.app.args.analysis_level == "group":
       for line in connectome:
         f.write( ','.join([ v*global_multiplier for v in line ]) )
       
-  # TODO
   # Third group-level calculation: Perform statistical analysis of connectomes using NBS-TFCE
   # Can't do this without opening the root-directory dataset description file and selecting a contrast to test
   
