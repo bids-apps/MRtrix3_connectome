@@ -28,7 +28,7 @@ ENV CXX=/usr/bin/g++-5
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout stanford && python configure -nogui -verbose && python build
 
 # Acquire script to be executed
-RUN wget -O- https://raw.githubusercontent.com/BIDS-Apps/MRtrix3_connectome/master/run.py /run.py
+RUN cd ../ && wget https://raw.githubusercontent.com/BIDS-Apps/MRtrix3_connectome/master/run.py
 
 # Setup environment variables 
 ENV FREESURFER_HOME=/opt/freesurfer
