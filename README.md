@@ -7,9 +7,9 @@ Experiencing problems? You can post a message on the [*MRtrix3* community forum]
 ### Acknowledgement
 When using this pipeline, please use the following snippet to acknowledge the relevant work (amend as appropriate depending on options used):
 
-```
 Structural connectomes were generated using tools provided in the MRtrix3 software package (http://mrtrix.org). This included: DWI denoising (Veraart et al., 2016), pre-processing (Andersson et al., 2003; Andersson and Sotiropoulos, 2015) and bias field correction (Tustison et al., 2010); inter-modal registration (Bhushan et al., 2015); T1 tissue segmentation (Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography (Tournier et al., 2010) utilizing ACT (Smith et al., 2012) and dynamic seeding (Smith et al., 2015); SIFT2 (Smith et al., 2015); T1 parcellation (Dale et al., 1999; Desikan et al., 2006 OR Destrieux et al., 2010); robust structural connectome construction (Yeh et al., 2016).
 
+```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
 Andersson, J. L. & Sotiropoulos, S. N. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage, 2015, 125, 1063-1078
 Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280
@@ -30,6 +30,81 @@ Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidde
 ```
 
 
+### Usage
+
+Command-line usage of the processing script `run.py` is as follows (also accessible by running the script without any command-line options):
+
+```
+run.py
+======
+
+Synopsis
+--------
+
+::
+
+    run.py [ options ] bids_dir output_dir analysis_level
+
+-  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
+-  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
+-  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
+
+Description
+-----------
+
+Generate subject connectomes from raw image data, perform inter-subject connection density normalisation, and perform statistical inference across subjects
+
+Options
+-------
+
+Options for setting up the connectome reconstruction
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- **-parc** The choice of connectome parcellation scheme. Options are: fs_2005, fs_2009
+
+Options specific to the batch processing of subject data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- **--participant_label** The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a comma-separated list.
+
+Standard options
+^^^^^^^^^^^^^^^^
+
+- **-continue <TempDir> <LastFile>** Continue the script from a previous execution; must provide the temporary directory path, and the name of the last successfully-generated file
+
+- **-force** Force overwrite of output files if pre-existing
+
+- **-help** Display help information for the script
+
+- **-nocleanup** Do not delete temporary files during script, or temporary directory at script completion
+
+- **-nthreads number** Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
+
+- **-tempdir /path/to/tmp/** Manually specify the path in which to generate the temporary directory
+
+- **-quiet** Suppress all console output during script execution
+
+- **-verbose** Display additional information for every command invoked
+
+--------------
+
+
+
+**Author:** Robert E. Smith (robert.smith@florey.edu.au)
+
+**Copyright:** Copyright (c) 2008-2016 the MRtrix3 contributors
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/
+
+MRtrix is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+For more details, see www.mrtrix.org
+```
+
 ### Instructions
 
 *** WARNING: Incomplete ***
@@ -41,10 +116,22 @@ In your terminal, type:
 $ docker pull bids/mrtrix3_connectome
 ```
 
-I can start my container with:
-```{bash}
-$ docker run -ti /* ? */
+To run the script in participant level mode (for processing one subject only), use e.g.:
+
 ```
-```{bash}
-docker run -ti --name connectome_test -v ./data:${HOME}/data bids/mrtrix3_connectome ${HOME}/data/ ${HOME}/data/outputs participant -p 01 -b mybucket -r path/on/bucket/
+docker run -i --rm \
+    -v /Users/yourname/data/ds005:/bids_dataset \
+    -v /Users/yourname/outputs:/outputs \
+    bids/example \
+    /bids_dataset /outputs participant --participant_label 01 -parc fs_2005
+```
+
+After doing this for all subjects (potentially in parallel), the group level analysis can be run:
+
+```
+docker run -i --rm \
+    -v /Users/yourname/data/ds005:/bids_dataset \
+    -v /Users/yourname/outputs:/outputs \
+    bids/example \
+    /bids_dataset /outputs group
 ```
