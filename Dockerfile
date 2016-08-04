@@ -37,12 +37,16 @@ ENV FSLOUTPUTTYPE=NIFTI_GZ
 ENV FSLMULTIFILEQUIT=TRUE
 ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
 ENV PATH=/opt/freesurfer/bin:/usr/lib/fsl/5.0:/usr/lib/ants:/mrtrix3/release/bin:/mrtrix3/scripts:$PATH
-ENV PYTHONPATH=/mrtrix3/scripts:$PYTHONPATH
+ENV PYTHONPATH=/mrtrix3/scripts
 
 # Copied from another dockerfile; not sure...
 RUN mkdir /oasis
 RUN mkdir /projects
 RUN mkdir /scratch
 RUN mkdir /local-scratch
+
+# Target mount points
+RUN mkdir /bids_dataset
+RUN mkdir /outputs
 
 ENTRYPOINT ["/run.py"]
