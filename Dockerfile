@@ -47,6 +47,7 @@ RUN apt-get update && \
 RUN npm install -g bids-validator
 
 # Acquire script to be executed
-COPY run.py /run.py && chmod 775 /run.py
+COPY run.py /run.py
+RUN chmod 775 /run.py
 
 ENTRYPOINT ["/run.py"]
