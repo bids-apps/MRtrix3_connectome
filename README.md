@@ -53,7 +53,7 @@ Generate subject connectomes from raw image data, perform inter-subject connecti
 
 #### Options specific to the batch processing of subject data
 
-+ **---participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a comma-separated list.
++ **---participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space list.
 
 #### Standard options
 
@@ -65,7 +65,7 @@ Generate subject connectomes from raw image data, perform inter-subject connecti
 
 + **--nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
 
-+ **--nthreads number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
++ **--n_cpus number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
 
 + **--tempdir /path/to/tmp/**<br>Manually specify the path in which to generate the temporary directory
 
