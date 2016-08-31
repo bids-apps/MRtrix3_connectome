@@ -27,9 +27,6 @@ RUN echo $'fsa@brain.org.au\n13477\n*CCll67nWRT9.\n' > /opt/freesurfer/license
 ENV CXX=/usr/bin/g++-5
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout stanford && python configure -nogui -verbose && python build
 
-# Acquire script to be executed
-RUN cd ../ && wget https://raw.githubusercontent.com/BIDS-Apps/MRtrix3_connectome/master/run.py && chmod 775 run.py
-
 # Setup environment variables
 ENV FREESURFER_HOME=/opt/freesurfer
 ENV FSLDIR=/usr/share/fsl/5.0
@@ -38,5 +35,18 @@ ENV FSLMULTIFILEQUIT=TRUE
 ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
 ENV PATH=/opt/freesurfer/bin:/usr/lib/fsl/5.0:/usr/lib/ants:/mrtrix3/release/bin:/mrtrix3/scripts:$PATH
 ENV PYTHONPATH=/mrtrix3/scripts
+
+## Install the validator
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -sL https://deb.nodesource.com/setup_4.x | bash - && \
+    apt-get remove -y curl && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+RUN npm install -g bids-validator
+
+# Acquire script to be executed
+COPY run.py /run.py && chmod 775 /run.py
 
 ENTRYPOINT ["/run.py"]

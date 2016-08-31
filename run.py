@@ -274,6 +274,8 @@ lib.app.initialise()
 if isWindows():
   errorMessage('Script cannot be run on Windows due to FSL dependency')
 
+runCommand('bids-validator ' + lib.app.args.bids_dir)
+
 subjects_to_analyze = [ ]
 # Only run a subset of subjects
 if lib.app.args.participant_label:
