@@ -1,0 +1,41 @@
+general:
+  artifacts:
+    - "~/outputs1"
+    - "~/outputs2"
+machine:
+  services:
+    - docker #don't use 1.10 - caching is broken
+
+dependencies:
+  cache_directories:
+    - "~/docker"
+    - "~/data"
+
+  override:
+    - if [[ ! -d ~/data/ds114_test1 ]]; then wget -c -P ${HOME}/downloads/ "https://googledrive.com/host/0B2JWN60ZLkgkMEw4bW5VUUpSdFU/ds114_test1.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/ds114_test1.tar -C ${HOME}/data; fi
+    - if [[ ! -d ~/data/ds114_test2 ]]; then wget -c -P ${HOME}/downloads/ "https://googledrive.com/host/0B2JWN60ZLkgkMEw4bW5VUUpSdFU/ds114_test2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/ds114_test2.tar -C ${HOME}/data; fi
+    - if [[ -e ~/docker/image.tar ]]; then docker load -i ~/docker/image.tar; fi
+    - docker build -t bids/${CIRCLE_PROJECT_REPONAME,,} . :
+        timeout: 21600
+    - mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
+    - mkdir -p ${HOME}/outputs
+
+test:
+  override:
+    - docker run -ti --rm -v ${HOME}/data/ds114_test1:/bids_dataset -v ${HOME}/outputs1:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --participant_label 01 :
+        timeout: 21600
+    - docker run -ti --rm -v ${HOME}/data/ds114_test1:/bids_dataset -v ${HOME}/outputs1:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --participant_label 02 :
+        timeout: 21600
+    - docker run -ti --rm -v ${HOME}/data/ds114_test1:/bids_dataset -v ${HOME}/outputs1:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group :
+        timeout: 21600
+    - docker run -ti --rm -v ${HOME}/data/ds114_test2:/bids_dataset -v ${HOME}/outputs2:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --participant_label 01 :
+        timeout: 21600
+    - docker run -ti --rm -v ${HOME}/data/ds114_test2:/bids_dataset -v ${HOME}/outputs2:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --participant_label 02 :
+        timeout: 21600
+    - docker run -ti --rm -v ${HOME}/data/ds114_test2:/bids_dataset -v ${HOME}/outputs2:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group :
+        timeout: 21600
+#deployment:
+#  hub:
+#    branch: master
+#    commands:
+#      - if [[ -n "$DOCKER_PASS" ]]; then docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS && docker push $DOCKER_REPO; fi
