@@ -29,19 +29,11 @@ Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. Correction for di
 Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57
 ```
 
-
 ### Usage
 
 Command-line usage of the processing script `run.py` is as follows (also accessible by running the script without any command-line options):
 
-```
-run.py
-======
-
-Synopsis
---------
-
-::
+#### Synopsis
 
     run.py [ options ] bids_dir output_dir analysis_level
 
@@ -49,46 +41,39 @@ Synopsis
 -  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
 -  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
 
-Description
------------
+#### Description
 
 Generate subject connectomes from raw image data, perform inter-subject connection density normalisation, and perform statistical inference across subjects
 
-Options
--------
+#### Options
 
-Options for setting up the connectome reconstruction
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#### Options for setting up the connectome reconstruction
 
-- **-parc** The choice of connectome parcellation scheme. Options are: fs_2005, fs_2009
++ **--parc**<br>The choice of connectome parcellation scheme. Options are: fs_2005, fs_2009
 
-Options specific to the batch processing of subject data
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#### Options specific to the batch processing of subject data
 
-- **--participant_label** The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a comma-separated list.
++ **---participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a comma-separated list.
 
-Standard options
-^^^^^^^^^^^^^^^^
+#### Standard options
 
-- **-continue <TempDir> <LastFile>** Continue the script from a previous execution; must provide the temporary directory path, and the name of the last successfully-generated file
++ **--continue <TempDir> <LastFile>**<br>Continue the script from a previous execution; must provide the temporary directory path, and the name of the last successfully-generated file
 
-- **-force** Force overwrite of output files if pre-existing
++ **--force**<br>Force overwrite of output files if pre-existing
 
-- **-help** Display help information for the script
++ **--help**<br>Display help information for the script
 
-- **-nocleanup** Do not delete temporary files during script, or temporary directory at script completion
++ **--nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
 
-- **-nthreads number** Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
++ **--nthreads number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
 
-- **-tempdir /path/to/tmp/** Manually specify the path in which to generate the temporary directory
++ **--tempdir /path/to/tmp/**<br>Manually specify the path in which to generate the temporary directory
 
-- **-quiet** Suppress all console output during script execution
++ **--quiet**<br>Suppress all console output during script execution
 
-- **-verbose** Display additional information for every command invoked
++ **--verbose**<br>Display additional information for every command invoked
 
---------------
-
-
+---
 
 **Author:** Robert E. Smith (robert.smith@florey.edu.au)
 
@@ -103,7 +88,6 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 For more details, see www.mrtrix.org
-```
 
 ### Instructions
 
