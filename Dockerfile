@@ -50,4 +50,6 @@ RUN npm install -g bids-validator
 COPY run.py /run.py
 RUN chmod 775 /run.py
 
+COPY version /version
+
 ENTRYPOINT ["/run.py"]
