@@ -11,12 +11,12 @@ from lib.getHeaderInfo import getHeaderInfo
 from lib.getUserPath   import getUserPath
 from lib.imagesMatch   import imagesMatch
 from lib.isWindows     import isWindows
+from lib.printMessage  import printMessage
 from lib.runCommand    import runCommand
 
 
 def runSubject (bids_dir, label, output_prefix):
-  import lib.app
-
+  import lib.app, os, shutil
   output_dir = os.path.join(output_prefix, label);
   if os.path.exists(output_dir):
     shutil.rmtree(output_dir)
@@ -59,8 +59,8 @@ def runSubject (bids_dir, label, output_prefix):
   # Need to perform an initial import of JSON data using mrconvert; so let's grab the diffusion gradient table as well
   # If no bvec/bval present, need to go down the directory listing
   # Only try to import JSON file if it's actually present
-  grad_prefix = os.path.join(bids_dir, label, 'dwi', label + '_dwi'
-  if os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec'):
+  grad_prefix = os.path.join(bids_dir, label, 'dwi', label + '_dwi')
+  if not (os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec')):
     grad_prefix = os.path.join(bids_dir, 'dwi')
     if not (os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec')):
       errorMessage('Unable to locate valid diffusion gradient table');
@@ -76,21 +76,24 @@ def runSubject (bids_dir, label, output_prefix):
 
   # Go hunting for reversed phase-encode data
   # TODO Should ideally have compatibility with fieldmap data also
+  # TODO Need to check the 'IntendedFor' field
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
   if not os.path.isdir(fmap_dir):
     errorMessage('Subject does not possess fmap data necessary for EPI distortion correction')
-  fmap_index = 0;
+  fmap_index = 1;
+  fmap_image_list = [ ]
   while (1):
-    prefix = os.path.join(fmap_dir, label + '_dir-' + str(fmap_index))
+    prefix = os.path.join(fmap_dir, label + '_dir-' + str(fmap_index) + '_epi')
     if os.path.isfile(prefix + '.nii.gz') and os.path.isfile(prefix + '.json'):
       runCommand('mrconvert ' + prefix + '.nii.gz -json_import ' + prefix + '.json ' + os.path.join(lib.app.tempDir, 'RPE' + str(fmap_index) + '.mif'))
+      fmap_image_list.append('RPE' + str(fmap_index) + '.mif')
     else:
       break
     fmap_index += 1
 
   runCommand('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' + os.path.join(lib.app.tempDir, 'T1.mif'))
 
-  cwd = os.cwd()
+  cwd = os.getcwd()
   lib.app.gotoTempDir()
 
   # Step 1: Denoise
@@ -98,30 +101,15 @@ def runSubject (bids_dir, label, output_prefix):
   delFile('input.mif')
 
   # Step 2: Distortion correction
-  # TODO Need to assess presence of reversed phase-encoding data and act accordingly
-
-  if fmap_index < 2:
-    errorMessage('Inadequate number of images in fmap directory for inhomogeneity estimation')
-  dwi_pe = getHeaderProperty('dwi_denoised.mif', 'PhaseEncodingDirection')
-  if not dwi_pe:
-    errorMessage('Phase encoding direction of DWI not defined')
-  fmap_pe = [ ]
-  for index in range(0, fmap_index):
-    pe = getHeaderProperty('RPE' + str(index) + 'mif', 'PhaseEncodingDirection')
-    if not pe:
-      errorMessage('Field mapping images do not all contain phase encoding information')
-    pe = getPEDir(pe)
-    if not getPEDir(dwi_pe)[0] == pe[0]:
-      errorMessage('Non-collinear phase encoding directions not currently supported')
-    fmap_pe.append(pe)
-  # Need to detect 'RPE*' volumes with equivalent phase-encoding directions, and concatenate them
-  # Either that, or start working on the dwipreproc interface...
-
-  runCommand('dwipreproc dwi_denoised.mif dwi_denoised_preprocessed.mif')
+  runCommand('mrcat ' + ' '.join(fmap_image_list) + ' fmap_images.mif -axis 3')
+  for path in fmap_image_list:
+    delFile(path)
+  runCommand('dwipreproc dwi_denoised.mif dwi_denoised_preprocessed.mif -rpe_header -topup_images fmap_images.mif')
   delFile('dwi_denoised.mif')
+  delFile('fmap_images.mif')
 
   # Step 3: Bias field correction
-  runCommand('dwibiascorrect dwi_denoised_preprocessed.mif dwi.mif')
+  runCommand('dwibiascorrect dwi_denoised_preprocessed.mif dwi.mif -ants')
   delFile('dwi_denoised_preprocessed.mif')
 
   # Step 4: Generate a brain mask for DWI
@@ -148,6 +136,7 @@ def runSubject (bids_dir, label, output_prefix):
     runCommand('mrconvert T1.nii T1_preBET' + fsl_suffix + ' -stride -1,+2,+3')
   delFile('T1.nii')
   runCommand(bet_cmd + ' T1_preBET' + fsl_suffix + ' T1_BET' + fsl_suffix + ' -f 0.15 -R')
+  delFile('T1_preBET' + fsl_suffix)
 
   # Step 6: Generate target image for T1->DWI registration
   runCommand('mrcalc 1 dwi_denoise_preproc.mif -div dwi_mask.mif -mult - | mrhistmatch - T1_BET' + fsl_suffix + ' dwi_pseudoT1.nii -stride -1,+2,+3')
@@ -191,8 +180,10 @@ def runSubject (bids_dir, label, output_prefix):
 
   # Step 13: Generate the tractogram
   # TODO Determine the appropriate number of streamlines based on the number of nodes in the parcellation
-  # TODO Present this as a command-line option
-  runCommand('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -cutoff 0.06 -maxlength 250 -number 10M -seed_dynamic FOD_WM.mif')
+  num_streamlines = 10000000
+  if lib.app.args.streamlines:
+    num_streamlines = lib.app.args.streamlines
+  runCommand('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -cutoff 0.06 -maxlength 250 -number ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
 
   # Step 14: Use SIFT2 to determine streamline weights
   fd_scale_gm_option = ''
@@ -265,40 +256,47 @@ lib.app.parser.add_argument('bids_dir', help='The directory with the input datas
 lib.app.parser.add_argument('output_dir', help='The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.')
 lib.app.parser.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
 batch_options = lib.app.parser.add_argument_group('Options specific to the batch processing of subject data')
-batch_options.add_argument('--participant_label', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space list.')
-connectome_options = lib.app.parser.add_argument_group('Options for setting up the connectome reconstruction')
-connectome_options.add_argument('-parc', help='The choice of connectome parcellation scheme. Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+batch_options.add_argument('--participant_label', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
+participant_options = lib.app.parser.add_argument_group('Options that are relevant to participant-level analysis')
+participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme. Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
+group_options = lib.app.parser.add_argument_group('Options that are relevant to group-level analysis')
 testing_options = lib.app.parser.add_argument_group('Options for testing the run.py script')
+# TODO Modify the standard -nthreads option to also accept -n_cpus
 lib.app.initialise()
 
 if isWindows():
   errorMessage('Script cannot be run on Windows due to FSL dependency')
 
-runCommand('bids-validator ' + lib.app.args.bids_dir)
+#runCommand('bids-validator ' + lib.app.args.bids_dir)
 
 subjects_to_analyze = [ ]
 # Only run a subset of subjects
 if lib.app.args.participant_label:
-  index_list = lib.app.args.participant_label.split(' ')
+  # TODO Will this come out as a list now that it's space-separated?
+  index_list = lib.app.args.participant_label
   # TODO May need zero-padding
   subjects_to_analyze = [ 'sub-' + i for i in index_list ]
-  for dir in subjects_to_analyze:
-    if not os.path.isdir(os.path.join(lib.app.args.bids_dir, dir)):
+  for subject_dir in subjects_to_analyze:
+    if not os.path.isdir(os.path.join(lib.app.args.bids_dir, subject_dir)):
       print (os.cwd)
       print (lib.app.args.bids_dir)
-      print (dir)
-      errorMessage('Unable to find directory for subject: ' + dir)
+      print (subject_dir)
+      errorMessage('Unable to find directory for subject: ' + subject_dir)
 # Run all subjects sequentially
 else:
   subject_dirs = glob.glob(os.path.join(lib.app.args.bids_dir, 'sub-*'))
-  subjects_to_analyze = subject_dirs
-  # subjects_to_analyze = [ dir.split("-")[-1] for dir in subject_dirs ]
+  # subjects_to_analyze = subject_dirs
+  subjects_to_analyze = [ 'sub-' + dir.split("-")[-1] for dir in subject_dirs ]
 
 
 # Running participant level
 if lib.app.args.analysis_level == "participant":
 
   for subject_label in subjects_to_analyze:
+    printMessage('Commencing execution for subject ' + subject_label)
+    print (lib.app.args.bids_dir)
+    print (subject_label)
     runSubject(lib.app.args.bids_dir, subject_label, lib.app.args.output_dir)
 
 # Running group level
@@ -439,3 +437,6 @@ elif lib.app.args.analysis_level == "group":
   with open(os.path.join(pop_template_dir, 'mean_connectome.csv'), 'w') as f:
     for row in mean_connectome:
       f.write(','.join(row))
+
+
+
