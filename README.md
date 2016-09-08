@@ -1,3 +1,6 @@
+### Description
+This BIDS App enables generation and subsequent group analysis of structural connectomes generated from diffusion MRI data. The analysis pipeline relies primarily on the *MRtrix3* software package, and includes a number of state-of-the-art methods for image processing, tractography reconstruction, and statistical analysis.
+
 ### Documentation
 Please use the official [*MRtrix3* documentation](http://mrtrix.readthedocs.org) for reference. Additional information may be found in the [online *MRtrix3* community forum](http://community.mrtrix.org).
 
@@ -65,7 +68,7 @@ Generate subject connectomes from raw image data, perform inter-subject connecti
 
 + **--nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
 
-+ **--n_cpus number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
++ **--nthreads number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
 
 + **--tempdir /path/to/tmp/**<br>Manually specify the path in which to generate the temporary directory
 
