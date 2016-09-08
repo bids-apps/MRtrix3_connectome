@@ -16,7 +16,7 @@ from lib.runCommand    import runCommand
 
 def runSubject (bids_dir, label, output_prefix):
   import lib.app
-  
+
   output_dir = os.path.join(output_prefix, label);
   if os.path.exists(output_dir):
     shutil.rmtree(output_dir)
@@ -33,7 +33,7 @@ def runSubject (bids_dir, label, output_prefix):
     bet_cmd = 'fsl5.0-bet'
     if not binaryInPath(bet_cmd):
       errorMessage('Could not find FSL program bet; please verify FSL install')
-      
+
   flirt_cmd = 'flirt'
   if not binaryInPath(flirt_cmd):
     flirt_cmd = 'fsl5.0-flirt'
@@ -73,7 +73,7 @@ def runSubject (bids_dir, label, output_prefix):
   runCommand('mrconvert ' + os.path.join(bids_dir, label, 'dwi', label + '_dwi.nii.gz')
              + grad_import_option + json_import_option
              + ' ' + os.path.join(lib.app.tempDir, 'input.mif'))
-  
+
   # Go hunting for reversed phase-encode data
   # TODO Should ideally have compatibility with fieldmap data also
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
@@ -89,17 +89,17 @@ def runSubject (bids_dir, label, output_prefix):
     fmap_index += 1
 
   runCommand('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' + os.path.join(lib.app.tempDir, 'T1.mif'))
-  
+
   cwd = os.cwd()
   lib.app.gotoTempDir()
 
   # Step 1: Denoise
   runCommand('dwidenoise input.mif dwi_denoised.mif')
   delFile('input.mif')
-  
+
   # Step 2: Distortion correction
   # TODO Need to assess presence of reversed phase-encoding data and act accordingly
-  
+
   if fmap_index < 2:
     errorMessage('Inadequate number of images in fmap directory for inhomogeneity estimation')
   dwi_pe = getHeaderProperty('dwi_denoised.mif', 'PhaseEncodingDirection')
@@ -116,14 +116,14 @@ def runSubject (bids_dir, label, output_prefix):
     fmap_pe.append(pe)
   # Need to detect 'RPE*' volumes with equivalent phase-encoding directions, and concatenate them
   # Either that, or start working on the dwipreproc interface...
-  
+
   runCommand('dwipreproc dwi_denoised.mif dwi_denoised_preprocessed.mif')
   delFile('dwi_denoised.mif')
-    
+
   # Step 3: Bias field correction
   runCommand('dwibiascorrect dwi_denoised_preprocessed.mif dwi.mif')
   delFile('dwi_denoised_preprocessed.mif')
-    
+
   # Step 4: Generate a brain mask for DWI
   runCommand('dwi2mask dwi.mif dwi_mask.mif')
 
@@ -210,7 +210,7 @@ def runSubject (bids_dir, label, output_prefix):
     runCommand('recon_all -subjid temp -i T1_registered.nii')
     delFile('T1_registered.nii')
     runCommand('recon_all -subjid temp -all')
-  
+
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image = os.path.join(os.environ['FREESURFER_HOME'], 'subjects', 'temp', 'mri')
     lut_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src', 'connectome', 'tables')
@@ -220,17 +220,17 @@ def runSubject (bids_dir, label, output_prefix):
     else:
       parc_image = os.path.join(parc_image, 'aparc.a2009.aseg.mgz')
       lut_file = os.path.join(lut_file, 'fs_2009.txt')
-  
+
     # Perform the index conversion
     runCommand('labelconvert ' + parc_image + ' ' + os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt') + ' ' + lut_file + ' parc_init.mif')
     shutil.rmtree(os.path.join(os.environ['FREESURFER_HOME'], 'subjects', 'temp'))
-  
+
     # Fix the sub-cortical grey matter parcellations using FSL FIRST
     runCommand('labelsgmfix parc_init.mif T1_registered.mif ' + label_file + ' parc.mif')
     delFile('parc_init.mif')
-  
+
   # TODO Implement AAL parcellation: Need MNI single-subject T1 image to perform registration (doesn't come with AAL package)
-  
+
   else:
     errorMessage('Unknown parcellation scheme requested: ' + lib.app.args.parc)
 
@@ -246,7 +246,7 @@ def runSubject (bids_dir, label, output_prefix):
              + ' -json_export ' + os.path.join(output_dir, 'dwi', label + '_dwi.json'))
   shutil.copy('out_mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
   shutil.copy(rf_file_for_scaling, os.path.join(output_dir, 'dwi', label + '_response.txt'))
-  
+
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
   os.chdir(cwd)
   shutil.rmtree(lib.app.tempDir)
@@ -265,7 +265,7 @@ lib.app.parser.add_argument('bids_dir', help='The directory with the input datas
 lib.app.parser.add_argument('output_dir', help='The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.')
 lib.app.parser.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
 batch_options = lib.app.parser.add_argument_group('Options specific to the batch processing of subject data')
-batch_options.add_argument('--participant_label', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a comma-separated list.')
+batch_options.add_argument('--participant_label', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space list.')
 connectome_options = lib.app.parser.add_argument_group('Options for setting up the connectome reconstruction')
 connectome_options.add_argument('-parc', help='The choice of connectome parcellation scheme. Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 testing_options = lib.app.parser.add_argument_group('Options for testing the run.py script')
@@ -274,10 +274,12 @@ lib.app.initialise()
 if isWindows():
   errorMessage('Script cannot be run on Windows due to FSL dependency')
 
+runCommand('bids-validator ' + lib.app.args.bids_dir)
+
 subjects_to_analyze = [ ]
 # Only run a subset of subjects
 if lib.app.args.participant_label:
-  index_list = lib.app.args.participant_label.split(',')
+  index_list = lib.app.args.participant_label.split(' ')
   # TODO May need zero-padding
   subjects_to_analyze = [ 'sub-' + i for i in index_list ]
   for dir in subjects_to_analyze:
@@ -311,11 +313,11 @@ elif lib.app.args.analysis_level == "group":
   os.makedirs(os.path.join(pop_template_dir, 'masks'))
   os.makedirs(os.path.join(pop_template_dir, 'values'))
   os.makedirs(os.path.join(pop_template_dir, 'warps'))
-  
+
   # First pass through subject data in group analysis:
   #   - Grab DWI data (written back from single-subject analysis back into BIDS format)
   #   - Generate mask and FA images to be used in populate template generation
-  #   - Generate the mean b=0 image that will be used later 
+  #   - Generate the mean b=0 image that will be used later
   for subject_label in subjects_to_analyze:
     dwi_path = os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_dwi.nii.gz')
     if not os.path.exists(dwi_path):
@@ -339,11 +341,11 @@ elif lib.app.args.analysis_level == "group":
     runCommand('dwiextract ' + dwi_path + ' ' + bzeros_path + ' -bzero')
     runCommand('mrmath ' + bzeros_path + ' ' + os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_mean_bzero.mif') + ' -axis 3')
     delFile(bzeros_path)
-  
+
   # First group-level calculation: Generate the population template
   template_path = os.path.join(pop_template_dir, 'template.mif')
   runCommand('population_template ' + os.path.join(pop_template_dir, 'images') + ' -mask_dir ' + os.path.join(pop_template_dir, 'masks') + ' -warp_dir ' + os.path.join(pop_template_dir, 'warps') + ' ' + template_path + ' -linear_scale 0.25,0.5,1.0,1.0 -nl_scale 0.5,0.75,1.0,1.0,1.0 -nl_niter 5,5,5,5,5')
-  
+
   # Second pass through subject data in group analysis:
   #   - Warp template FA image back to subject space & threshold to define a WM mask
   #   - Calculate the median subject FA value within this mask
@@ -375,13 +377,13 @@ elif lib.app.args.analysis_level == "group":
       mean_RF = mean_RF + RF_lzero
     else:
       mean_RF = RF_lzero
-    
+
   # Second group-level calculation:
   #   - Calculate the mean of median b=0 values
   #   - Calculate the mean response function
   mean_median_bzero = mean_median_bzero / len(subjects_to_analyze)
   mean_RF = [ v / len(subjects_to_analyze) for v in mean_RF ]
-  
+
   # Third pass through subject data in group analysis:
   #   - Scale the connectome strengths:
   #     - Multiply by SIFT proportionality coefficient mu
@@ -404,7 +406,7 @@ elif lib.app.args.analysis_level == "group":
     for (mean, subj) in zip(mean_RF, RF_lzero):
       RF_multiplier = RF_multiplier * subj / mean
     global_multiplier = mu * (mean_median_bzero / median_bzero) * RF_multiplier
-    
+
     connectome_path = os.path.join(lib.app.args.output_dir, subject_label, 'connectome', subject_label + '_connectome.csv')
     if not os.path.exists(connectome_path):
       errorMessage('Could not find subject connectome file: ' + connectome_path)
@@ -414,10 +416,10 @@ elif lib.app.args.analysis_level == "group":
     with open(os.path.join(lib.app.args.output_dir, subject_label, 'connectome', subject_label + '_connectome_scaled.csv'), 'w') as f:
       for line in connectome:
         f.write( ','.join([ v*global_multiplier for v in line ]) )
-      
+
   # Third group-level calculation: Perform statistical analysis of connectomes using NBS-TFCE
   # Can't do this without opening the root-directory dataset description file and selecting a contrast to test
-  
+
   # For now, for the sake of testing the pipeline and doing some form of group data manipulation,
   #   let's just generate the mean connectome
   mean_connectome = [ ]
@@ -431,11 +433,9 @@ elif lib.app.args.analysis_level == "group":
         r2 = [ c1+c2 for c1,c2 in zip(r1,r2) ]
     else:
       mean_connectome = connectome
-    
+
   mean_connectome = [ [ v/len(subjects_to_analyze) for v in row ] for row in mean_connectome ]
-  
+
   with open(os.path.join(pop_template_dir, 'mean_connectome.csv'), 'w') as f:
     for row in mean_connectome:
       f.write(','.join(row))
-      
-  

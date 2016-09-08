@@ -17,7 +17,7 @@ RUN apt-key adv --recv-keys --keyserver hkp://pgp.mit.edu:80 0xA5D32F012649A5A9 
 RUN apt-get install -y ants
 RUN apt-get install -y fsl-5.0-core
 RUN apt-get install -y fsl-5.0-eddy-nonfree
-RUN apt-get install -y fsl-first-data 
+RUN apt-get install -y fsl-first-data
 RUN wget -qO- ftp://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/5.3.0-HCP/freesurfer-Linux-centos4_x86_64-stable-pub-v5.3.0-HCP.tar.gz | tar zxv -C /opt
 # TODO Acquire own FreeSurfer license file
 RUN echo $'fsa@brain.org.au\n13477\n*CCll67nWRT9.\n' > /opt/freesurfer/license
@@ -27,10 +27,7 @@ RUN echo $'fsa@brain.org.au\n13477\n*CCll67nWRT9.\n' > /opt/freesurfer/license
 ENV CXX=/usr/bin/g++-5
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout stanford && python configure -nogui -verbose && python build
 
-# Acquire script to be executed
-RUN cd ../ && wget https://raw.githubusercontent.com/BIDS-Apps/MRtrix3_connectome/master/run.py && chmod 775 run.py
-
-# Setup environment variables 
+# Setup environment variables
 ENV FREESURFER_HOME=/opt/freesurfer
 ENV FSLDIR=/usr/share/fsl/5.0
 ENV FSLOUTPUTTYPE=NIFTI_GZ
@@ -39,14 +36,20 @@ ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
 ENV PATH=/opt/freesurfer/bin:/usr/lib/fsl/5.0:/usr/lib/ants:/mrtrix3/release/bin:/mrtrix3/scripts:$PATH
 ENV PYTHONPATH=/mrtrix3/scripts
 
-# Copied from another dockerfile; not sure...
-RUN mkdir /oasis
-RUN mkdir /projects
-RUN mkdir /scratch
-RUN mkdir /local-scratch
+## Install the validator
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -sL https://deb.nodesource.com/setup_4.x | bash - && \
+    apt-get remove -y curl && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Target mount points
-RUN mkdir /bids_dataset
-RUN mkdir /outputs
+RUN npm install -g bids-validator
+
+# Acquire script to be executed
+COPY run.py /run.py
+RUN chmod 775 /run.py
+
+COPY version /version
 
 ENTRYPOINT ["/run.py"]
