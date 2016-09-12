@@ -15,6 +15,9 @@ from lib.printMessage  import printMessage
 from lib.runCommand    import runCommand
 
 
+__version__ = 'BIDS-App \'MRtrix3_connectome\' version {}'.format(open('/version').read()) if os.path.exists('/version') else 'BIDS-App \'MRtrix3_connectome\' standalone'
+
+
 def runSubject (bids_dir, label, output_prefix):
   import lib.app, os, shutil
   output_dir = os.path.join(output_prefix, label);
@@ -59,6 +62,8 @@ def runSubject (bids_dir, label, output_prefix):
   # Need to perform an initial import of JSON data using mrconvert; so let's grab the diffusion gradient table as well
   # If no bvec/bval present, need to go down the directory listing
   # Only try to import JSON file if it's actually present
+  # TODO May need to concatenate more than one input DWI, since if there's more than one phase-encode
+  #   direction in the acquisition they'll need to be split across multiple files
   grad_prefix = os.path.join(bids_dir, label, 'dwi', label + '_dwi')
   if not (os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec')):
     grad_prefix = os.path.join(bids_dir, 'dwi')
@@ -76,7 +81,7 @@ def runSubject (bids_dir, label, output_prefix):
 
   # Go hunting for reversed phase-encode data
   # TODO Should ideally have compatibility with fieldmap data also
-  # TODO Need to check the 'IntendedFor' field
+  # TODO If there's an 'IntendedFor' field in the JSON file, and it's NOT the DWI(s) we're using, don't use
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
   if not os.path.isdir(fmap_dir):
     errorMessage('Subject does not possess fmap data necessary for EPI distortion correction')
@@ -251,10 +256,11 @@ analysis_choices = [ 'participant', 'group' ]
 parcellation_choices = [ 'fs_2005', 'fs_2009' ]
 
 lib.app.author = 'Robert E. Smith (robert.smith@florey.edu.au)'
-lib.cmdlineParser.initialise('Generate subject connectomes from raw image data, perform inter-subject connection density normalisation, and perform statistical inference across subjects')
+lib.cmdlineParser.initialise('Generate subject connectomes from raw image data, perform inter-subject connection density normalisation, and calculate the group mean connectome')
 lib.app.parser.add_argument('bids_dir', help='The directory with the input dataset formatted according to the BIDS standard.')
 lib.app.parser.add_argument('output_dir', help='The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.')
 lib.app.parser.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
+lib.app.parser.add_argument('-v', '--version', action='version', version=__version__)
 batch_options = lib.app.parser.add_argument_group('Options specific to the batch processing of subject data')
 batch_options.add_argument('--participant_label', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = lib.app.parser.add_argument_group('Options that are relevant to participant-level analysis')
