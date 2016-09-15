@@ -271,7 +271,7 @@ lib.app.parser.add_argument('output_dir', help='The directory where the output f
 lib.app.parser.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
 lib.app.parser.add_argument('-v', '--version', action='version', version=__version__)
 batch_options = lib.app.parser.add_argument_group('Options specific to the batch processing of subject data')
-batch_options.add_argument('--participant_label', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
+batch_options.add_argument('--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = lib.app.parser.add_argument_group('Options that are relevant to participant-level analysis')
 participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme. Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
@@ -288,15 +288,9 @@ if isWindows():
 subjects_to_analyze = [ ]
 # Only run a subset of subjects
 if lib.app.args.participant_label:
-  # TODO Will this come out as a list now that it's space-separated?
-  index_list = lib.app.args.participant_label
-  # TODO May need zero-padding
-  subjects_to_analyze = [ 'sub-' + i for i in index_list ]
+  subjects_to_analyze = [ 'sub-' + i for i in lib.app.args.participant_label ]
   for subject_dir in subjects_to_analyze:
     if not os.path.isdir(os.path.join(lib.app.args.bids_dir, subject_dir)):
-      print (os.cwd)
-      print (lib.app.args.bids_dir)
-      print (subject_dir)
       errorMessage('Unable to find directory for subject: ' + subject_dir)
 # Run all subjects sequentially
 else:
@@ -310,8 +304,6 @@ if lib.app.args.analysis_level == "participant":
 
   for subject_label in subjects_to_analyze:
     printMessage('Commencing execution for subject ' + subject_label)
-    print (lib.app.args.bids_dir)
-    print (subject_label)
     runSubject(lib.app.args.bids_dir, subject_label, lib.app.args.output_dir)
 
 # Running group level
