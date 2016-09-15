@@ -13,6 +13,7 @@ from lib.imagesMatch   import imagesMatch
 from lib.isWindows     import isWindows
 from lib.printMessage  import printMessage
 from lib.runCommand    import runCommand
+from lib.warnMessage   import warnMessage
 
 
 __version__ = 'BIDS-App \'MRtrix3_connectome\' version {}'.format(open('/version').read()) if os.path.exists('/version') else 'BIDS-App \'MRtrix3_connectome\' standalone'
@@ -51,11 +52,17 @@ def runSubject (bids_dir, label, output_prefix):
 
   fsl_suffix = getFSLSuffix()
 
+  if not lib.app.args.parc:
+    errorMessage('For participant-level analysis, desired parcellation must be provided using the -parc option')
+
   if lib.app.args.parc == 'fs_2005' or lib.app.args.parc == 'fs_2009':
     if not os.environ['FREESURFER_HOME']:
       errorMessage('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
-    if not binaryInPath('recon_all'):
-      errorMessage('Could not find FreeSurfer script recon_all; please verify FreeSurfer installation')
+    if not binaryInPath('recon-all'):
+      errorMessage('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
+
+  if not binaryInPath('N4BiasFieldCorrection'):
+    errorMessage('Could not find ANTs program N4BiasFieldCorrection; please verify ANTs installation')
 
   lib.app.makeTempDir()
 
@@ -144,7 +151,7 @@ def runSubject (bids_dir, label, output_prefix):
   delFile('T1_preBET' + fsl_suffix)
 
   # Step 6: Generate target image for T1->DWI registration
-  runCommand('mrcalc 1 dwi_denoise_preproc.mif -div dwi_mask.mif -mult - | mrhistmatch - T1_BET' + fsl_suffix + ' dwi_pseudoT1.nii -stride -1,+2,+3')
+  runCommand('dwiextract dwi.mif -bzero - | mrmath - mean - -axis 3 | mrcalc 1 - -div dwi_mask.mif -mult - | mrconvert - - -stride -1,+2,+3 | mrhistmatch - T1_BET' + fsl_suffix + ' dwi_pseudoT1.nii')
 
   # Step 7: Perform T1->DWI registration
   #         Since mrregister is currently symmetric, but here we explicitly want an asymmetric
@@ -152,7 +159,7 @@ def runSubject (bids_dir, label, output_prefix):
   #         for now we'll go with FSL's FLIRT
   #         TODO Switch to least-squares metric, or switch to mrregister
   runCommand('flirt -ref dwi_pseudoT1 -in T1_BET -omat T1_to_DWI_FLIRT.mat -dof 6')
-  runCommand('transformconvert T1_to_DWI_FLIRT.mat flirt_import T1_to_DWI_MRtrix.mat')
+  runCommand('transformconvert T1_to_DWI_FLIRT.mat T1_BET' + fsl_suffix + ' dwi_pseudoT1.nii flirt_import T1_to_DWI_MRtrix.mat')
   delFile('T1_to_DWI_FLIRT.mat')
   runCommand('mrtransform T1.mif T1_registered.mif -linear T1_to_DWI_MRtrix.mat')
   delFile('T1.mif')
@@ -162,15 +169,16 @@ def runSubject (bids_dir, label, output_prefix):
   runCommand('5ttgen fsl T1_registered.mif 5TT.mif')
 
   # Step 9: Determine whether we are working with single-shell or multi-shell data
-  shells = [ int(round(float(x))) for x in getHeaderInfo('dwi_denoise_preproc.mif', 'shells').split() ]
+  # TODO Detect b=0 shell and remove from list before testing length
+  shells = [ int(round(float(x))) for x in getHeaderInfo('dwi.mif', 'shells').split() ]
   multishell = (len(shells) > 2)
 
   # Step 10: Estimate response function(s) for spherical deconvolution
   if multishell:
-    runCommand('dwi2response msmt_5tt dwi_denoise_preproc.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
+    runCommand('dwi2response msmt_5tt dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
     rf_file_for_scaling = 'response_wm.txt'
   else:
-    runCommand('dwi2response tournier dwi_denoise_preproc.mif response.txt -mask dwi_mask.mif')
+    runCommand('dwi2response tournier dwi.mif response.txt -mask dwi_mask.mif')
     rf_file_for_scaling = 'response.txt'
 
   # Step 12: Perform spherical deconvolution
@@ -178,10 +186,10 @@ def runSubject (bids_dir, label, output_prefix):
   #          ACT should be responsible for stopping streamlines before they reach the edge of the DWI mask
   runCommand('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
   if multishell:
-    runCommand('dwi2fod msmt_csd dwi_denoise_preproc.mif response_wm.txt FOD_WM.mif response_gm.txt FOD_GM.mif response_csf.txt FOD_CSF.mif -mask dwi_mask_dilated.mif')
+    runCommand('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_gm.txt FOD_GM.mif response_csf.txt FOD_CSF.mif -mask dwi_mask_dilated.mif')
   else:
     # Still use the msmt_csd algorithm with single-shell data: Use hard non-negativity constraint
-    runCommand('dwi2fod msmt_csd dwi_denoise_preproc.mif response.txt FOD_WM.mif')
+    runCommand('dwiextract dwi.mif - | dwi2fod msmt_csd - response.txt FOD_WM.mif')
 
   # Step 13: Generate the tractogram
   # TODO Determine the appropriate number of streamlines based on the number of nodes in the parcellation
@@ -194,7 +202,7 @@ def runSubject (bids_dir, label, output_prefix):
   fd_scale_gm_option = ''
   if not multishell:
     fd_scale_gm_option = ' -fd_scale_gm'
-  runCommand('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fod_scale_gm_option + ' -info')
+  runCommand('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option + ' -info')
 
   # Step 15: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
@@ -202,13 +210,13 @@ def runSubject (bids_dir, label, output_prefix):
 
     # Run FreeSurfer pipeline on this subject's T1 image
     # TODO May need to change the FreeSurfer subjects directory in order to have write access in Singularity
-    runCommand('T1_registered.mif T1_registered.nii')
-    runCommand('recon_all -subjid temp -i T1_registered.nii')
+    runCommand('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
+    runCommand('recon-all -sd ' + lib.app.tempDir + ' -subjid freesurfer -i T1_registered.nii')
     delFile('T1_registered.nii')
-    runCommand('recon_all -subjid temp -all')
+    runCommand('recon-all -sd ' + lib.app.tempDir + ' -subjid freesurfer -all')
 
     # Grab the relevant parcellation image and target lookup table for conversion
-    parc_image = os.path.join(os.environ['FREESURFER_HOME'], 'subjects', 'temp', 'mri')
+    parc_image = os.path.join('freesurfer', 'mri')
     lut_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src', 'connectome', 'tables')
     if lib.app.args.parc == 'fs_2005':
       parc_image = os.path.join(parc_image, 'aparc.aseg.mgz')
@@ -219,7 +227,8 @@ def runSubject (bids_dir, label, output_prefix):
 
     # Perform the index conversion
     runCommand('labelconvert ' + parc_image + ' ' + os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt') + ' ' + lut_file + ' parc_init.mif')
-    shutil.rmtree(os.path.join(os.environ['FREESURFER_HOME'], 'subjects', 'temp'))
+    if not lib.app.args.nocleanup:
+      shutil.rmtree('freesurfer')
 
     # Fix the sub-cortical grey matter parcellations using FSL FIRST
     runCommand('labelsgmfix parc_init.mif T1_registered.mif ' + label_file + ' parc.mif')
