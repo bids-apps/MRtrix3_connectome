@@ -21,6 +21,7 @@ RUN apt-get install -y fsl-first-data
 RUN wget -qO- ftp://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/5.3.0-HCP/freesurfer-Linux-centos4_x86_64-stable-pub-v5.3.0-HCP.tar.gz | tar zxv -C /opt
 # TODO Acquire own FreeSurfer license file
 RUN echo $'fsa@brain.org.au\n13477\n*CCll67nWRT9.\n' > /opt/freesurfer/license
+RUN /opt/freesurfer/SetUpFreeSurfer.sh
 
 # MRtrix3 setup
 # NOTE: After the Stanford Coding Sprint, the command "git checkout stanford" will likely be removed, since prerequisite changes should be merged into master
@@ -29,7 +30,7 @@ RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && gi
 RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables
-ENV FREESURFER_HOME=/opt/freesurfer
+#ENV FREESURFER_HOME=/opt/freesurfer # Should be handled by script SetUpFreeSurfer.sh
 ENV FSLDIR=/usr/share/fsl/5.0
 ENV FSLMULTIFILEQUIT=TRUE
 ENV FSLOUTPUTTYPE=NIFTI_GZ
