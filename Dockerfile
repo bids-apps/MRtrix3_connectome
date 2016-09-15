@@ -18,10 +18,36 @@ RUN apt-get install -y ants
 RUN apt-get install -y fsl-5.0-core
 RUN apt-get install -y fsl-5.0-eddy-nonfree
 RUN apt-get install -y fsl-first-data
-RUN wget -qO- ftp://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/5.3.0-HCP/freesurfer-Linux-centos4_x86_64-stable-pub-v5.3.0-HCP.tar.gz | tar zxv -C /opt
-# TODO Acquire own FreeSurfer license file
-RUN echo $'fsa@brain.org.au\n13477\n*CCll67nWRT9.\n' > /opt/freesurfer/license
-RUN /opt/freesurfer/SetUpFreeSurfer.sh
+RUN wget -qO- ftp://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/5.3.0-HCP/freesurfer-Linux-centos4_x86_64-stable-pub-v5.3.0-HCP.tar.gz | tar zxv -C /opt \
+    --exclude='freesurfer/trctrain' \
+    --exclude='freesurfer/subjects/fsaverage_sym' \
+    --exclude='freesurfer/subjects/fsaverage3' \
+    --exclude='freesurfer/subjects/fsaverage4' \
+    --exclude='freesurfer/subjects/fsaverage5' \
+    --exclude='freesurfer/subjects/fsaverage6' \
+    --exclude='freesurfer/subjects/cvs_avg35' \
+    --exclude='freesurfer/subjects/cvs_avg35_inMNI152' \
+    --exclude='freesurfer/subjects/bert' \
+    --exclude='freesurfer/subjects/V1_average' \
+    --exclude='freesurfer/average/mult-comp-cor' \
+    --exclude='freesurfer/lib/cuda' \
+    --exclude='freesurfer/lib/qt'
+RUN /bin/bash -c 'touch /opt/freesurfer/.license'
+
+# Make FreeSurfer happy
+ENV OS Linux
+ENV SUBJECTS_DIR /opt/freesurfer/subjects
+ENV FSF_OUTPUT_FORMAT nii.gz
+ENV MNI_DIR /opt/freesurfer/mni
+ENV LOCAL_DIR /opt/freesurfer/local
+ENV FREESURFER_HOME /opt/freesurfer
+ENV FSFAST_HOME /opt/freesurfer/fsfast
+ENV MINC_BIN_DIR /opt/freesurfer/mni/bin
+ENV MINC_LIB_DIR /opt/freesurfer/mni/lib
+ENV MNI_DATAPATH /opt/freesurfer/mni/data
+ENV FMRI_ANALYSIS_DIR /opt/freesurfer/fsfast
+ENV PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
+ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 
 # MRtrix3 setup
 # NOTE: After the Stanford Coding Sprint, the command "git checkout stanford" will likely be removed, since prerequisite changes should be merged into master
@@ -30,22 +56,20 @@ RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && gi
 RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables
-#ENV FREESURFER_HOME=/opt/freesurfer # Should be handled by script SetUpFreeSurfer.sh
 ENV FSLDIR=/usr/share/fsl/5.0
 ENV FSLMULTIFILEQUIT=TRUE
 ENV FSLOUTPUTTYPE=NIFTI_GZ
 ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
-ENV PATH=/opt/freesurfer/bin:/usr/lib/fsl/5.0:/usr/lib/ants:/mrtrix3/release/bin:/mrtrix3/scripts:$PATH
+ENV PATH=/opt/freesurfer/bin:/opt/freesurfer/mni/bin:/usr/lib/fsl/5.0:/usr/lib/ants:/mrtrix3/release/bin:/mrtrix3/scripts:$PATH
 ENV PYTHONPATH=/mrtrix3/scripts
 
-## Install the validator
+# Install the validator
 RUN apt-get update && \
     apt-get install -y curl && \
     curl -sL https://deb.nodesource.com/setup_4.x | bash - && \
     apt-get remove -y curl && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 RUN npm install -g bids-validator
 
 # Acquire script to be executed
