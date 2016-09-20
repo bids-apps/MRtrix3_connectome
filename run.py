@@ -52,17 +52,46 @@ def runSubject (bids_dir, label, output_prefix):
 
   fsl_suffix = getFSLSuffix()
 
+  if not binaryInPath('N4BiasFieldCorrection'):
+    errorMessage('Could not find ANTs program N4BiasFieldCorrection; please verify ANTs installation')
+
   if not lib.app.args.parc:
     errorMessage('For participant-level analysis, desired parcellation must be provided using the -parc option')
+
+  parc_image_path = ''
+  parc_lut_file = ''
+  mrtrix_lut_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src', 'connectome', 'tables')
 
   if lib.app.args.parc == 'fs_2005' or lib.app.args.parc == 'fs_2009':
     if not os.environ['FREESURFER_HOME']:
       errorMessage('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
     if not binaryInPath('recon-all'):
       errorMessage('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
+    parc_lut_file = os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt')
+    if lib.app.args.parc == 'fs_2005':
+      mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_default.txt')
+    else:
+      mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_2009.txt')
 
-  if not binaryInPath('N4BiasFieldCorrection'):
-    errorMessage('Could not find ANTs program N4BiasFieldCorrection; please verify ANTs installation')
+  if lib.app.args.parc == 'aal' or lib.app.args.parc == 'aal2':
+    mni152_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
+    if not os.path.isfile(mni152_path):
+      errorMessage('Could not find MNI152 template image within FSL installation')
+    if lib.app.args.parc == 'aal':
+      parc_image_path = os.path.join('opt', 'aal', 'ROI_MNI_V4.nii')
+      parc_lut_file = os.path.join('opt', 'aal', 'ROI_MNI_V4.txt')
+      mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal.txt')
+    else:
+      parc_image_path = os.path.join('opt', 'aal', 'ROI_MNI_V5.nii')
+      parc_lut_file = os.path.join('opt', 'aal', 'ROI_MNI_V5.txt')
+      mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal2.txt')
+
+  if parc_image_path and not os.path.isfile(parc_image_path):
+    errorMessage('Could not find parcellation image (expected location: ' + parc_image_path + ')')
+  if not os.path.isfile(parc_lut_file):
+    errorMessage('Could not find parcellation lookup table file (expected location: ' + parc_lut_file + ')')
+  if not os.path.exists(lut_file):
+    errorMessage('Could not find MRtrix3 connectome lookup table file (expected location: ' + mrtrix_lut_file + ')')
 
   lib.app.makeTempDir()
 
@@ -209,32 +238,42 @@ def runSubject (bids_dir, label, output_prefix):
   if lib.app.args.parc == 'fs_2005' or lib.app.args.parc == 'fs_2009':
 
     # Run FreeSurfer pipeline on this subject's T1 image
-    # TODO May need to change the FreeSurfer subjects directory in order to have write access in Singularity
     runCommand('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
     runCommand('recon-all -sd ' + lib.app.tempDir + ' -subjid freesurfer -i T1_registered.nii')
     delFile('T1_registered.nii')
     runCommand('recon-all -sd ' + lib.app.tempDir + ' -subjid freesurfer -all')
 
     # Grab the relevant parcellation image and target lookup table for conversion
-    parc_image = os.path.join('freesurfer', 'mri')
-    lut_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src', 'connectome', 'tables')
+    parc_image_path = os.path.join('freesurfer', 'mri')
+
     if lib.app.args.parc == 'fs_2005':
-      parc_image = os.path.join(parc_image, 'aparc.aseg.mgz')
-      lut_file = os.path.join(lut_file, 'fs_default.txt')
+      parc_image_path = os.path.join(parc_image_path, 'aparc.aseg.mgz')
     else:
-      parc_image = os.path.join(parc_image, 'aparc.a2009.aseg.mgz')
-      lut_file = os.path.join(lut_file, 'fs_2009.txt')
+      parc_image_path = os.path.join(parc_image_path, 'aparc.a2009.aseg.mgz')
 
     # Perform the index conversion
-    runCommand('labelconvert ' + parc_image + ' ' + os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt') + ' ' + lut_file + ' parc_init.mif')
+    runCommand('labelconvert ' + parc_image_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc_init.mif')
     if not lib.app.args.nocleanup:
       shutil.rmtree('freesurfer')
 
     # Fix the sub-cortical grey matter parcellations using FSL FIRST
-    runCommand('labelsgmfix parc_init.mif T1_registered.mif ' + label_file + ' parc.mif')
+    runCommand('labelsgmfix parc_init.mif T1_registered.mif ' + mrtrix_lut_file + ' parc.mif')
     delFile('parc_init.mif')
 
-  # TODO Implement AAL parcellation: Need MNI single-subject T1 image to perform registration (doesn't come with AAL package)
+  elif lib.app.args.parc == 'aal' or lib.app.args.parc == 'aal2':
+
+    runCommand('mrconvert T1_registered.mif T1_registered.nii')
+    # Can use MNI152 image provided with FSL for registration
+    runCommand('flirt -ref ' + mni152_path + ' -in T1 -omat T1_to_MNI_FLIRT.mat -dof 12')
+    delFile('T1_registered.nii')
+    runCommand('transformconvert T1_to_MNI_FLIRT.mat T1.nii ' + mni_path + ' flirt_import T1_to_MNI_MRtrix.mat')
+    delFile('T1_to_MNI_FLIRT.mat')
+    runCommand('transformcalc T1_to_MNI_MRtrix.mat invert MNI_to_T1_MRtrix.mat')
+    delFile('T1_to_MNI_MRtrix.mat')
+    runCommand('mrtransform ' + parc_image_path + ' AAL.mif -linear MNI_to_T1_MRtrix.mat -template T1_registered.mif -interp nearest')
+    delFile('MNI_to_T1_MRtrix.mat')
+    runCommand('labelconvert AAL.mif ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc.mif')
+    delFile('AAL.mif')
 
   else:
     errorMessage('Unknown parcellation scheme requested: ' + lib.app.args.parc)
@@ -261,11 +300,12 @@ def runSubject (bids_dir, label, output_prefix):
 
 
 
-analysis_choices = [ 'participant', 'group' ]
-parcellation_choices = [ 'fs_2005', 'fs_2009' ]
+#analysis_choices = [ 'participant', 'group' ]
+analysis_choices = [ 'participant' ]
+parcellation_choices = [ 'aal', 'aal2', 'fs_2005', 'fs_2009' ]
 
 lib.app.author = 'Robert E. Smith (robert.smith@florey.edu.au)'
-lib.cmdlineParser.initialise('Generate subject connectomes from raw image data, perform inter-subject connection density normalisation, and calculate the group mean connectome')
+lib.cmdlineParser.initialise('Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3')
 lib.app.parser.add_argument('bids_dir', help='The directory with the input dataset formatted according to the BIDS standard.')
 lib.app.parser.add_argument('output_dir', help='The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.')
 lib.app.parser.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
@@ -275,9 +315,16 @@ batch_options.add_argument('--participant_label', nargs='+', help='The label(s) 
 participant_options = lib.app.parser.add_argument_group('Options that are relevant to participant-level analysis')
 participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme. Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
-group_options = lib.app.parser.add_argument_group('Options that are relevant to group-level analysis')
-testing_options = lib.app.parser.add_argument_group('Options for testing the run.py script')
-# TODO Modify the standard -nthreads option to also accept -n_cpus
+# TODO Option to copy particular data files from participant level processing into the output directory
+#group_options = lib.app.parser.add_argument_group('Options that are relevant to group-level analysis')
+#testing_options = lib.app.parser.add_argument_group('Options for testing the run.py script')
+lib.app.parser._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '-n_cpus' ]
+lib.app.parser._option_string_actions['-n_cpus'] = lib.app.parser._option_string_actions['-nthreads']
+for i in lib.app.parser._actions:
+  if i.dest == 'nthreads':
+    i.option_strings = [ '-nthreads', '-n_cpus' ]
+    break
+
 lib.app.initialise()
 
 if isWindows():
@@ -308,6 +355,8 @@ if lib.app.args.analysis_level == "participant":
 
 # Running group level
 elif lib.app.args.analysis_level == "group":
+
+  errorMessage('Group-level analysis not yet supported')
 
   if lib.app.args.participant_label:
     errorMessage('Do not specify a subgroup of subjects if performing a group analysis')

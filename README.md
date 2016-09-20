@@ -1,5 +1,5 @@
 ### Description
-This BIDS App enables generation and subsequent group analysis of structural connectomes generated from diffusion MRI data. The analysis pipeline relies primarily on the *MRtrix3* software package, and includes a number of state-of-the-art methods for image processing, tractography reconstruction, and statistical analysis.
+This BIDS App enables generation and subsequent group analysis of structural connectomes generated from diffusion MRI data. The analysis pipeline relies primarily on the *MRtrix3* software package, and includes a number of state-of-the-art methods for image processing, tractography reconstruction, connectome generation and inter-subject connection density normalisation.
 
 ### Documentation
 Please use the official [*MRtrix3* documentation](http://mrtrix.readthedocs.org) for reference. Additional information may be found in the [online *MRtrix3* community forum](http://community.mrtrix.org).
@@ -10,7 +10,7 @@ Experiencing problems? You can post a message on the [*MRtrix3* community forum]
 ### Acknowledgement
 When using this pipeline, please use the following snippet to acknowledge the relevant work (amend as appropriate depending on options used):
 
-Structural connectomes were generated using tools provided in the MRtrix3 software package (http://mrtrix.org). This included: DWI denoising (Veraart et al., 2016), pre-processing (Andersson et al., 2003; Andersson and Sotiropoulos, 2015) and bias field correction (Tustison et al., 2010); inter-modal registration (Bhushan et al., 2015); T1 tissue segmentation (Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography (Tournier et al., 2010) utilizing ACT (Smith et al., 2012) and dynamic seeding (Smith et al., 2015); SIFT2 (Smith et al., 2015); T1 parcellation (Dale et al., 1999; Desikan et al., 2006 OR Destrieux et al., 2010); robust structural connectome construction (Yeh et al., 2016).
+Structural connectomes were generated using tools provided in the MRtrix3 software package (http://mrtrix.org). This included: DWI denoising (Veraart et al., 2016), pre-processing (Andersson et al., 2003; Andersson and Sotiropoulos, 2015) and bias field correction (Tustison et al., 2010); inter-modal registration (Bhushan et al., 2015); T1 tissue segmentation (Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography (Tournier et al., 2010) utilizing ACT (Smith et al., 2012) and dynamic seeding (Smith et al., 2015); SIFT2 (Smith et al., 2015); T1 parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010) ) ); robust structural connectome construction (Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
@@ -27,6 +27,7 @@ Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dens
 Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. Direct estimation of the fiber orientation density function from diffusion-weighted MRI data using spherical deconvolution. NeuroImage,     2004, 23, 1176-1185
 Tournier, J.-D.; Calamante, F. & Connelly, A. Improved probabilistic streamlines tractography by 2nd order integration over fibre orientation distributions. Proceedings of the International Society for Magnetic Resonance in Medicine, 2010, 1670
 Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J. N4ITK: Improved N3 Bias Correction. IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320
+Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. Automated Anatomical Labeling of activations in SPM using a Macroscopic Anatomical Parcellation of the MNI MRI single-subject brain. NeuroImage, 15(1), 273–289
 Veraart, J.; Fieremans, E. & Novikov, D.S. Diffusion MRI noise mapping using random matrix theory Magn. Res. Med., 2016, early view, doi:10.1002/mrm.26059
 Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. Neuroimage, 2016, doi: 10.1016/j.neuroimage.2016.05.047
 Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57
@@ -42,21 +43,23 @@ Command-line usage of the processing script `run.py` is as follows (also accessi
 
 -  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
 -  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
--  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
+-  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant
 
 #### Description
 
-Generate subject connectomes from raw image data, perform inter-subject connection density normalisation, and perform statistical inference across subjects
+Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3
 
 #### Options
 
-#### Options for setting up the connectome reconstruction
+#### Options that are relevant to participant-level analysis
 
-+ **--parc**<br>The choice of connectome parcellation scheme. Options are: fs_2005, fs_2009
++ **--parc**<br>The choice of connectome parcellation scheme. Options are: aal, aal2, fs_2005, fs_2009
+
++ **--streamlines**<br>The number of streamlines to generate for each subject
 
 #### Options specific to the batch processing of subject data
 
-+ **---participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space list.
++ **---participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
 
 #### Standard options
 
@@ -68,13 +71,19 @@ Generate subject connectomes from raw image data, perform inter-subject connecti
 
 + **--nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
 
-+ **--nthreads number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
++ **--nthreads/-n_cpus number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
 
 + **--tempdir /path/to/tmp/**<br>Manually specify the path in which to generate the temporary directory
 
 + **--quiet**<br>Suppress all console output during script execution
 
-+ **--verbose**<br>Display additional information for every command invoked
++ **--verbose**<br>Display additional information and progress for every command invoked
+
++ **--debug**<br>Display additional debugging information over and above the verbose output
+
+#### optional arguments
+
++ **--v/--version**<br>show program's version number and exit
 
 ---
 
@@ -96,7 +105,7 @@ For more details, see www.mrtrix.org
 
 *** WARNING: Incomplete ***
 
-The [bids/MRtrix3_connectome](https://hub.docker.com/r/bids/mrtrix3_connectome/) Docker container enables users to generate structural connectomes from diffusion MRI data using state-of-the-art techniques, and perform statistical analysis of these connectomes between groups. The pipeline requires that data be organized in accordance with the [BIDS specification](http://bids.neuroimaging.io).
+The [bids/MRtrix3_connectome](https://hub.docker.com/r/bids/mrtrix3_connectome/) Docker container enables users to generate structural connectomes from diffusion MRI data using state-of-the-art techniques. The pipeline requires that data be organized in accordance with the [BIDS specification](http://bids.neuroimaging.io).
 
 In your terminal, type:
 ```{bash}
@@ -113,12 +122,5 @@ docker run -i --rm \
     /bids_dataset /outputs participant --participant_label 01 -parc fs_2005
 ```
 
-After doing this for all subjects (potentially in parallel), the group level analysis can be run:
+Watch this space for the addition of group-level analysis capability.
 
-```
-docker run -i --rm \
-    -v /Users/yourname/data/ds005:/bids_dataset \
-    -v /Users/yourname/outputs:/outputs \
-    bids/example \
-    /bids_dataset /outputs group
-```
