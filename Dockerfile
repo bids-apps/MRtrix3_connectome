@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y g++-5
 RUN apt-get install -y libeigen3-dev zlib1g-dev
 
 # Neuroimaging software / data dependencies
-RUN wget -qO- ftp://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/5.3.0-HCP/freesurfer-Linux-centos4_x86_64-stable-pub-v5.3.0-HCP.tar.gz | tar zxv -C /opt \
+RUN curl -sL ftp://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/5.3.0/freesurfer-Linux-centos4_x86_64-stable-pub-v5.3.0.tar.gz | tar zxv -C /opt \
     --exclude='freesurfer/trctrain' \
     --exclude='freesurfer/subjects/fsaverage_sym' \
     --exclude='freesurfer/subjects/fsaverage3' \
@@ -36,8 +36,8 @@ RUN apt-get install -y fsl-5.0-core
 RUN apt-get install -y fsl-5.0-eddy-nonfree
 RUN apt-get install -y fsl-first-data
 RUN apt-get install -y fsl-mni152-templates
-RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | tar zxv /opt
-RUN wget -qO- http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | tar zxv /opt
+RUN curl -sL http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | tar zxv -C /opt
+RUN curl -sL http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | tar zxv -C /opt
 RUN npm install -g bids-validator
 
 # Make FreeSurfer happy
