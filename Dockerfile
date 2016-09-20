@@ -58,7 +58,7 @@ ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 # MRtrix3 setup
 # NOTE: After the Stanford Coding Sprint, the command "git checkout stanford" will likely be removed, since prerequisite changes should be merged into master
 ENV CXX=/usr/bin/g++-5
-RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout stanford && python configure -nogui && python build
+RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout stanford && python configure -nogui && NUMBER_OF_PROCESSORS=1 python build
 RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables
