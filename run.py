@@ -90,7 +90,7 @@ def runSubject (bids_dir, label, output_prefix):
     errorMessage('Could not find parcellation image (expected location: ' + parc_image_path + ')')
   if not os.path.isfile(parc_lut_file):
     errorMessage('Could not find parcellation lookup table file (expected location: ' + parc_lut_file + ')')
-  if not os.path.exists(lut_file):
+  if not os.path.exists(mrtrix_lut_file):
     errorMessage('Could not find MRtrix3 connectome lookup table file (expected location: ' + mrtrix_lut_file + ')')
 
   lib.app.makeTempDir()
