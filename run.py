@@ -60,7 +60,7 @@ def runSubject (bids_dir, label, output_prefix):
 
   parc_image_path = ''
   parc_lut_file = ''
-  mrtrix_lut_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src', 'connectome', 'tables')
+  mrtrix_lut_file = os.path.join(os.path.dirname(os.path.abspath(lib.__file__)), os.pardir, os.pardir, 'src', 'connectome', 'tables')
 
   if lib.app.args.parc == 'fs_2005' or lib.app.args.parc == 'fs_2009':
     if not os.environ['FREESURFER_HOME']:
