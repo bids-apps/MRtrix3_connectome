@@ -321,10 +321,36 @@ def runSubject (bids_dir, label, output_prefix):
 def runGroup(output_dir):
   import lib.app, os, shutil
 
-  subject_list = [ 'sub-' + dir.split("-")[-1] for dir in glob.glob(os.path.join(output_dir, 'sub-*')) ]
+  # Check presence of all required input files before proceeding
+  # Pre-calculate paths of all files since many will be used in more than one location
+  class subjectPaths:
+    def __init__(self, label):
+      self.in_dwi        = os.path.join(output_dir, label, 'dwi', label + '_dwi.nii.gz')
+      self.in_bvec       = os.path.join(output_dir, label, 'dwi', label + '_dwi.bvec')
+      self.in_bval       = os.path.join(output_dir, label, 'dwi', label + '_dwi.bval')
+      self.in_json       = os.path.join(output_dir, label, 'dwi', label + '_dwi.json')
+      self.in_rf         = os.path.join(output_dir, label, 'dwi', label + '_response.txt')
+      self.in_connectome = os.path.join(output_dir, label, 'connectome', label + '_connectome.csv')
+      self.in_mu         = os.path.join(output_dir, label, 'connectome', label + '_mu.txt')
 
-  # TODO Check presence of all required files before proceeding
-  # This can all go into a class so that the calculated paths can be re-used
+      for path in vars(self).values():
+        if not os.path.exists(path):
+          errorMessage('Unable to find critical subject data (expected location: ' + path + ')')
+
+      self.temp_mask      = os.path.join('masks',  label + '.mif')
+      self.temp_fa        = os.path.join('images', label + '.mif')
+      self.temp_bzero     = os.path.join('bzeros', label + '.mif')
+      self.temp_warp      = os.path.join('warps',  label + '.mif')
+      self.temp_voxels    = os.path.join('voxels', label + '.mif')
+      self.out_value      = os.path.join('values', label + '.txt')
+      self.out_connectome = os.path.join('connectomes', label + '.csv')
+
+      self.label = label
+
+  subject_list = [ 'sub-' + dir.split("-")[-1] for dir in glob.glob(os.path.join(output_dir, 'sub-*')) ]
+  subjects = [ ]
+  for label in subject_list:
+    subjects.append(subjectPaths(label))
 
   lib.app.makeTempDir()
   lib.app.gotoTempDir()
@@ -336,29 +362,17 @@ def runGroup(output_dir):
   os.makedirs('bzeros')
   os.makedirs('images')
   os.makedirs('masks')
-  for subject_label in subject_list:
-    dwi_path = os.path.join(output_dir, subject_label, 'dwi', subject_label + '_dwi.nii.gz')
-    if not os.path.exists(dwi_path):
-      errorMessage('Unable to find subject DWI data: ' + dwi_path)
-    bvec_path = os.path.join(output_dir, subject_label, 'dwi', subject_label + '_dwi.bvec')
-    bval_path = os.path.join(output_dir, subject_label, 'dwi', subject_label + '_dwi.bval')
-    if not os.path.exists(bvec_path) or not os.path.exists(bval_path):
-      errorMessage('Unable to find DWI gradient table for subject: ' + subject_label)
-    json_path = os.path.join(output_dir, subject_label, 'dwi', subject_label + '_dwi.json')
-    if not os.path.exists(dwi_path):
-      errorMessage('Unable to find DWI JSON file: ' + json_path)
-    mask_path = os.path.join('masks', subject_label + '.mif')
-    grad_import_option = ' -fslgrad ' + bvec_path + ' ' + bval_path
-    runCommand('dwi2mask ' + dwi_path + ' ' + mask_path + grad_import_option)
-    fa_path = os.path.join('images', subject_label + '.mif')
-    runCommand('dwi2tensor ' + dwi_path + ' - -mask ' + mask_path + grad_import_option + ' | tensor2metric - -fa ' + fa_path)
-    mean_bzero_path = os.path.join('bzeros', subject_label + '.mif')
-    runCommand('dwiextract ' + dwi_path + grad_import_option + ' - -bzero | mrmath - mean ' + mean_bzero_path + ' -axis 3')
+  for s in subjects:
+    grad_import_option = ' -fslgrad ' + s.in_bvec + ' ' + s.in_bval
+    runCommand('dwi2mask ' + s.in_dwi + ' ' + s.temp_mask + grad_import_option)
+    runCommand('dwi2tensor ' + s.in_dwi + ' - -mask ' + s.temp_mask + grad_import_option + ' | tensor2metric - -fa ' + s.temp_fa)
+    runCommand('dwiextract ' + s.in_dwi + grad_import_option + ' - -bzero | mrmath - mean ' + s.temp_bzero + ' -axis 3')
 
   # First group-level calculation: Generate the population FA template
   runCommand('population_template images -mask_dir masks -warp_dir warps template.mif -linear_scale 0.25,0.5,1.0,1.0 -nl_scale 0.5,0.75,1.0,1.0,1.0 -nl_niter 5,5,5,5,5')
   if lib.app.cleanup:
     shutil.rmtree('images')
+    shutil.rmtree('masks')
 
   # Second pass through subject data in group analysis:
   #   - Warp template FA image back to subject space & threshold to define a WM mask in subject space
@@ -369,21 +383,17 @@ def runGroup(output_dir):
   os.makedirs('voxels')
   mean_median_bzero = 0.0
   mean_RF = [ ]
-  for subject_label in subject_list:
-    mean_bzero_path = os.path.join('bzeros', subject_label + '.mif')
-    voxel_path = os.path.join('voxels', subject_label + '.mif')
-    runCommand('mrtransform template.mif -warp_full ' + os.path.join('warps', subject_label + '.mif') + ' - -from 2 -template ' + mean_bzero_path + ' | mrthreshold - ' + voxel_path + ' -abs 0.4')
-    median_bzero = getImageStat(mean_bzero_path, 'median', voxel_path)
-    delFile(voxel_path)
-    delFile(mean_bzero_path)
-    with open(os.path.join('values', subject_label + '.txt'), 'w') as f:
+  for s in subjects:
+    runCommand('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.temp_bzero + ' | mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
+    median_bzero = getImageStat(s.temp_bzero, 'median', s.temp_voxels)
+    delFile(s.temp_bzero)
+    delFile(s.temp_voxels)
+    delFile(s.temp_warp)
+    with open(s.out_value, 'w') as f:
       f.write (median_bzero)
     mean_median_bzero = mean_median_bzero + float(median_bzero)
-    rf_path = os.path.join(output_dir, subject_label, 'dwi', subject_label + '_response.txt')
-    if not os.path.exists(rf_path):
-      errorMessage('Unable to find SD response function file: ' + rf_path)
     RF = [ ]
-    with open(rf_path, 'r') as f:
+    with open(s.in_rf, 'r') as f:
       for line in f:
         RF.append([ float(v) for v in line.split() ])
     RF_lzero = [ line[0] for line in RF ]
@@ -393,15 +403,16 @@ def runGroup(output_dir):
       mean_RF = RF_lzero
   if lib.app.cleanup:
     shutil.rmtree('bzeros')
-    shutil.rmtree('masks')
+    shutil.rmtree('voxels')
+    shutil.rmtree('warps')
 
   # Second group-level calculation:
   #   - Calculate the mean of median b=0 values
   #   - Calculate the mean response function
   # TODO Write these to file?
-  # Perhaps a better option would be a text file summary of all inter-subject connection density normalisation parameters per subject
-  mean_median_bzero = mean_median_bzero / len(subject_list)
-  mean_RF = [ v / len(subject_list) for v in mean_RF ]
+  # Perhaps a better option would be a text file summary of all inter-subject connection density normalisation parameters per subject, as well as all group mean data
+  mean_median_bzero = mean_median_bzero / len(subjects)
+  mean_RF = [ v / len(subjects) for v in mean_RF ]
 
   # Third pass through subject data in group analysis:
   #   - Scale the connectome strengths:
@@ -410,17 +421,13 @@ def runGroup(output_dir):
   #     - Multiply by (subject RF size) / (mean RF size)
   #   - Write the result to file
   os.makedirs('connectomes')
-  for subject_label in subject_list:
-    mu_file_path = os.path.join(output_dir, subject_label, 'connectome', subject_label + '_mu.txt')
-    if not os.path.exists(mu_file_path):
-      errorMessage('Could not find SIFT proportionality coefficient file: ' + mu_file_path)
-    with open(mu_file_path, 'r') as f:
+  for s in subjects:
+    with open(s.in_mu, 'r') as f:
       mu = float(f.read())
-    with open(os.path.join('values', subject_label + '.txt'), 'r') as f:
+    with open(s.out_value, 'r') as f:
       median_bzero = float(f.read())
-    rf_path = os.path.join(output_dir, subject_label, 'dwi', subject_label + '_response.txt')
     RF = [ ]
-    with open(rf_path, 'r') as f:
+    with open(s.in_rf, 'r') as f:
       for line in f:
         RF.append([ float(v) for v in line.split() ])
     RF_lzero = [ line[0] for line in RF ]
@@ -429,14 +436,11 @@ def runGroup(output_dir):
       RF_multiplier = RF_multiplier * subj / mean
     global_multiplier = mu * (mean_median_bzero / median_bzero) * RF_multiplier
 
-    connectome_path = os.path.join(output_dir, subject_label, 'connectome', subject_label + '_connectome.csv')
-    if not os.path.exists(connectome_path):
-      errorMessage('Could not find subject connectome file: ' + connectome_path)
     connectome = [ ]
-    with open(connectome_path, 'r') as f:
+    with open(s.in_connectome, 'r') as f:
       for line in f:
         connectome.append ( [ float(v) for v in line.split() ] )
-    with open(os.path.join('connectomes', subject_label + '.csv'), 'w') as f:
+    with open(s.out_connectome, 'w') as f:
       for line in connectome:
         f.write(' '.join([ str(v*global_multiplier) for v in line ]) + '\n')
 
@@ -449,10 +453,9 @@ def runGroup(output_dir):
   #   then have the flexibility to subsequently analyse the data however they choose (ideally
   #   based on subject classification data provided with the BIDS-compliant dataset).
   mean_connectome = [ ]
-  for subject_label in subject_list:
-    path = os.path.join('connectomes', subject_label + '.csv')
+  for s in subjects:
     connectome = [ ]
-    with open(path, 'r') as f:
+    with open(s.out_connectome, 'r') as f:
       for line in f:
         connectome.append( [ float(v) for v in line.split() ] )
     if mean_connectome:
@@ -461,11 +464,11 @@ def runGroup(output_dir):
     else:
       mean_connectome = connectome
 
-  mean_connectome = [ [ v/len(subject_list) for v in row ] for row in mean_connectome ]
+  mean_connectome = [ [ v/len(subjects) for v in row ] for row in mean_connectome ]
 
   # Write results of interest back to the output directory
-  for subject_label in subject_list:
-    shutil.copyfile(os.path.join('connectomes', subject_label + '.csv'), os.path.join(output_dir, subject_label, 'connectome', subject_label + '_scaled_connectome.csv'))
+  for s in subjects:
+    shutil.copyfile(s.out_connectome, os.path.join(output_dir, s.label, 'connectome', s.label + '_scaled_connectome.csv'))
   with open(os.path.join(output_dir, 'mean_connectome.csv'), 'w') as f:
     for row in mean_connectome:
       f.write(' '.join( [ str(v) for v in row ] ) + '\n')
@@ -493,9 +496,10 @@ batch_options.add_argument('--participant_label', nargs='+', help='The label(s) 
 participant_options = lib.app.parser.add_argument_group('Options that are relevant to participant-level analysis')
 participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme. Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
-# TODO Option to copy particular data files from participant level processing into the output directory
+# TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 #group_options = lib.app.parser.add_argument_group('Options that are relevant to group-level analysis')
 #testing_options = lib.app.parser.add_argument_group('Options for testing the run.py script')
+# Modify the existing -nthreads option (created in lib.cmdlineParser) to also accept the usage '-n_cpus'
 lib.app.parser._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '-n_cpus' ]
 lib.app.parser._option_string_actions['-n_cpus'] = lib.app.parser._option_string_actions['-nthreads']
 for i in lib.app.parser._actions:
