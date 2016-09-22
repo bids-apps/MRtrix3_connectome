@@ -73,17 +73,21 @@ def runSubject (bids_dir, label, output_prefix):
     else:
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_2009.txt')
 
+# TODO Command-line option to provide the path to the parcellation information,
+#   for if the script is used outside of the BIDS App container and these data
+#   are provided in some other location
+
   if lib.app.args.parc == 'aal' or lib.app.args.parc == 'aal2':
     mni152_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
     if not os.path.isfile(mni152_path):
       errorMessage('Could not find MNI152 template image within FSL installation')
     if lib.app.args.parc == 'aal':
-      parc_image_path = os.path.join('opt', 'aal', 'ROI_MNI_V4.nii')
-      parc_lut_file = os.path.join('opt', 'aal', 'ROI_MNI_V4.txt')
+      parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.nii'))
+      parc_lut_file = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.txt'))
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal.txt')
     else:
-      parc_image_path = os.path.join('opt', 'aal', 'ROI_MNI_V5.nii')
-      parc_lut_file = os.path.join('opt', 'aal', 'ROI_MNI_V5.txt')
+      parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V5.nii'))
+      parc_lut_file = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V5.txt'))
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal2.txt')
 
   if parc_image_path and not os.path.isfile(parc_image_path):
@@ -471,11 +475,14 @@ elif lib.app.args.analysis_level == "group":
       for line in connectome:
         f.write( ','.join([ v*global_multiplier for v in line ]) )
 
-  # Third group-level calculation: Perform statistical analysis of connectomes using NBS-TFCE
-  # Can't do this without opening the root-directory dataset description file and selecting a contrast to test
-
-  # For now, for the sake of testing the pipeline and doing some form of group data manipulation,
-  #   let's just generate the mean connectome
+  # Third group-level calculation: Generate the group mean connectome
+  # For any higher-level analysis (e.g. NBSE, computing connectome global measures, etc.),
+  #   trying to incorporate such analysis into this particular pipeline script is likely to
+  #   overly complicate the interface, and not actually provide much in terms of
+  #   convenience / reproducibility guarantees. The primary functionality of this group-level
+  #   analysis is therefore to achieve inter-subject connection density normalisation; users
+  #   then have the flexibility to subsequently analyse the data however they choose (ideally
+  #   based on subject classification data provided with the BIDS-compliant dataset).
   mean_connectome = [ ]
   for subject_label in subjects_to_analyze:
     path = os.path.join(lib.app.args.output_dir, subject_label, 'connectome', subject_label + '_connectome_scaled.csv')
