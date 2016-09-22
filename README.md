@@ -45,7 +45,7 @@ Command-line usage of the processing script `run.py` is as follows (also accessi
 
 -  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
 -  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
--  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant
+-  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
 
 #### Description
 
@@ -105,8 +105,6 @@ For more details, see www.mrtrix.org
 
 ### Instructions
 
-*** WARNING: Incomplete ***
-
 The [bids/MRtrix3_connectome](https://hub.docker.com/r/bids/mrtrix3_connectome/) Docker container enables users to generate structural connectomes from diffusion MRI data using state-of-the-art techniques. The pipeline requires that data be organized in accordance with the [BIDS specification](http://bids.neuroimaging.io).
 
 In your terminal, type:
@@ -124,5 +122,13 @@ docker run -i --rm \
     /bids_dataset /outputs participant --participant_label 01 -parc fs_2005
 ```
 
-Watch this space for the addition of group-level analysis capability.
+Following processing of all participants, the script can be run in group analysis mode using e.g.:
+
+```
+docker run -i --rm \
+    -v /Users/yourname/data/ds005:/bids_dataset \
+    -v /Users/yourname/outputs:/outputs \
+    bids/example \
+    /bids_dataset /outputs group
+```
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, glob, sys
+import os, glob, shutil, sys
 import lib.app, lib.cmdlineParser
 
 from lib.binaryInPath  import binaryInPath
@@ -8,6 +8,7 @@ from lib.delFile       import delFile
 from lib.errorMessage  import errorMessage
 from lib.getFSLSuffix  import getFSLSuffix
 from lib.getHeaderInfo import getHeaderInfo
+from lib.getImageStat  import getImageStat
 from lib.getUserPath   import getUserPath
 from lib.imagesMatch   import imagesMatch
 from lib.isWindows     import isWindows
@@ -239,12 +240,11 @@ def runSubject (bids_dir, label, output_prefix):
 
   # Step 15: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
+  runCommand('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
   if lib.app.args.parc == 'fs_2005' or lib.app.args.parc == 'fs_2009':
 
     # Run FreeSurfer pipeline on this subject's T1 image
-    runCommand('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
     runCommand('recon-all -sd ' + lib.app.tempDir + ' -subjid freesurfer -i T1_registered.nii')
-    delFile('T1_registered.nii')
     runCommand('recon-all -sd ' + lib.app.tempDir + ' -subjid freesurfer -all')
 
     # Grab the relevant parcellation image and target lookup table for conversion
@@ -266,11 +266,10 @@ def runSubject (bids_dir, label, output_prefix):
 
   elif lib.app.args.parc == 'aal' or lib.app.args.parc == 'aal2':
 
-    runCommand('mrconvert T1_registered.mif T1_registered.nii')
     # Can use MNI152 image provided with FSL for registration
-    runCommand('flirt -ref ' + mni152_path + ' -in T1 -omat T1_to_MNI_FLIRT.mat -dof 12')
-    delFile('T1_registered.nii')
-    runCommand('transformconvert T1_to_MNI_FLIRT.mat T1.nii ' + mni152_path + ' flirt_import T1_to_MNI_MRtrix.mat')
+    runCommand('flirt -ref ' + mni152_path + ' -in T1_registered.nii -omat T1_to_MNI_FLIRT.mat -dof 12')
+    runCommand('transformconvert T1_to_MNI_FLIRT.mat T1_registered.nii ' + mni152_path + ' flirt_import T1_to_MNI_MRtrix.mat')
+    
     delFile('T1_to_MNI_FLIRT.mat')
     runCommand('transformcalc T1_to_MNI_MRtrix.mat invert MNI_to_T1_MRtrix.mat')
     delFile('T1_to_MNI_MRtrix.mat')
@@ -281,6 +280,7 @@ def runSubject (bids_dir, label, output_prefix):
 
   else:
     errorMessage('Unknown parcellation scheme requested: ' + lib.app.args.parc)
+  delFile('T1_registered.nii')
 
   # Step 16: Generate the connectome
   #          Only provide the standard density-weighted connectome for now
@@ -297,15 +297,23 @@ def runSubject (bids_dir, label, output_prefix):
 
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
   os.chdir(cwd)
-  shutil.rmtree(lib.app.tempDir)
+  if lib.app.cleanup:
+    printMessage('Deleting temporary directory ' + lib.app.tempDir)
+    shutil.rmtree(lib.app.tempDir)
+  else:
+    printMessage('Contents of temporary directory kept, location: ' + lib.app.tempDir)
   lib.app.tempDir = ''
 
 # End of runSubject() function
 
 
 
-#analysis_choices = [ 'participant', 'group' ]
-analysis_choices = [ 'participant' ]
+# TODO Create runGroup() function, use a temporary directory
+# Don't write to the output directory unless the function actually completes
+
+
+
+analysis_choices = [ 'participant', 'group' ]
 parcellation_choices = [ 'aal', 'aal2', 'fs_2005', 'fs_2009' ]
 
 lib.app.author = 'Robert E. Smith (robert.smith@florey.edu.au)'
@@ -360,17 +368,17 @@ if lib.app.args.analysis_level == "participant":
 # Running group level
 elif lib.app.args.analysis_level == "group":
 
-  errorMessage('Group-level analysis not yet supported')
-
   if lib.app.args.participant_label:
     errorMessage('Do not specify a subgroup of subjects if performing a group analysis')
 
   pop_template_dir = os.path.join(lib.app.args.output_dir, 'population_template')
+  if os.path.exists(pop_template_dir):
+    shutil.rmtree(pop_template_dir)
   os.makedirs(pop_template_dir)
   os.makedirs(os.path.join(pop_template_dir, 'images'))
   os.makedirs(os.path.join(pop_template_dir, 'masks'))
   os.makedirs(os.path.join(pop_template_dir, 'values'))
-  os.makedirs(os.path.join(pop_template_dir, 'warps'))
+  #os.makedirs(os.path.join(pop_template_dir, 'warps')) # population_template script will generate
 
   # First pass through subject data in group analysis:
   #   - Grab DWI data (written back from single-subject analysis back into BIDS format)
@@ -393,11 +401,11 @@ elif lib.app.args.analysis_level == "group":
     tensor_path = os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_tensor.mif')
     runCommand('dwi2tensor ' + dwi_path + ' ' + tensor_path + ' -mask ' + mask_path + grad_import_option)
     fa_path = os.path.join(lib.app.args.output_dir, 'population_template', 'images', subject_label + '.mif')
-    runCommand('tensor2metric ' + tensor_path + ' ' + fa_path)
-    deflFile(tensor_path)
+    runCommand('tensor2metric ' + tensor_path + ' -fa ' + fa_path)
+    delFile(tensor_path)
     bzeros_path = os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_bzeros.mif')
-    runCommand('dwiextract ' + dwi_path + ' ' + bzeros_path + ' -bzero')
-    runCommand('mrmath ' + bzeros_path + ' ' + os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_mean_bzero.mif') + ' -axis 3')
+    runCommand('dwiextract ' + dwi_path + grad_import_option + ' ' + bzeros_path + ' -bzero')
+    runCommand('mrmath ' + bzeros_path + ' mean ' + os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_mean_bzero.mif') + ' -axis 3')
     delFile(bzeros_path)
 
   # First group-level calculation: Generate the population template
@@ -412,8 +420,8 @@ elif lib.app.args.analysis_level == "group":
   mean_median_bzero = 0.0
   mean_RF = [ ]
   for subject_label in subjects_to_analyze:
-    warped_template_path = os.path.join(lib.app.args.args.output_dir, subject_label, 'dwi', subject_label + '_template_fa.mif')
-    runCommand('mrtransform ' + template_path + ' -warp_full ' + os.path.join(pop_template_dir, 'warps', subject_label + '.mif') + ' ' + warped_template_path + ' -from 2 -template ' + os.path.join(args.output_dir, 'population_template', 'images', subject_label + '.mif'))
+    warped_template_path = os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_template_fa.mif')
+    runCommand('mrtransform ' + template_path + ' -warp_full ' + os.path.join(pop_template_dir, 'warps', subject_label + '.mif') + ' ' + warped_template_path + ' -from 2 -template ' + os.path.join(lib.app.args.output_dir, 'population_template', 'images', subject_label + '.mif'))
     voxel_mask_path = os.path.join(lib.app.args.output_dir, subject_label, 'dwi', subject_label + '_intensity_mask.mif')
     runCommand('mrthreshold ' + warped_template_path + ' ' + voxel_mask_path + ' -abs 0.4')
     delFile(warped_template_path)
@@ -470,10 +478,11 @@ elif lib.app.args.analysis_level == "group":
       errorMessage('Could not find subject connectome file: ' + connectome_path)
     connectome = [ ]
     with open(connectome_path, 'r') as f:
-      connectome.append ( [ float(v) for v in f.read().split() ] )
+      for line in f:
+        connectome.append ( [ float(v) for v in line.split() ] )
     with open(os.path.join(lib.app.args.output_dir, subject_label, 'connectome', subject_label + '_connectome_scaled.csv'), 'w') as f:
       for line in connectome:
-        f.write( ','.join([ v*global_multiplier for v in line ]) )
+        f.write(' '.join([ str(v*global_multiplier) for v in line ]) + '\n')
 
   # Third group-level calculation: Generate the group mean connectome
   # For any higher-level analysis (e.g. NBSE, computing connectome global measures, etc.),
@@ -488,7 +497,8 @@ elif lib.app.args.analysis_level == "group":
     path = os.path.join(lib.app.args.output_dir, subject_label, 'connectome', subject_label + '_connectome_scaled.csv')
     connectome = [ ]
     with open(path, 'r') as f:
-      connectome.append( [ float(v) for v in f.read().split() ] )
+      for line in f:
+        connectome.append( [ float(v) for v in line.split() ] )
     if mean_connectome:
       for r1,r2 in zip(connectome, mean_connectome):
         r2 = [ c1+c2 for c1,c2 in zip(r1,r2) ]
@@ -499,7 +509,7 @@ elif lib.app.args.analysis_level == "group":
 
   with open(os.path.join(pop_template_dir, 'mean_connectome.csv'), 'w') as f:
     for row in mean_connectome:
-      f.write(','.join(row))
+      f.write(' '.join( [ str(v) for v in row ] ) + '\n')
 
 
 
