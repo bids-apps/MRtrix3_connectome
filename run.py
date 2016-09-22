@@ -270,7 +270,7 @@ def runSubject (bids_dir, label, output_prefix):
     # Can use MNI152 image provided with FSL for registration
     runCommand('flirt -ref ' + mni152_path + ' -in T1 -omat T1_to_MNI_FLIRT.mat -dof 12')
     delFile('T1_registered.nii')
-    runCommand('transformconvert T1_to_MNI_FLIRT.mat T1.nii ' + mni_path + ' flirt_import T1_to_MNI_MRtrix.mat')
+    runCommand('transformconvert T1_to_MNI_FLIRT.mat T1.nii ' + mni152_path + ' flirt_import T1_to_MNI_MRtrix.mat')
     delFile('T1_to_MNI_FLIRT.mat')
     runCommand('transformcalc T1_to_MNI_MRtrix.mat invert MNI_to_T1_MRtrix.mat')
     delFile('T1_to_MNI_MRtrix.mat')
@@ -292,7 +292,7 @@ def runSubject (bids_dir, label, output_prefix):
   runCommand('mrconvert dwi.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi.nii.gz')
              + ' -export_grad_fsl ' + os.path.join(output_dir, 'dwi', label + '_dwi.bvec') + ' ' + os.path.join(output_dir, 'dwi', label + '_dwi.bval')
              + ' -json_export ' + os.path.join(output_dir, 'dwi', label + '_dwi.json'))
-  shutil.copy('out_mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
+  shutil.copy('mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
   shutil.copy(rf_file_for_scaling, os.path.join(output_dir, 'dwi', label + '_response.txt'))
 
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
@@ -355,7 +355,7 @@ if lib.app.args.analysis_level == "participant":
 
   for subject_label in subjects_to_analyze:
     printMessage('Commencing execution for subject ' + subject_label)
-    runSubject(lib.app.args.bids_dir, subject_label, lib.app.args.output_dir)
+    runSubject(lib.app.args.bids_dir, subject_label, os.path.abspath(lib.app.args.output_dir))
 
 # Running group level
 elif lib.app.args.analysis_level == "group":
