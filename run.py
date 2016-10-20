@@ -500,11 +500,11 @@ participant_options.add_argument('-streamlines', type=int, help='The number of s
 #group_options = lib.app.parser.add_argument_group('Options that are relevant to group-level analysis')
 #testing_options = lib.app.parser.add_argument_group('Options for testing the run.py script')
 # Modify the existing -nthreads option (created in lib.cmdlineParser) to also accept the usage '-n_cpus'
-lib.app.parser._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '-n_cpus' ]
-lib.app.parser._option_string_actions['-n_cpus'] = lib.app.parser._option_string_actions['-nthreads']
+lib.app.parser._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '--n_cpus' ]
+lib.app.parser._option_string_actions['--n_cpus'] = lib.app.parser._option_string_actions['-nthreads']
 for i in lib.app.parser._actions:
   if i.dest == 'nthreads':
-    i.option_strings = [ '-nthreads', '-n_cpus' ]
+    i.option_strings = [ '-nthreads', '--n_cpus' ]
     break
 
 lib.app.initialise()
