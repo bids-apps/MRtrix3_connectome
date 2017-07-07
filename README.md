@@ -12,17 +12,20 @@ Experiencing problems? You can post a message on the [*MRtrix3* community forum]
 ### Acknowledgement
 When using this pipeline, please use the following snippet to acknowledge the relevant work (amend as appropriate depending on options used):
 
-Structural connectomes were generated using tools provided in the MRtrix3 software package (http://mrtrix.org). This included: DWI denoising (Veraart et al., 2016), pre-processing (Andersson et al., 2003; Andersson and Sotiropoulos, 2015) and bias field correction (Tustison et al., 2010); inter-modal registration (Bhushan et al., 2015); T1 tissue segmentation (Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography (Tournier et al., 2010) utilizing ACT (Smith et al., 2012) and dynamic seeding (Smith et al., 2015); SIFT2 (Smith et al., 2015); T1 parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010) ) ); robust structural connectome construction (Yeh et al., 2016).
+Structural connectomes were generated using tools provided in the MRtrix3 software package (http://mrtrix.org). This included: DWI denoising (Veraart et al., 2016), Gibbs ringing removal (Kellner et al., 2016), pre-processing (Andersson et al., 2003; Andersson and Sotiropoulos, 2015; Andersson et al., 2016) and bias field correction (Tustison et al., 2010); inter-modal registration (Bhushan et al., 2015); T1 tissue segmentation (Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography (Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al., 2012) and dynamic seeding (Smith et al., 2015); SIFT2 (Smith et al., 2015); T1 parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010) ) OR Rohlfing et al., 2010 ); robust structural connectome construction (Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
 Andersson, J. L. & Sotiropoulos, S. N. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage, 2015, 125, 1063-1078
+Andersson, J. L. R. & Graham, M. S. & Zsoldos, E. & Sotiropoulos, S. N. Incorporating outlier detection and replacement into a non-parametric framework for movement and distortion correction of diffusion MR images. NeuroImage, 2016, 141, 556-572
 Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280
 Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction NeuroImage, 1999, 9, 179-194
-Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data NeuroImage, 2014, 103, 411-426
 Desikan, R. S.; Ségonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980
 Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15
+Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data NeuroImage, 2014, 103, 411-426
+Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581
 Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. A Bayesian model of shape and appearance for subcortical brain segmentation. NeuroImage, 2011, 56, 907-922
+Rohlfing, T.; Zahr, N. M.; Sullivan, E. V. & Pfefferbaum, A. The SRI24 Multi-Channel Atlas of Normal Adult Human Brain Structure. Human Brain Mapping, 2010, 31, 798-819
 Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 17, 143-155
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dense quantitative assessment of brain white matter connectivity using streamlines tractography. NeuroImage, 2015, 119, 338-351
@@ -114,21 +117,22 @@ $ docker pull bids/mrtrix3_connectome
 
 To run the script in participant level mode (for processing one subject only), use e.g.:
 
-```
-docker run -i --rm \
-    -v /Users/yourname/data/ds005:/bids_dataset \
-    -v /Users/yourname/outputs:/outputs \
-    bids/example \
-    /bids_dataset /outputs participant --participant_label 01 -parc fs_2005
+```{bash}
+$ docker run -i --rm \
+      -v /Users/yourname/data/ds005:/bids_dataset \
+      -v /Users/yourname/outputs:/outputs \
+      bids/example \
+      /bids_dataset /outputs participant --participant_label 01 -parc fs_2005
 ```
 
 Following processing of all participants, the script can be run in group analysis mode using e.g.:
 
-```
-docker run -i --rm \
-    -v /Users/yourname/data/ds005:/bids_dataset \
-    -v /Users/yourname/outputs:/outputs \
-    bids/example \
-    /bids_dataset /outputs group
+```{bash}
+$ docker run -i --rm \
+      -v /Users/yourname/data/ds005:/bids_dataset \
+      -v /Users/yourname/outputs:/outputs \
+      bids/example \
+      /bids_dataset /outputs group
 ```
 
+If you wish to run this script on a computing cluster, we recommend the use of [Singularity](http://singularity.lbl.gov/). Although built for Docker, this container can be converted using the [`docker2singularity`](https://github.com/singularityware/docker2singularity) tool.
