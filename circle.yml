@@ -11,7 +11,7 @@ dependencies:
     - "~/data"
 
   override:
-    - if [[ ! -d ~/data/mrtrix3_connectome_data ]]; then wget -c -P ${HOME}/downloads/ "https://dl.dropboxusercontent.com/u/8970757/mrtrix3_connectome_data.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/mrtrix3_connectome_data.tar -C ${HOME}/data; fi
+    - if [[ ! -d ~/data/mrtrix3_connectome_data ]]; then wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/03b2ufkcjr25eo6/mrtrix3_connectome_data.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/mrtrix3_connectome_data.tar -C ${HOME}/data; fi
     - if [[ -e ~/docker/image.tar ]]; then docker load -i ~/docker/image.tar; fi
     - git describe --tags > version
     - docker build -t bids/${CIRCLE_PROJECT_REPONAME,,} . :
