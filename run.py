@@ -331,7 +331,8 @@ def runSubject(bids_dir, label, output_prefix):
   os.chdir(cwd)
   if app._cleanup:
     app.console('Deleting temporary directory ' + app._tempDir)
-    run.function(shutil.rmtree, app._tempDir)
+    # Can't use run.function() here; it'll try to write to the log file that resides in the temp directory just deleted
+    shutil.rmtree(app._tempDir)
   else:
     app.console('Contents of temporary directory kept, location: ' + app._tempDir)
   app._tempDir = ''
