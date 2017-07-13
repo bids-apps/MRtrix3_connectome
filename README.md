@@ -42,23 +42,25 @@ Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidde
 
 Command-line usage of the processing script `run.py` is as follows (also accessible by running the script without any command-line options):
 
-#### Synopsis
+## Synopsis
 
-    run.py [ options ] bids_dir output_dir analysis_level
+Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3
+
+## Usage
+
+    run.py bids_dir output_dir analysis_level [ options ]
 
 -  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
 -  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
 -  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
 
-#### Description
-
-Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3
-
-#### Options
+## Options
 
 #### Options that are relevant to participant-level analysis
 
-+ **--parc**<br>The choice of connectome parcellation scheme. Options are: aal, aal2, fs_2005, fs_2009
++ **--atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
+
++ **--parc**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
 
 + **--streamlines**<br>The number of streamlines to generate for each subject
 
@@ -82,9 +84,9 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **--quiet**<br>Suppress all console output during script execution
 
-+ **--verbose**<br>Display additional information and progress for every command invoked
++ **--info**<br>Display additional information and progress for every command invoked
 
-+ **--debug**<br>Display additional debugging information over and above the verbose output
++ **--debug**<br>Display additional debugging information over and above the output of -info
 
 #### optional arguments
 
@@ -94,17 +96,19 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 **Author:** Robert E. Smith (robert.smith@florey.edu.au)
 
-**Copyright:** Copyright (c) 2008-2016 the MRtrix3 contributors
+**Copyright:** Copyright (c) 2008-2017 the MRtrix3 contributors
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/
+file, you can obtain one at http://mozilla.org/MPL/2.0/.
 
 MRtrix is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+but WITHOUT ANY WARRANTY; without even the implied warranty
+of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-For more details, see www.mrtrix.org
+For more details, see http://www.mrtrix.org/.
+
+
 
 ### Instructions
 

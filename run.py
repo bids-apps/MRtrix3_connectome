@@ -75,10 +75,6 @@ def runSubject(bids_dir, label, output_prefix):
     else:
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_2009.txt')
 
-# TODO Command-line option to provide the path to the parcellation information,
-#   for if the script is used outside of the BIDS App container and these data
-#   are provided in some other location
-
   if app.args.parc == 'aal' or app.args.parc == 'aal2':
     mni152_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
     if not os.path.isfile(mni152_path):
@@ -93,9 +89,23 @@ def runSubject(bids_dir, label, output_prefix):
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal2.txt')
 
   if parc_image_path and not os.path.isfile(parc_image_path):
-    app.error('Could not find parcellation image (expected location: ' + parc_image_path + ')')
+    if app.args.atlas_path:
+      parc_image_path = [ parc_image_path, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(parc_image_path)) ]
+      if os.path.isfile(parc_image_path[1]):
+        parc_image_path = parc_image_path[1]
+      else:
+        app.error('Could not find parcellation image (tested locations: ' + str(parc_image_path) + ')')
+    else:
+      app.error('Could not find parcellation image (expected location: ' + parc_image_path + ')')
   if not os.path.isfile(parc_lut_file):
-    app.error('Could not find parcellation lookup table file (expected location: ' + parc_lut_file + ')')
+    if app.args.atlas_path:
+      parc_lut_file = [ parc_lut_file, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(parc_lut_file)) ]
+      if os.path.isfile(parc_lut_file[1]):
+        parc_lut_file = parc_lut_file[1]
+      else:
+        app.error('Could not find parcellation lookup table file (tested locations: ' + str(parc_lut_file) + ')')
+    else:
+      app.error('Could not find parcellation lookup table file (expected location: ' + parc_lut_file + ')')
   if not os.path.exists(mrtrix_lut_file):
     app.error('Could not find MRtrix3 connectome lookup table file (expected location: ' + mrtrix_lut_file + ')')
 
@@ -104,8 +114,10 @@ def runSubject(bids_dir, label, output_prefix):
   # Need to perform an initial import of JSON data using mrconvert; so let's grab the diffusion gradient table as well
   # If no bvec/bval present, need to go down the directory listing
   # Only try to import JSON file if it's actually present
-  # TODO May need to concatenate more than one input DWI, since if there's more than one phase-encode
   #   direction in the acquisition they'll need to be split across multiple files
+  # May need to concatenate more than one input DWI, since if there's more than one phase-encode direction
+  #   in the acquired DWIs (i.e. not just those used for estimating the inhomogeneity field), they will
+  #   need to be stored as separate NIfTI files in the 'dwi/' directory.
   dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label) + '*_dwi.nii*')
   dwi_index = 1
   for entry in dwi_image_list:
@@ -566,9 +578,9 @@ app.cmdline.add_argument('-v', '--version', action='version', version=__version_
 batch_options = app.cmdline.add_argument_group('Options specific to the batch processing of subject data')
 batch_options.add_argument('--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
-participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme. Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+participant_options.add_argument('-atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
+participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
-# TODO Option to specify the location of the parcellation, for when being used outside of the container
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 # Modify the existing -nthreads option to also accept the usage '-n_cpus'
 app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '-n_cpus' ]
