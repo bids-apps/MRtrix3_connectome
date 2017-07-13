@@ -124,20 +124,21 @@ def runSubject(bids_dir, label, output_prefix):
   # Go hunting for reversed phase-encode data
   # TODO Should ideally have compatibility with fieldmap data also
   # TODO If there's an 'IntendedFor' field in the JSON file, and it's NOT the DWI(s) we're using, don't use
-  fmap_dir = os.path.join(bids_dir, label, 'fmap')
-  if not os.path.isdir(fmap_dir):
-    app.error('Subject does not possess fmap data necessary for EPI distortion correction')
-  fmap_index = 1
   fmap_image_list = []
-  while (True):
-    prefix = os.path.join(fmap_dir, label + '_dir-' + str(fmap_index) + '_epi')
-    if os.path.isfile(prefix + '.nii.gz') and os.path.isfile(prefix + '.json'):
-      run.command('mrconvert ' + prefix + '.nii.gz -json_import ' + prefix + '.json ' +
-                  path.toTemp('RPE' + str(fmap_index) + '.mif', True))
-      fmap_image_list.append('RPE' + str(fmap_index) + '.mif')
-    else:
-      break
-    fmap_index += 1
+  fmap_dir = os.path.join(bids_dir, label, 'fmap')
+  fmap_index = 1
+  if os.path.isdir(fmap_dir):
+    while (True):
+      prefix = os.path.join(fmap_dir, label + '_dir-' + str(fmap_index) + '_epi')
+      if os.path.isfile(prefix + '.nii.gz') and os.path.isfile(prefix + '.json'):
+        run.command('mrconvert ' + prefix + '.nii.gz -json_import ' + prefix + '.json ' +
+                    path.toTemp('RPE' + str(fmap_index) + '.mif', True))
+        fmap_image_list.append('RPE' + str(fmap_index) + '.mif')
+      else:
+        break
+      fmap_index += 1
+  # TODO If there's no data in fmap/ directory, need to check to see if there's any phase-encoding
+  #   contrast within the input DWI(s)
 
   run.command('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' +
               path.toTemp('T1.mif', True))
@@ -145,16 +146,27 @@ def runSubject(bids_dir, label, output_prefix):
   cwd = os.getcwd()
   app.gotoTempDir()
 
-  # Step 1: Denoise
-  # TODO: Concatenate any SE EPI images with the DWIs before denoising, then
+  # Concatenate any SE EPI images with the DWIs before denoising (& unringing), then
   #   separate them again after the fact
+  dwidenoise_input = 'input.mif'
+  fmap_num_volumes = 0
+  if len(fmap_image_list):
+    run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
+    for i in fmap_image_list:
+      file.delTempFile(i)
+    fmap_num_volumes = int(image.headerField('fmap_cat.mif', 'size').strip().split(',')[3])
+    dwidenoise_input = 'all_cat.mif'
+    run.command('mrcat fmap_cat.mif input.mif ' + dwidenoise_input + ' -axis 3')
+    file.delTempFile('fmap_cat.mif')
+    file.delTempFile('input.mif')
 
-  run.command('dwidenoise input.mif dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
+  # Step 1: Denoise
+  run.command('dwidenoise ' + dwidenoise_input + ' dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
   if unring_cmd:
-    run.command('mrinfo input.mif -json_export input.json')
-  file.delTempFile('input.mif')
+    run.command('mrinfo ' + dwidenoise_input + ' -json_export input.json')
+  file.delTempFile(dwidenoise_input)
 
-  # Step 2: Gibbs ringing removal
+  # Step 2: Gibbs ringing removal (if available)
   if unring_cmd:
     run.command('unring.a64 dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
     file.delTempFile('dwi_denoised.nii')
@@ -162,14 +174,25 @@ def runSubject(bids_dir, label, output_prefix):
     file.delTempFile('dwi_unring' + fsl_suffix)
     file.delTempFile('input.json')
 
-  # Step 3: Distortion correction
-  run.command('mrcat ' + ' '.join(fmap_image_list) + ' se_epi.mif -axis 3')
-  for path in fmap_image_list:
-    file.delTempFile(path)
+  # If fmap images and DWIs have been concatenated, now is the time to split them back apart
   dwipreproc_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
-  run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header -se_epi se_epi.mif')
+  dwipreproc_se_epi = ''
+  dwipreproc_se_epi_option = ''
+  if fmap_num_volumes:
+    cat_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
+    dwipreproc_se_epi = 'se_epi.mif'
+    run.command('mrconvert ' + dwipreproc_input + ' ' + dwipreproc_se_epi + ' -coord 3 0:' + str(fmap_num_volumes-1))
+    cat_num_volumes = int(image.headerField(dwipreproc_input, 'size').strip().split(',')[3])
+    run.command('mrconvert ' + dwipreproc_input + ' dwipreproc_in.mif -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
+    file.delTempFile(dwipreproc_input)
+    dwipreproc_input = 'dwipreproc_in.mif'
+    dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
+
+  # Step 3: Distortion correction
+  run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option)
   file.delTempFile(dwipreproc_input)
-  file.delTempFile('se_epi.mif')
+  if dwipreproc_se_epi:
+    file.delTempFile(dwipreproc_se_epi)
 
   # Step 4: Bias field correction
   if dwibiascorrect_algo:
