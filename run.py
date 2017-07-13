@@ -106,40 +106,48 @@ def runSubject(bids_dir, label, output_prefix):
   # Only try to import JSON file if it's actually present
   # TODO May need to concatenate more than one input DWI, since if there's more than one phase-encode
   #   direction in the acquisition they'll need to be split across multiple files
-  grad_prefix = os.path.join(bids_dir, label, 'dwi', label + '_dwi')
-  if not (os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec')):
-    grad_prefix = os.path.join(bids_dir, 'dwi')
-    if not (os.path.isfile(grad_prefix + '.bval') and os.path.isfile(grad_prefix + '.bvec')):
-      app.error('Unable to locate valid diffusion gradient table')
-  grad_import_option = ' -fslgrad ' + grad_prefix + '.bvec ' + grad_prefix + '.bval'
-  json_path = os.path.join(bids_dir, label, 'dwi', label + '_dwi.json')
-  if os.path.isfile(json_path):
-    json_import_option = ' -json_import ' + json_path
-  else:
-    json_import_option = ''
-  run.command('mrconvert ' + os.path.join(bids_dir, label, 'dwi', label + '_dwi.nii.gz')
-              + grad_import_option + json_import_option
-              + ' ' + path.toTemp('input.mif', True))
+  dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label) + '*_dwi.nii*')
+  dwi_index = 1
+  for entry in dwi_image_list:
+    prefix = os.path.splitext(entry)[0]
+    if not (os.path.isfile(prefix + '.bval') and os.path.isfile(prefix + '.bvec')):
+      prefix = os.path.join(bids_dir, 'dwi')
+      if not (os.path.isfile(prefix + '.bval') and os.path.isfile(prefix + '.bvec')):
+        app.error('Unable to locate valid diffusion gradient table for image \'' + entry + '\'')
+    grad_import_option = ' -fslgrad ' + prefix + '.bvec ' + prefix + '.bval'
+    json_path = prefix + '.json'
+    if os.path.isfile(json_path):
+      json_import_option = ' -json_import ' + json_path
+    else:
+      json_import_option = ''
+    run.command('mrconvert ' + entry + grad_import_option + json_import_option
+                + ' ' + path.toTemp('dwi' + str(dwi_index) + '.mif', True))
+    dwi_index += 1
 
   # Go hunting for reversed phase-encode data
-  # TODO Should ideally have compatibility with fieldmap data also
+  # TODO Should ideally have compatibility with GE-based fieldmap data also
   # TODO If there's an 'IntendedFor' field in the JSON file, and it's NOT the DWI(s) we're using, don't use
   fmap_image_list = []
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
   fmap_index = 1
   if os.path.isdir(fmap_dir):
-    while (True):
-      prefix = os.path.join(fmap_dir, label + '_dir-' + str(fmap_index) + '_epi')
-      if os.path.isfile(prefix + '.nii.gz') and os.path.isfile(prefix + '.json'):
-        run.command('mrconvert ' + prefix + '.nii.gz -json_import ' + prefix + '.json ' +
-                    path.toTemp('RPE' + str(fmap_index) + '.mif', True))
-        fmap_image_list.append('RPE' + str(fmap_index) + '.mif')
+    fmap_image_list = glob.glob(os.path.join(fmap_dir, label) + '_dir-*_epi.nii*')
+    for entry in fmap_image_list:
+      prefix = os.path.splitext(entry)[0]
+      json_path = prefix + '.json'
+      if os.path.isfile(json_path):
+        json_import_option = ' -json_import ' + json_path
       else:
-        break
+        json_import_option = ''
+      run.command('mrconvert ' + entry + json_import_option + ' ' +
+                   path.toTemp('fmap' + str(fmap_index) + '.mif', True))
       fmap_index += 1
-  # TODO If there's no data in fmap/ directory, need to check to see if there's any phase-encoding
+  # If there's no data in fmap/ directory, need to check to see if there's any phase-encoding
   #   contrast within the input DWI(s)
+  elif len(dwi_image_list) < 2:
+    app.error('Inadequate data for subject \'' + label + '\': No phase-encoding contrast in input DWIs or fmap/ directory')
 
+  # Import anatomical image
   run.command('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' +
               path.toTemp('T1.mif', True))
 
@@ -148,7 +156,7 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Concatenate any SE EPI images with the DWIs before denoising (& unringing), then
   #   separate them again after the fact
-  dwidenoise_input = 'input.mif'
+  dwidenoise_input = 'dwidenoise_input.mif'
   fmap_num_volumes = 0
   if len(fmap_image_list):
     run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
@@ -156,9 +164,17 @@ def runSubject(bids_dir, label, output_prefix):
       file.delTempFile(i)
     fmap_num_volumes = int(image.headerField('fmap_cat.mif', 'size').strip().split(',')[3])
     dwidenoise_input = 'all_cat.mif'
-    run.command('mrcat fmap_cat.mif input.mif ' + dwidenoise_input + ' -axis 3')
+    run.command('mrcat fmap_cat.mif ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
     file.delTempFile('fmap_cat.mif')
-    file.delTempFile('input.mif')
+  else:
+    # Even if no explicit fmap images, may still need to concatenate multiple DWI inputs
+    if len(dwi_image_list) > 1:
+      run.command('mrcat ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
+    else:
+      run.function(os.move, dwi_image_list[0], dwidenoise_input)
+
+  for i in dwi_image_list:
+    file.delTempFile(i)
 
   # Step 1: Denoise
   run.command('dwidenoise ' + dwidenoise_input + ' dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
