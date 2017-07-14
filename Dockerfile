@@ -40,11 +40,11 @@ RUN rm -f `which eddy`
 RUN mkdir /opt/eddy/
 RUN wget -qO- https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.9/centos6/eddy_openmp > /opt/eddy/eddy_openmp
 RUN chmod 775 /opt/eddy/eddy_openmp
-RUN wget -qO- https://bitbucket.org/reisert/unring/get/8e5eeba67a1d.zip -O unring.zip && unzip -qq -o unring.zip -d /opt/
+RUN wget -qO- https://bitbucket.org/reisert/unring/get/8e5eeba67a1d.zip -O unring.zip && unzip -qq -o unring.zip -d /opt/ && rm -f unring.zip
 RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | tar zxv -C /opt
 RUN wget -qO- http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | tar zxv -C /opt
-RUN wget -qO- http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && unzip -qq -o sri24_anatomy_nifti.zip -d /opt/
-RUN wget -qO- http://www.nitrc.org/frs/download.php/4508/sri24_labels_nifti.zip -O sri24_labels_nifti.zip && unzip -qq -o sri24_labels_nifti.zip -d /opt/
+RUN wget -qO- http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && unzip -qq -o sri24_anatomy_nifti.zip -d /opt/ && rm -f sri24_anatomy_nifti.zip
+RUN wget -qO- http://www.nitrc.org/frs/download.php/4508/sri24_labels_nifti.zip -O sri24_labels_nifti.zip && unzip -qq -o sri24_labels_nifti.zip -d /opt/ && rm -f sri24_labels_nifti.zip
 
 RUN npm install -g bids-validator
 

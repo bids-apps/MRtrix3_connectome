@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, glob, shutil, sys
+import glob, json, os, shutil, sys
 from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
@@ -121,13 +121,16 @@ def runSubject(bids_dir, label, output_prefix):
   dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label) + '*_dwi.nii*')
   dwi_index = 1
   for entry in dwi_image_list:
-    prefix = os.path.splitext(entry)[0]
-    if not (os.path.isfile(prefix + '.bval') and os.path.isfile(prefix + '.bvec')):
+    # os.path.split() falls over with .nii.gz extensions; only removes the .gz
+    prefix = entry.split(os.extsep)[0]
+    if os.path.isfile(prefix + '.bval') and os.path.isfile(prefix + '.bvec'):
+      prefix = prefix + '.'
+    else:
       prefix = os.path.join(bids_dir, 'dwi')
-      if not (os.path.isfile(prefix + '.bval') and os.path.isfile(prefix + '.bvec')):
+      if not (os.path.isfile(prefix + 'bval') and os.path.isfile(prefix + 'bvec')):
         app.error('Unable to locate valid diffusion gradient table for image \'' + entry + '\'')
-    grad_import_option = ' -fslgrad ' + prefix + '.bvec ' + prefix + '.bval'
-    json_path = prefix + '.json'
+    grad_import_option = ' -fslgrad ' + prefix + 'bvec ' + prefix + 'bval'
+    json_path = prefix + 'json'
     if os.path.isfile(json_path):
       json_import_option = ' -json_import ' + json_path
     else:
@@ -138,26 +141,37 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Go hunting for reversed phase-encode data
   # TODO Should ideally have compatibility with GE-based fieldmap data also
-  # TODO If there's an 'IntendedFor' field in the JSON file, and it's NOT the DWI(s) we're using, don't use
   fmap_image_list = []
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
   fmap_index = 1
   if os.path.isdir(fmap_dir):
     fmap_image_list = glob.glob(os.path.join(fmap_dir, label) + '_dir-*_epi.nii*')
     for entry in fmap_image_list:
-      prefix = os.path.splitext(entry)[0]
+      prefix = entry.split(os.extsep)[0]
       json_path = prefix + '.json'
+      with open(json_path, 'r') as f:
+        json_elements = json.load(f)
+      if 'IntendedFor' in json_elements and not any(i.endswith(json_elements['IntendedFor']) for i in dwi_image_list):
+        app.console('Image \'' + entry + '\' is not intended for use with DWIs; skipping')
+        continue
       if os.path.isfile(json_path):
         json_import_option = ' -json_import ' + json_path
+        # fmap files may not come with any gradient encoding in the JSON;
+        #   therefore we need to add it manually ourselves
+        run.command('mrconvert ' + entry + json_import_option +
+                    ' -set_property dw_scheme \"0,0,1,0\" ' +
+                     path.toTemp('fmap' + str(fmap_index) + '.mif', True))
+        fmap_index += 1
       else:
-        json_import_option = ''
-      run.command('mrconvert ' + entry + json_import_option + ' ' +
-                   path.toTemp('fmap' + str(fmap_index) + '.mif', True))
-      fmap_index += 1
+        app.warn('No corresponding .json file found for image \'' + entry + '\'; skipping')
+
+    fmap_image_list = [ 'fmap' + str(i) + '.mif' for i in range(1, fmap_index) ]
   # If there's no data in fmap/ directory, need to check to see if there's any phase-encoding
   #   contrast within the input DWI(s)
   elif len(dwi_image_list) < 2:
     app.error('Inadequate data for subject \'' + label + '\': No phase-encoding contrast in input DWIs or fmap/ directory')
+
+  dwi_image_list = [ 'dwi' + str(i) + '.mif' for i in range(1, dwi_index) ]
 
   # Import anatomical image
   run.command('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' +
@@ -166,55 +180,82 @@ def runSubject(bids_dir, label, output_prefix):
   cwd = os.getcwd()
   app.gotoTempDir()
 
-  # Concatenate any SE EPI images with the DWIs before denoising (& unringing), then
-  #   separate them again after the fact
-  dwidenoise_input = 'dwidenoise_input.mif'
-  fmap_num_volumes = 0
-  if len(fmap_image_list):
-    run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
-    for i in fmap_image_list:
-      file.delTempFile(i)
-    fmap_num_volumes = int(image.headerField('fmap_cat.mif', 'size').strip().split(',')[3])
-    dwidenoise_input = 'all_cat.mif'
-    run.command('mrcat fmap_cat.mif ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
-    file.delTempFile('fmap_cat.mif')
-  else:
-    # Even if no explicit fmap images, may still need to concatenate multiple DWI inputs
-    if len(dwi_image_list) > 1:
-      run.command('mrcat ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
-    else:
-      run.function(os.move, dwi_image_list[0], dwidenoise_input)
-
-  for i in dwi_image_list:
-    file.delTempFile(i)
-
-  # Step 1: Denoise
-  run.command('dwidenoise ' + dwidenoise_input + ' dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
-  if unring_cmd:
-    run.command('mrinfo ' + dwidenoise_input + ' -json_export input.json')
-  file.delTempFile(dwidenoise_input)
-
-  # Step 2: Gibbs ringing removal (if available)
-  if unring_cmd:
-    run.command('unring.a64 dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
-    file.delTempFile('dwi_denoised.nii')
-    run.command('mrconvert dwi_unring' + fsl_suffix + ' dwi_unring.mif -json_import input.json')
-    file.delTempFile('dwi_unring' + fsl_suffix)
-    file.delTempFile('input.json')
-
-  # If fmap images and DWIs have been concatenated, now is the time to split them back apart
-  dwipreproc_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
   dwipreproc_se_epi = ''
   dwipreproc_se_epi_option = ''
-  if fmap_num_volumes:
-    cat_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
-    dwipreproc_se_epi = 'se_epi.mif'
-    run.command('mrconvert ' + dwipreproc_input + ' ' + dwipreproc_se_epi + ' -coord 3 0:' + str(fmap_num_volumes-1))
-    cat_num_volumes = int(image.headerField(dwipreproc_input, 'size').strip().split(',')[3])
-    run.command('mrconvert ' + dwipreproc_input + ' dwipreproc_in.mif -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
-    file.delTempFile(dwipreproc_input)
+
+  # For automated testing, down-sampled images are used. However, this invalidates the requirements of
+  #   both MP-PCA denoising and Gibbs ringing removal.
+  if app.args.test:
+    app.console('Skipping MP-PCA denoising' + (' and Gibbs ringing removal' if unring_cmd else '') + ' due to use of -test option')
     dwipreproc_input = 'dwipreproc_in.mif'
-    dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
+    if len(dwi_image_list) == 1:
+      run.function(os.rename, dwi_image_list[0], dwipreproc_input)
+    else:
+      run.command('mrcat ' + ' '.join(dwi_image_list) + ' ' + dwipreproc_input + ' -axis 3')
+      for i in dwi_image_list:
+        file.delTempFile(i)
+    if len(fmap_image_list):
+      dwipreproc_se_epi = 'se_epi.mif'
+      dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
+      if len(fmap_image_list) == 1:
+        run.function(os.rename, fmap_image_list[0], dwipreproc_se_epi)
+      else:
+        run.command('mrcat ' + ' '.join(fmap_image_list) + ' ' + dwipreproc_se_epi + ' -axis 3')
+        for i in fmap_image_list:
+          file.delTempFile(i)
+
+  else: # Do initial image filtering (denoising & Gibbs ringing removal) as normal
+
+    # Concatenate any SE EPI images with the DWIs before denoising (& unringing), then
+    #   separate them again after the fact
+    dwidenoise_input = 'dwidenoise_input.mif'
+    fmap_num_volumes = 0
+    if len(fmap_image_list):
+      run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
+      for i in fmap_image_list:
+        file.delTempFile(i)
+      fmap_num_volumes = int(image.headerField('fmap_cat.mif', 'size').strip().split()[3])
+      dwidenoise_input = 'all_cat.mif'
+      run.command('mrcat fmap_cat.mif ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
+      file.delTempFile('fmap_cat.mif')
+    else:
+      # Even if no explicit fmap images, may still need to concatenate multiple DWI inputs
+      if len(dwi_image_list) > 1:
+        run.command('mrcat ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
+      else:
+        run.function(os.move, dwi_image_list[0], dwidenoise_input)
+
+    for i in dwi_image_list:
+      file.delTempFile(i)
+
+    # Step 1: Denoise
+    run.command('dwidenoise ' + dwidenoise_input + ' dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
+    if unring_cmd:
+      run.command('mrinfo ' + dwidenoise_input + ' -json_export input.json')
+    file.delTempFile(dwidenoise_input)
+
+    # Step 2: Gibbs ringing removal (if available)
+    if unring_cmd:
+      run.command('unring.a64 dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
+      file.delTempFile('dwi_denoised.nii')
+      run.command('mrconvert dwi_unring' + fsl_suffix + ' dwi_unring.mif -json_import input.json')
+      file.delTempFile('dwi_unring' + fsl_suffix)
+      file.delTempFile('input.json')
+
+    # If fmap images and DWIs have been concatenated, now is the time to split them back apart
+    dwipreproc_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
+  
+    if fmap_num_volumes:
+      cat_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
+      dwipreproc_se_epi = 'se_epi.mif'
+      run.command('mrconvert ' + dwipreproc_input + ' ' + dwipreproc_se_epi + ' -coord 3 0:' + str(fmap_num_volumes-1))
+      cat_num_volumes = int(image.headerField(dwipreproc_input, 'size').strip().split()[3])
+      run.command('mrconvert ' + dwipreproc_input + ' dwipreproc_in.mif -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
+      file.delTempFile(dwipreproc_input)
+      dwipreproc_input = 'dwipreproc_in.mif'
+      dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
+
+  # No longer branching based on whether or not -test was specified
 
   # Step 3: Distortion correction
   run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option)
@@ -280,47 +321,29 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 9: Generate 5TT image for ACT
   run.command('5ttgen fsl T1_registered.mif 5TT.mif')
 
-  # Step 10: Determine whether we are working with single-shell or multi-shell data
-  # TODO Detect b=0 shell and remove from list before testing length
+  # Step 10: Estimate response function(s) for spherical deconvolution
+  run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
+
+  # Step 11: Determine whether we are working with single-shell or multi-shell data
   shells = [int(round(float(x))) for x in image.headerField('dwi.mif', 'shells').split()]
   multishell = (len(shells) > 2)
-
-  # Step 11: Estimate response function(s) for spherical deconvolution
-  # TODO Use 'dhollander' algorithm for both
-  if multishell:
-    run.command('dwi2response msmt_5tt dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
-    rf_file_for_scaling = 'response_wm.txt'
-  else:
-    run.command('dwi2response tournier dwi.mif response.txt -mask dwi_mask.mif')
-    rf_file_for_scaling = 'response.txt'
 
   # Step 12: Perform spherical deconvolution
   #          Use a dilated mask for spherical deconvolution as a 'safety margin' -
   #          ACT should be responsible for stopping streamlines before they reach the edge of the DWI mask
-  # TODO Use msmt_5tt with WM & CSF responses if single-shell
   run.command('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
   if multishell:
     run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_gm.txt FOD_GM.mif response_csf.txt FOD_CSF.mif '
                 '-mask dwi_mask_dilated.mif')
+    file.delTempFile('FOD_GM.mif')
+    file.delTempFile('FOD_CSF.mif')
   else:
     # Still use the msmt_csd algorithm with single-shell data: Use hard non-negativity constraint
-    run.command('dwiextract dwi.mif - | dwi2fod msmt_csd - response.txt FOD_WM.mif')
+    # Also incorporate the CSF response to provide some fluid attenuation
+    run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_csf.txt FOD_CSF.mif')
+    file.delTempFile('FOD_CSF.mif')
 
-  # Step 13: Generate the tractogram
-  # TODO Determine the appropriate number of streamlines based on the number of nodes in the parcellation
-  num_streamlines = 10000000
-  if app.args.streamlines:
-    num_streamlines = app.args.streamlines
-  run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -cutoff 0.06 -maxlength 250 '
-              '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
-
-  # Step 14: Use SIFT2 to determine streamline weights
-  fd_scale_gm_option = ''
-  if not multishell:
-    fd_scale_gm_option = ' -fd_scale_gm'
-  run.command('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option + ' -info')
-
-  # Step 15: Generate the grey matter parcellation
+  # Step 13: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
   run.command('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
   if app.args.parc == 'fs_2005' or app.args.parc == 'fs_2009':
@@ -364,6 +387,22 @@ def runSubject(bids_dir, label, output_prefix):
   else:
     app.error('Unknown parcellation scheme requested: ' + app.args.parc)
   file.delTempFile('T1_registered.nii')
+
+  # Step 14: Generate the tractogram
+  # If not manually specified, determine the appropriate number of streamlines based on the number of nodes in the parcellation:
+  #   mean edge weight of 1,000 streamlines
+  num_nodes = int(image.statistic('parc.mif', 'max'))
+  num_streamlines = 1000 * num_nodes * num_nodes
+  if app.args.streamlines:
+    num_streamlines = app.args.streamlines
+  run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -cutoff 0.06 -maxlength 250 '
+              '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
+
+  # Step 15: Use SIFT2 to determine streamline weights
+  fd_scale_gm_option = ''
+  if not multishell:
+    fd_scale_gm_option = ' -fd_scale_gm'
+  run.command('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option)
 
   # Step 16: Generate the connectome
   #          Only provide the standard density-weighted connectome for now
@@ -581,6 +620,7 @@ participant_options = app.cmdline.add_argument_group('Options that are relevant 
 participant_options.add_argument('-atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
 participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
+participant_options.add_argument('-test', action='store_true', help='Indicate that the script is being run on test data (bypasses initial image processing steps that are invalid for downsampled data)')
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 # Modify the existing -nthreads option to also accept the usage '-n_cpus'
 app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '-n_cpus' ]
