@@ -139,12 +139,14 @@ def runSubject(bids_dir, label, output_prefix):
                 + ' ' + path.toTemp('dwi' + str(dwi_index) + '.mif', True))
     dwi_index += 1
 
-  # Go hunting for reversed phase-encode data
+  # Go hunting for reversed phase-encode data dedicated to field map estimation
   # TODO Should ideally have compatibility with GE-based fieldmap data also
   fmap_image_list = []
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
   fmap_index = 1
   if os.path.isdir(fmap_dir):
+    if app.args.preprocessed:
+      app.error('fmap/ directory detected for subject \'' + label + '\' despite use of -preprocessed option')
     fmap_image_list = glob.glob(os.path.join(fmap_dir, label) + '_dir-*_epi.nii*')
     for entry in fmap_image_list:
       prefix = entry.split(os.extsep)[0]
@@ -168,8 +170,8 @@ def runSubject(bids_dir, label, output_prefix):
     fmap_image_list = [ 'fmap' + str(i) + '.mif' for i in range(1, fmap_index) ]
   # If there's no data in fmap/ directory, need to check to see if there's any phase-encoding
   #   contrast within the input DWI(s)
-  elif len(dwi_image_list) < 2:
-    app.error('Inadequate data for subject \'' + label + '\': No phase-encoding contrast in input DWIs or fmap/ directory')
+  elif len(dwi_image_list) < 2 and not app.args.preprocessed:
+    app.error('Inadequate data for pre-processing of subject \'' + label + '\': No phase-encoding contrast in input DWIs or fmap/ directory')
 
   dwi_image_list = [ 'dwi' + str(i) + '.mif' for i in range(1, dwi_index) ]
 
@@ -184,27 +186,17 @@ def runSubject(bids_dir, label, output_prefix):
   dwipreproc_se_epi_option = ''
 
   # For automated testing, down-sampled images are used. However, this invalidates the requirements of
-  #   both MP-PCA denoising and Gibbs ringing removal.
-  if app.args.test:
-    app.console('Skipping MP-PCA denoising' + (' and Gibbs ringing removal' if unring_cmd else '') + ' due to use of -test option')
-    dwipreproc_input = 'dwipreproc_in.mif'
-    if len(dwi_image_list) == 1:
-      run.function(os.rename, dwi_image_list[0], dwipreproc_input)
-    else:
-      run.command('mrcat ' + ' '.join(dwi_image_list) + ' ' + dwipreproc_input + ' -axis 3')
-      for i in dwi_image_list:
-        file.delTempFile(i)
-    if len(fmap_image_list):
-      dwipreproc_se_epi = 'se_epi.mif'
-      dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
-      if len(fmap_image_list) == 1:
-        run.function(os.rename, fmap_image_list[0], dwipreproc_se_epi)
-      else:
-        run.command('mrcat ' + ' '.join(fmap_image_list) + ' ' + dwipreproc_se_epi + ' -axis 3')
-        for i in fmap_image_list:
-          file.delTempFile(i)
+  #   both MP-PCA denoising and Gibbs ringing removal. In addition, eddy can still take a long time
+  #   despite the down-sampling. Therefore, provide images that have been pre-processed to the stage
+  #   where it is still only DWI, JSON & bvecs/bvals that need to be provided.
+  if app.args.preprocessed:
 
-  else: # Do initial image filtering (denoising & Gibbs ringing removal) as normal
+    if len(dwi_image_list) > 1:
+      app.error('If DWIs have been pre-processed, then only a single DWI file should need to be provided')
+    app.console('Skipping MP-PCA denoising, ' + ('Gibbs ringing removal, ' if unring_cmd else '') + 'distortion correction and bias field correction due to use of -preprocessed option')
+    run.function(os.rename, dwi_image_list[0], 'dwi.mif')
+
+  else: # Do initial image pre-processing (denoising, Gibbs ringing removal if available, distortion correction & bias field correction) as normal
 
     # Concatenate any SE EPI images with the DWIs before denoising (& unringing), then
     #   separate them again after the fact
@@ -255,20 +247,20 @@ def runSubject(bids_dir, label, output_prefix):
       dwipreproc_input = 'dwipreproc_in.mif'
       dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
 
-  # No longer branching based on whether or not -test was specified
+    # Step 3: Distortion correction
+    run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option)
+    file.delTempFile(dwipreproc_input)
+    if dwipreproc_se_epi:
+      file.delTempFile(dwipreproc_se_epi)
 
-  # Step 3: Distortion correction
-  run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option)
-  file.delTempFile(dwipreproc_input)
-  if dwipreproc_se_epi:
-    file.delTempFile(dwipreproc_se_epi)
+    # Step 4: Bias field correction
+    if dwibiascorrect_algo:
+      run.command('dwibiascorrect dwi_preprocessed.mif dwi.mif ' + dwibiascorrect_algo)
+      file.delTempFile('dwi_preprocessed.mif')
+    else:
+      run.function(os.move, 'dwi_preprocessed.mif', 'dwi.mif')
 
-  # Step 4: Bias field correction
-  if dwibiascorrect_algo:
-    run.command('dwibiascorrect dwi_preprocessed.mif dwi.mif ' + dwibiascorrect_algo)
-    file.delTempFile('dwi_preprocessed.mif')
-  else:
-    run.function(os.move, 'dwi_preprocessed.mif', 'dwi.mif')
+  # No longer branching based on whether or not -preprocessed was specified
 
   # Step 5: Generate a brain mask for DWI
   run.command('dwi2mask dwi.mif dwi_mask.mif')
@@ -619,8 +611,8 @@ batch_options.add_argument('--participant_label', nargs='+', help='The label(s) 
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
 participant_options.add_argument('-atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
 participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+participant_options.add_argument('-preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
 participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
-participant_options.add_argument('-test', action='store_true', help='Indicate that the script is being run on test data (bypasses initial image processing steps that are invalid for downsampled data)')
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 # Modify the existing -nthreads option to also accept the usage '-n_cpus'
 app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '-n_cpus' ]
