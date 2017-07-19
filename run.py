@@ -30,9 +30,8 @@ def runSubject(bids_dir, label, output_prefix):
       return newname
     app.error('Could not find FSL program \'' + name + '\'; please verify FSL install')
 
-  bet_cmd = findFSLBinary('bet')
   flirt_cmd = findFSLBinary('flirt')
-  ssroi_cmd = findFSLBinary('standard_space_roi')
+  fslanat_cmd = findFSLBinary('fsl_anat')
 
   fsl_suffix = fsl.suffix()
 
@@ -265,55 +264,44 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 5: Generate a brain mask for DWI
   run.command('dwi2mask dwi.mif dwi_mask.mif')
 
-  # TODO Consider instead using fsl_anat script
-
   # Step 6: Perform brain extraction on the T1 image in its original space
   #         (this is necessary for histogram matching prior to registration)
+  #         Use fsl_anat script
   run.command('mrconvert T1.mif T1.nii -stride -1,+2,+3')
-  mni_mask_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm_brain_mask_dil.nii.gz')
-  mni_mask_dilation = 0
-  if os.path.exists(mni_mask_path):
-    mni_mask_dilation = 4
-  else:
-    mni_mask_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_2mm_brain_mask_dil.nii.gz')
-    if os.path.exists(mni_mask_path):
-      mni_mask_dilation = 2
-  if mni_mask_dilation:
-    run.command('maskfilter ' + mni_mask_path + ' dilate mni_mask.nii -npass ' + str(mni_mask_dilation))
-    run.command(ssroi_cmd + ' T1.nii T1_preBET' + fsl_suffix + ' -maskMASK mni_mask.nii -roiNONE', False)
-  else:
-    run.command(ssroi_cmd + ' T1.nii T1_preBET' + fsl_suffix + ' -b', False)
-  if not os.path.exists('T1_preBET' + fsl_suffix):
-    app.warn('FSL command ' + ssroi_cmd + ' appears to have failed; passing T1 directly to BET')
-    run.command('mrconvert T1.nii T1_preBET' + fsl_suffix + ' -stride -1,+2,+3')
-  file.delTempFile('T1.nii')
-  run.command(bet_cmd + ' T1_preBET' + fsl_suffix + ' T1_BET' + fsl_suffix + ' -f 0.15 -R')
-  file.delTempFile('T1_preBET' + fsl_suffix)
+  run.command(fslanat_cmd + ' -i T1.nii --noseg --nosubcortseg')
+  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain_mask.nii') + ' T1_mask.mif -datatype bit')
+  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain.nii') + ' T1_biascorr_brain.mif')
+  file.delTempDir('T1.anat')
 
-  # Step 7: Generate target image for T1->DWI registration
+  # Step 7: Generate target images for T1->DWI registration
   run.command('dwiextract dwi.mif -bzero - | '
-              'mrmath - mean - -axis 3 | '
-              'mrcalc 1 - -div dwi_mask.mif -mult - | '
-              'mrconvert - - -stride -1,+2,+3 | '
-              'mrhistmatch - T1_BET' + fsl_suffix + ' dwi_pseudoT1.nii')
+              'mrmath - mean - -axis 3 dwi_meanbzero.mif')
+  run.command('mrcalc 1 dwi_meanbzero.mif -div dwi_mask.mif -mult - | '
+              'mrhistmatch - T1_biascorr_brain.mif dwi_pseudoT1.mif -mask_input dwi_mask.mif -mask_target T1_mask.mif')
+  run.command('mrcalc 1 T1_biascorr_brain.mif -div T1_mask.mif -mult - | '
+              'mrhistmatch - dwi_meanbzero.mif T1_pseudobzero.mif -mask_input T1_mask.mif -mask_target dwi_mask.mif')
 
   # Step 8: Perform T1->DWI registration
-  #         Since mrregister is currently symmetric, but here we explicitly want an asymmetric
-  #         registration (so we don't have to worry about gradient direction reorientation),
-  #         for now we'll go with FSL's FLIRT
-  #         TODO Switch to least-squares metric, or switch to mrregister
-  run.command('flirt -ref dwi_pseudoT1 -in T1_BET -omat T1_to_DWI_FLIRT.mat -dof 6')
-  run.command('transformconvert T1_to_DWI_FLIRT.mat T1_BET' + fsl_suffix + ' dwi_pseudoT1.nii '
-              'flirt_import T1_to_DWI_MRtrix.mat')
-  file.delTempFile('T1_to_DWI_FLIRT.mat')
-  run.command('mrtransform T1.mif T1_registered.mif -linear T1_to_DWI_MRtrix.mat')
+  #         Note that two registrations are performed: Even though we have a symmetric registration,
+  #         generation of the two histogram-matched images means that you will get slightly different
+  #         answers depending on which synthesized image & original image you use.
+  run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_T1_to_pseudoT1.txt')
+  file.delTempFile('T1_biascorr_brain.mif')
+  run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif -type rigid -mask1 dwi_mask.mif -mask2 T1_mask.mif -rigid rigid_pseudobzero_to_bzero.txt')
+  file.delTempFile('dwi_meanbzero.mif')
+  run.command('transformcalc rigid_T1_to_pseudoT1.txt rigid_pseudobzero_to_bzero.txt average rigid_T1_to_dwi.txt')
+  file.delTempFile('rigid_T1_to_pseudoT1.txt')
+  file.delTempFile('rigid_pseudobzero_to_bzero.txt')
+  run.command('mrtransform T1.mif T1_registered.mif -linear rigid_T1_to_dwi.txt')
   file.delTempFile('T1.mif')
-  file.delTempFile('T1_to_DWI_MRtrix.mat')
+  run.command('mrtransform T1_mask.mif T1_mask_registered.mif -linear rigid_T1_to_dwi.txt')
+  file.delTempFile('T1_mask.mif')
 
   # Step 9: Generate 5TT image for ACT
-  run.command('5ttgen fsl T1_registered.mif 5TT.mif')
+  run.command('5ttgen fsl T1_registered.mif 5TT.mif -mask T1_mask_registered.mif')
+  file.delTempFile('T1_mask_registered.mif')
 
-  # Step 10: Estimate response function(s) for spherical deconvolution
+  # Step 10: Estimate response functions for spherical deconvolution
   run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
 
   # Step 11: Determine whether we are working with single-shell or multi-shell data
@@ -346,7 +334,6 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
-
     if app.args.parc == 'fs_2005':
       parc_image_path = os.path.join(parc_image_path, 'aparc.aseg.mgz')
     else:
@@ -364,9 +351,10 @@ def runSubject(bids_dir, label, output_prefix):
   elif app.args.parc == 'aal' or app.args.parc == 'aal2':
 
     # Can use MNI152 image provided with FSL for registration
+    # TODO Retain bias-corrected & brain-extracted T1, give mrhistmatch the ability to perform linear scaling of
+    #   input image only, and use mrregister for this step
     run.command('flirt -ref ' + mni152_path + ' -in T1_registered.nii -omat T1_to_MNI_FLIRT.mat -dof 12')
     run.command('transformconvert T1_to_MNI_FLIRT.mat T1_registered.nii ' + mni152_path + ' flirt_import T1_to_MNI_MRtrix.mat')
-
     file.delTempFile('T1_to_MNI_FLIRT.mat')
     run.command('transformcalc T1_to_MNI_MRtrix.mat invert MNI_to_T1_MRtrix.mat')
     file.delTempFile('T1_to_MNI_MRtrix.mat')
@@ -383,6 +371,8 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 14: Generate the tractogram
   # If not manually specified, determine the appropriate number of streamlines based on the number of nodes in the parcellation:
   #   mean edge weight of 1,000 streamlines
+  # A smaller FOD amplitude threshold of 0.06 (default 0.1) is used for tracking due to the use of the msmt_csd
+  #   algorithm, which imposes a hard rather than soft non-negativity constraint
   num_nodes = int(image.statistic('parc.mif', 'max'))
   num_streamlines = 1000 * num_nodes * num_nodes
   if app.args.streamlines:
