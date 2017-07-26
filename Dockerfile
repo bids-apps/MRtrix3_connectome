@@ -65,13 +65,14 @@ ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 
 # MRtrix3 setup
 ENV CXX=/usr/bin/g++-5
-RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout 3.0_RC1 && python configure -nogui && NUMBER_OF_PROCESSORS=1 python build
+# Note: Current commit being checked out includes various fixes that have been necessary to get test data working; eventually it will instead point to a release tag that includes these updates
+RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout 096520f && python configure -nogui && NUMBER_OF_PROCESSORS=1 python build
 #RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables
 ENV FSLDIR=/usr/share/fsl/5.0
 ENV FSLMULTIFILEQUIT=TRUE
-ENV FSLOUTPUTTYPE=NIFTI_GZ
+ENV FSLOUTPUTTYPE=NIFTI
 ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
 ENV PATH=/opt/freesurfer/bin:/opt/freesurfer/mni/bin:/usr/lib/fsl/5.0:/usr/lib/ants:/mrtrix3/bin:/opt/reisert-unring-8e5eeba67a1d/fsl/:/opt/eddy:$PATH
 ENV PYTHONPATH=/mrtrix3/lib

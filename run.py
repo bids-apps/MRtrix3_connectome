@@ -269,13 +269,14 @@ def runSubject(bids_dir, label, output_prefix):
   #         Use fsl_anat script
   run.command('mrconvert T1.mif T1.nii -stride -1,+2,+3')
   run.command(fslanat_cmd + ' -i T1.nii --noseg --nosubcortseg')
-  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain_mask.nii') + ' T1_mask.mif -datatype bit')
-  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain.nii') + ' T1_biascorr_brain.mif')
-  file.delTempDir('T1.anat')
+  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain_mask' + fsl_suffix) + ' T1_mask.mif -datatype bit')
+  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain' + fsl_suffix) + ' T1_biascorr_brain.mif')
+  file.delTempFolder('T1.anat')
 
   # Step 7: Generate target images for T1->DWI registration
   run.command('dwiextract dwi.mif -bzero - | '
-              'mrmath - mean - -axis 3 dwi_meanbzero.mif')
+              'mrcalc - 0.0 -max - | '
+              'mrmath - mean -axis 3 dwi_meanbzero.mif')
   run.command('mrcalc 1 dwi_meanbzero.mif -div dwi_mask.mif -mult - | '
               'mrhistmatch - T1_biascorr_brain.mif dwi_pseudoT1.mif -mask_input dwi_mask.mif -mask_target T1_mask.mif')
   run.command('mrcalc 1 T1_biascorr_brain.mif -div T1_mask.mif -mult - | '
@@ -287,14 +288,16 @@ def runSubject(bids_dir, label, output_prefix):
   #         answers depending on which synthesized image & original image you use.
   run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_T1_to_pseudoT1.txt')
   file.delTempFile('T1_biascorr_brain.mif')
-  run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif -type rigid -mask1 dwi_mask.mif -mask2 T1_mask.mif -rigid rigid_pseudobzero_to_bzero.txt')
+  run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_pseudobzero_to_bzero.txt')
   file.delTempFile('dwi_meanbzero.mif')
   run.command('transformcalc rigid_T1_to_pseudoT1.txt rigid_pseudobzero_to_bzero.txt average rigid_T1_to_dwi.txt')
   file.delTempFile('rigid_T1_to_pseudoT1.txt')
   file.delTempFile('rigid_pseudobzero_to_bzero.txt')
   run.command('mrtransform T1.mif T1_registered.mif -linear rigid_T1_to_dwi.txt')
   file.delTempFile('T1.mif')
-  run.command('mrtransform T1_mask.mif T1_mask_registered.mif -linear rigid_T1_to_dwi.txt')
+  # Note: Since we're using a mask from fsl_anat (which crops the FoV), but using it as input to 5ttge fsl
+  #   (which is receiving the raw T1), we need to resample in order to have the same dimensions between these two
+  run.command('mrtransform T1_mask.mif T1_mask_registered.mif -linear rigid_T1_to_dwi.txt -template T1_registered.mif -interp nearest')
   file.delTempFile('T1_mask.mif')
 
   # Step 9: Generate 5TT image for ACT
@@ -305,7 +308,7 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
 
   # Step 11: Determine whether we are working with single-shell or multi-shell data
-  shells = [int(round(float(x))) for x in image.headerField('dwi.mif', 'shells').split()]
+  shells = [int(round(float(x))) for x in image.headerField('dwi.mif', 'shellvalues').split()]
   multishell = (len(shells) > 2)
 
   # Step 12: Perform spherical deconvolution
@@ -397,7 +400,7 @@ def runSubject(bids_dir, label, output_prefix):
               + ' -export_grad_fsl ' + os.path.join(output_dir, 'dwi', label + '_dwi.bvec') + ' ' + os.path.join(output_dir, 'dwi', label + '_dwi.bval')
               + ' -json_export ' + os.path.join(output_dir, 'dwi', label + '_dwi.json'))
   run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
-  run.function(shutil.copy, rf_file_for_scaling, os.path.join(output_dir, 'dwi', label + '_response.txt'))
+  run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_response.txt'))
 
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
   os.chdir(cwd)
@@ -433,9 +436,9 @@ def runGroup(output_dir):
       self.in_connectome = os.path.join(output_dir, label, 'connectome', label + '_connectome.csv')
       self.in_mu = os.path.join(output_dir, label, 'connectome', label + '_mu.txt')
 
-      for path in vars(self).values():
-        if not os.path.exists(path):
-          app.error('Unable to find critical subject data (expected location: ' + path + ')')
+      for entry in vars(self).values():
+        if not os.path.exists(entry):
+          app.error('Unable to find critical subject data (expected location: ' + entry + ')')
 
       self.temp_mask = os.path.join('masks',  label + '.mif')
       self.temp_fa = os.path.join('images', label + '.mif')
@@ -471,9 +474,8 @@ def runGroup(output_dir):
   # First group-level calculation: Generate the population FA template
   run.command('population_template images -mask_dir masks -warp_dir warps template.mif '
               '-linear_scale 0.25,0.5,1.0,1.0 -nl_scale 0.5,0.75,1.0,1.0,1.0 -nl_niter 5,5,5,5,5')
-  if app.cleanup:
-    run.function(shutil.rmtree, 'images')
-    run.function(shutil.rmtree, 'masks')
+  file.delTempDir('images')
+  file.delTempDir('masks')
 
   # Second pass through subject data in group analysis:
   #   - Warp template FA image back to subject space & threshold to define a WM mask in subject space
@@ -482,8 +484,8 @@ def runGroup(output_dir):
   #   - Contribute to the group average response function
   run.function(os.makedirs, 'values')
   run.function(os.makedirs, 'voxels')
-  mean_median_bzero = 0.0
-  mean_RF = []
+  sum_median_bzero = 0.0
+  sum_RF_lzero = []
   for s in subjects:
     run.command('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.temp_bzero + ' | '
                 'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
@@ -493,20 +495,20 @@ def runGroup(output_dir):
     file.delTempFile(s.temp_warp)
     with open(s.out_value, 'w') as f:
       f.write(median_bzero)
-    mean_median_bzero = mean_median_bzero + float(median_bzero)
+    sum_median_bzero = sum_median_bzero + float(median_bzero)
     RF = []
     with open(s.in_rf, 'r') as f:
       for line in f:
         RF.append([float(v) for v in line.split()])
     RF_lzero = [ line[0] for line in RF ]
-    if mean_RF:
-      mean_RF = mean_RF + RF_lzero
+    if sum_RF_lzero:
+      sum_RF_lzero = sum_RF_lzero + RF_lzero
     else:
-      mean_RF = RF_lzero
-  if app._cleanup:
-    run.function(shutil.rmtree, 'bzeros')
-    run.function(shutil.rmtree, 'voxels')
-    run.function(shutil.rmtree, 'warps')
+      sum_RF_lzero = RF_lzero
+
+  file.delTempDir('bzeros')
+  file.delTempDir('voxels')
+  file.delTempDir('warps')
 
   # Second group-level calculation:
   #   - Calculate the mean of median b=0 values
@@ -514,8 +516,8 @@ def runGroup(output_dir):
   # TODO Write these to file?
   # Perhaps a better option would be a text file summary of all inter-subject connection density normalisation
   #   parameters per subject, as well as all group mean data
-  mean_median_bzero = mean_median_bzero / len(subjects)
-  mean_RF = [ v / len(subjects) for v in mean_RF ]
+  mean_median_bzero = sum_median_bzero / len(subjects)
+  mean_RF_lzero = [ v / len(subjects) for v in sum_RF_lzero ]
 
   # Third pass through subject data in group analysis:
   #   - Scale the connectome strengths:
@@ -535,7 +537,7 @@ def runGroup(output_dir):
         RF.append([ float(v) for v in line.split() ])
     RF_lzero = [line[0] for line in RF]
     RF_multiplier = 1.0
-    for (mean, subj) in zip(mean_RF, RF_lzero):
+    for (mean, subj) in zip(mean_RF_lzero, RF_lzero):
       RF_multiplier = RF_multiplier * subj / mean
     bzero_multiplier = mean_median_bzero / median_bzero
 
