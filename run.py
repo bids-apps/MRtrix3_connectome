@@ -72,7 +72,7 @@ def runSubject(bids_dir, label, output_prefix):
     if app.args.parc == 'fs_2005':
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_default.txt')
     else:
-      mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_2009.txt')
+      mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_a2009s.txt')
 
   if app.args.parc == 'aal' or app.args.parc == 'aal2':
     mni152_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
@@ -317,13 +317,13 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
   if multishell:
     run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_gm.txt FOD_GM.mif response_csf.txt FOD_CSF.mif '
-                '-mask dwi_mask_dilated.mif')
+                '-mask dwi_mask_dilated.mif -lmax 10,0,0')
     file.delTempFile('FOD_GM.mif')
     file.delTempFile('FOD_CSF.mif')
   else:
     # Still use the msmt_csd algorithm with single-shell data: Use hard non-negativity constraint
     # Also incorporate the CSF response to provide some fluid attenuation
-    run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_csf.txt FOD_CSF.mif')
+    run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_csf.txt FOD_CSF.mif -lmax 10,0')
     file.delTempFile('FOD_CSF.mif')
 
   # Step 13: Generate the grey matter parcellation
@@ -338,9 +338,9 @@ def runSubject(bids_dir, label, output_prefix):
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
     if app.args.parc == 'fs_2005':
-      parc_image_path = os.path.join(parc_image_path, 'aparc.aseg.mgz')
+      parc_image_path = os.path.join(parc_image_path, 'aparc+aseg.mgz')
     else:
-      parc_image_path = os.path.join(parc_image_path, 'aparc.a2009.aseg.mgz')
+      parc_image_path = os.path.join(parc_image_path, 'aparc.a2009+aseg.mgz')
 
     # Perform the index conversion
     run.command('labelconvert ' + parc_image_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc_init.mif')
@@ -380,7 +380,7 @@ def runSubject(bids_dir, label, output_prefix):
   num_streamlines = 1000 * num_nodes * num_nodes
   if app.args.streamlines:
     num_streamlines = app.args.streamlines
-  run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -cutoff 0.06 -maxlength 250 '
+  run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -cutoff 0.06 -maxlength 250 -power 0.33 '
               '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
 
   # Step 15: Use SIFT2 to determine streamline weights
@@ -389,7 +389,13 @@ def runSubject(bids_dir, label, output_prefix):
     fd_scale_gm_option = ' -fd_scale_gm'
   run.command('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option)
 
-  # Step 16: Generate the connectome
+  # Step 16: Generate a TDI (to verify that SIFT2 has worked correctly)
+  with open('mu.txt', 'r') as f:
+    mu = float(f.read())
+  run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template FOD_WM.mif -precise - | '
+              'mrcalc - ' + str(mu) + ' -mult tdi.mif')
+
+  # Step 17: Generate the connectome
   #          Only provide the standard density-weighted connectome for now
   run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv')
   file.delTempFile('weights.csv')
@@ -399,6 +405,7 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('mrconvert dwi.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi.nii.gz')
               + ' -export_grad_fsl ' + os.path.join(output_dir, 'dwi', label + '_dwi.bvec') + ' ' + os.path.join(output_dir, 'dwi', label + '_dwi.bval')
               + ' -json_export ' + os.path.join(output_dir, 'dwi', label + '_dwi.json'))
+  run.command('mrconvert tdi.mif ' + os.path.join(output_dir, 'dwi', label + '_tdi.nii.gz'))
   run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
   run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_response.txt'))
 
