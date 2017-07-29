@@ -323,7 +323,8 @@ def runSubject(bids_dir, label, output_prefix):
   else:
     # Still use the msmt_csd algorithm with single-shell data: Use hard non-negativity constraint
     # Also incorporate the CSF response to provide some fluid attenuation
-    run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_csf.txt FOD_CSF.mif -lmax 10,0')
+    run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_csf.txt FOD_CSF.mif '
+                '-mask dwi_mask_dilated.mif -lmax 10,0')
     file.delTempFile('FOD_CSF.mif')
 
   # Step 13: Generate the grey matter parcellation
@@ -340,7 +341,7 @@ def runSubject(bids_dir, label, output_prefix):
     if app.args.parc == 'fs_2005':
       parc_image_path = os.path.join(parc_image_path, 'aparc+aseg.mgz')
     else:
-      parc_image_path = os.path.join(parc_image_path, 'aparc.a2009+aseg.mgz')
+      parc_image_path = os.path.join(parc_image_path, 'aparc.a2009s+aseg.mgz')
 
     # Perform the index conversion
     run.command('labelconvert ' + parc_image_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc_init.mif')
