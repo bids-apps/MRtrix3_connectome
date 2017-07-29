@@ -486,6 +486,7 @@ def runGroup(output_dir):
   #   - Grab DWI data (written back from single-subject analysis back into BIDS format)
   #   - Generate mask and FA images to be used in populate template generation
   #   - Generate mean b=0 image for each subject for later use
+  progress = app.progressBar('Importing and preparing subject data', len(subjects))
   run.function(os.makedirs, 'bzeros')
   run.function(os.makedirs, 'images')
   run.function(os.makedirs, 'masks')
@@ -494,8 +495,11 @@ def runGroup(output_dir):
     run.command('dwi2mask ' + s.in_dwi + ' ' + s.temp_mask + grad_import_option)
     run.command('dwi2tensor ' + s.in_dwi + ' - -mask ' + s.temp_mask + grad_import_option + ' | tensor2metric - -fa ' + s.temp_fa)
     run.command('dwiextract ' + s.in_dwi + grad_import_option + ' - -bzero | mrmath - mean ' + s.temp_bzero + ' -axis 3')
+    progress.increment()
+  progress.done()
 
   # First group-level calculation: Generate the population FA template
+  app.console('Generating population template for inter-subject intensity normalisation WM mask derivation')
   run.command('population_template images -mask_dir masks -warp_dir warps template.mif '
               '-type rigid_affine_nonlinear -rigid_scale 0.25,0.5,0.8,1.0 -affine_scale 0.7,0.8,1.0,1.0 '
               '-nl_scale 0.5,0.75,1.0,1.0,1.0 -nl_niter 5,5,5,5,5 -linear_no_pause')
@@ -507,6 +511,7 @@ def runGroup(output_dir):
   #   - Calculate the median subject b=0 value within this mask
   #   - Store this in a file, and contribute to calculation of the mean of these values across subjects
   #   - Contribute to the group average response function
+  progress = app.progressBar('Generating group-average response function and intensity normalisation factors', len(subjects)+1)
   run.function(os.makedirs, 'voxels')
   sum_median_bzero = 0.0
   sum_RF = []
@@ -523,9 +528,11 @@ def runGroup(output_dir):
       sum_RF = [[a+b for a, b in zip(one, two)] for one, two in zip(sum_RF, s.RF)]
     else:
       sum_RF = s.RF
+    progress.increment()
   file.delTempFolder('bzeros')
   file.delTempFolder('voxels')
   file.delTempFolder('warps')
+  progress.done()
 
   # Second group-level calculation:
   #   - Calculate the mean of median b=0 values
@@ -541,6 +548,7 @@ def runGroup(output_dir):
   #     - Multiply by (subject RF size) / (mean RF size)
   #         (needs to account for multi-shell data)
   #   - Write the result to file
+  progress = app.progressBar('Applying normalisation scaling to subject connectomes', len(subjects))
   run.function(os.makedirs, 'connectomes')
   for s in subjects:
     RF_lzero = [line[0] for line in s.RF]
@@ -562,6 +570,8 @@ def runGroup(output_dir):
     with open(s.temp_connectome, 'w') as f:
       for line in connectome:
         f.write(' '.join([str(v*s.global_multiplier) for v in line]) + '\n')
+    progress.increment()
+  progress.done()
 
   # Third group-level calculation: Generate the group mean connectome
   # For any higher-level analysis (e.g. NBSE, computing connectome global measures, etc.),
@@ -571,6 +581,7 @@ def runGroup(output_dir):
   #   analysis is therefore to achieve inter-subject connection density normalisation; users
   #   then have the flexibility to subsequently analyse the data however they choose (ideally
   #   based on subject classification data provided with the BIDS-compliant dataset).
+  progress = app.progressBar('Calculating group mean connectome', len(subjects)+1)
   mean_connectome = []
   for s in subjects:
     connectome = []
@@ -581,24 +592,30 @@ def runGroup(output_dir):
       mean_connectome = [[c1+c2 for c1, c2 in zip(r1, r2)] for r1, r2 in zip(mean_connectome, connectome)]
     else:
       mean_connectome = connectome
+    progress.increment()
 
   mean_connectome = [[v/len(subjects) for v in row] for row in mean_connectome]
+  progress.done()
 
   # Write results of interest back to the output directory;
   #   both per-subject and group information
+  progress = app.progressBar('Writing results to output directory', len(subjects)+2)
   for s in subjects:
     run.function(shutil.copyfile, s.temp_connectome, s.out_connectome)
     with open(s.out_scale_bzero, 'w') as f:
       f.write(str(s.bzero_multiplier))
     with open(s.out_scale_RF, 'w') as f:
       f.write(str(s.RF_multiplier))
+    progress.increment()
 
   with open(os.path.join(output_dir, 'mean_response.txt'), 'w') as f:
     for row in mean_RF:
       f.write(' '.join([str(v) for v in row]) + '\n')
+  progress.increment()
   with open(os.path.join(output_dir, 'mean_connectome.csv'), 'w') as f:
     for row in mean_connectome:
       f.write(' '.join([str(v) for v in row]) + '\n')
+  progress.done()
 
 # End of runGroup() function
 
