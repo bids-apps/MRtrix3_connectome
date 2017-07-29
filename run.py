@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import glob, json, os, shutil, sys
+import glob, json, math, os, shutil, sys
 from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
@@ -409,6 +409,8 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('mrconvert tdi.mif ' + os.path.join(output_dir, 'dwi', label + '_tdi.nii.gz'))
   run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
   run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_response.txt'))
+  # TODO Write shell b-values to file;
+  #   If these are inconsistent between subjects, the inter-subject intensity normalisation won't work
 
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
   os.chdir(cwd)
@@ -448,13 +450,27 @@ def runGroup(output_dir):
         if not os.path.exists(entry):
           app.error('Unable to find critical subject data (expected location: ' + entry + ')')
 
+      with open(self.in_mu, 'r') as f:
+        self.mu = float(f.read())
+
+      self.RF = []
+      with open(self.in_rf, 'r') as f:
+        for line in f:
+          self.RF.append([ float(v) for v in line.split() ])
+
       self.temp_mask = os.path.join('masks',  label + '.mif')
       self.temp_fa = os.path.join('images', label + '.mif')
       self.temp_bzero = os.path.join('bzeros', label + '.mif')
       self.temp_warp = os.path.join('warps',  label + '.mif')
       self.temp_voxels = os.path.join('voxels', label + '.mif')
-      self.out_value = os.path.join('values', label + '.txt')
-      self.out_connectome = os.path.join('connectomes', label + '.csv')
+      self.median_bzero = 0.0
+      self.dwiintensitynorm_factor = 1.0
+      self.RF_multiplier = 1.0
+      self.global_multiplier = 1.0
+      self.temp_connectome = os.path.join('connectomes', label + '.csv')
+      self.out_scale_bzero = os.path.join(output_dir, label, 'connectome', label + '_scalefactor_bzero.csv')
+      self.out_scale_RF = os.path.join(output_dir, label, 'connectome', label + '_scalefactor_response.csv')
+      self.out_connectome = os.path.join(output_dir, label, 'connectome', label + '_connectome_scaled.csv')
 
       self.label = label
 
@@ -481,83 +497,71 @@ def runGroup(output_dir):
 
   # First group-level calculation: Generate the population FA template
   run.command('population_template images -mask_dir masks -warp_dir warps template.mif '
-              '-linear_scale 0.25,0.5,1.0,1.0 -nl_scale 0.5,0.75,1.0,1.0,1.0 -nl_niter 5,5,5,5,5')
-  file.delTempDir('images')
-  file.delTempDir('masks')
+              '-type rigid_affine_nonlinear -rigid_scale 0.25,0.5,0.8,1.0 -affine_scale 0.7,0.8,1.0,1.0 '
+              '-nl_scale 0.5,0.75,1.0,1.0,1.0 -nl_niter 5,5,5,5,5 -linear_no_pause')
+  file.delTempFolder('images')
+  file.delTempFolder('masks')
 
   # Second pass through subject data in group analysis:
   #   - Warp template FA image back to subject space & threshold to define a WM mask in subject space
   #   - Calculate the median subject b=0 value within this mask
   #   - Store this in a file, and contribute to calculation of the mean of these values across subjects
   #   - Contribute to the group average response function
-  run.function(os.makedirs, 'values')
   run.function(os.makedirs, 'voxels')
   sum_median_bzero = 0.0
-  sum_RF_lzero = []
+  sum_RF = []
+  RF_variable_warning = False
   for s in subjects:
     run.command('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.temp_bzero + ' | '
                 'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
-    median_bzero = image.statistic(s.temp_bzero, 'median', s.temp_voxels)
+    s.median_bzero = float(image.statistic(s.temp_bzero, 'median', s.temp_voxels))
     file.delTempFile(s.temp_bzero)
     file.delTempFile(s.temp_voxels)
     file.delTempFile(s.temp_warp)
-    with open(s.out_value, 'w') as f:
-      f.write(median_bzero)
-    sum_median_bzero = sum_median_bzero + float(median_bzero)
-    RF = []
-    with open(s.in_rf, 'r') as f:
-      for line in f:
-        RF.append([float(v) for v in line.split()])
-    RF_lzero = [ line[0] for line in RF ]
-    if sum_RF_lzero:
-      sum_RF_lzero = sum_RF_lzero + RF_lzero
+    sum_median_bzero += s.median_bzero
+    if sum_RF:
+      sum_RF = [[a+b for a, b in zip(one, two)] for one, two in zip(sum_RF, s.RF)]
     else:
-      sum_RF_lzero = RF_lzero
-
-  file.delTempDir('bzeros')
-  file.delTempDir('voxels')
-  file.delTempDir('warps')
+      sum_RF = s.RF
+  file.delTempFolder('bzeros')
+  file.delTempFolder('voxels')
+  file.delTempFolder('warps')
 
   # Second group-level calculation:
   #   - Calculate the mean of median b=0 values
-  #   - Calculate the mean response function
-  # TODO Write these to file?
-  # Perhaps a better option would be a text file summary of all inter-subject connection density normalisation
-  #   parameters per subject, as well as all group mean data
+  #   - Calculate the mean response function, and extract the l=0 values from it
   mean_median_bzero = sum_median_bzero / len(subjects)
-  mean_RF_lzero = [ v / len(subjects) for v in sum_RF_lzero ]
+  mean_RF = [[v/len(subjects) for v in line] for line in sum_RF]
+  mean_RF_lzero = [line[0] for line in mean_RF]
 
   # Third pass through subject data in group analysis:
   #   - Scale the connectome strengths:
   #     - Multiply by SIFT proportionality coefficient mu
   #     - Multiply by (mean median b=0) / (subject median b=0)
   #     - Multiply by (subject RF size) / (mean RF size)
+  #         (needs to account for multi-shell data)
   #   - Write the result to file
   run.function(os.makedirs, 'connectomes')
   for s in subjects:
-    with open(s.in_mu, 'r') as f:
-      mu = float(f.read())
-    with open(s.out_value, 'r') as f:
-      median_bzero = float(f.read())
-    RF = []
-    with open(s.in_rf, 'r') as f:
-      for line in f:
-        RF.append([ float(v) for v in line.split() ])
-    RF_lzero = [line[0] for line in RF]
-    RF_multiplier = 1.0
+    RF_lzero = [line[0] for line in s.RF]
+    s.RF_multiplier = 1.0
     for (mean, subj) in zip(mean_RF_lzero, RF_lzero):
-      RF_multiplier = RF_multiplier * subj / mean
-    bzero_multiplier = mean_median_bzero / median_bzero
+      s.RF_multiplier = s.RF_multiplier * subj / mean
+    # Don't want to be scaling connectome independently for differences in RF l=0 terms across all shells;
+    #   use the geometric mean of the per-shell scale factors
+    s.RF_multiplier = math.pow(s.RF_multiplier, 1.0 / len(mean_RF_lzero))
 
-    global_multiplier = mu * bzero_multiplier * RF_multiplier
+    s.bzero_multiplier = mean_median_bzero / s.median_bzero
+
+    s.global_multiplier = s.mu * s.bzero_multiplier * s.RF_multiplier
 
     connectome = [ ]
     with open(s.in_connectome, 'r') as f:
       for line in f:
         connectome.append([float(v) for v in line.split()])
-    with open(s.out_connectome, 'w') as f:
+    with open(s.temp_connectome, 'w') as f:
       for line in connectome:
-        f.write(' '.join([str(v*global_multiplier) for v in line]) + '\n')
+        f.write(' '.join([str(v*s.global_multiplier) for v in line]) + '\n')
 
   # Third group-level calculation: Generate the group mean connectome
   # For any higher-level analysis (e.g. NBSE, computing connectome global measures, etc.),
@@ -570,20 +574,28 @@ def runGroup(output_dir):
   mean_connectome = []
   for s in subjects:
     connectome = []
-    with open(s.out_connectome, 'r') as f:
+    with open(s.temp_connectome, 'r') as f:
       for line in f:
         connectome.append([float(v) for v in line.split()])
     if mean_connectome:
-      for r1,r2 in zip(connectome, mean_connectome):
-        r2 = [c1+c2 for c1,c2 in zip(r1,r2)]
+      mean_connectome = [[c1+c2 for c1, c2 in zip(r1, r2)] for r1, r2 in zip(mean_connectome, connectome)]
     else:
       mean_connectome = connectome
 
   mean_connectome = [[v/len(subjects) for v in row] for row in mean_connectome]
 
-  # Write results of interest back to the output directory
+  # Write results of interest back to the output directory;
+  #   both per-subject and group information
   for s in subjects:
-    run.function(shutil.copyfile, s.out_connectome, os.path.join(output_dir, s.label, 'connectome', s.label + '_scaled_connectome.csv'))
+    run.function(shutil.copyfile, s.temp_connectome, s.out_connectome)
+    with open(s.out_scale_bzero, 'w') as f:
+      f.write(str(s.bzero_multiplier))
+    with open(s.out_scale_RF, 'w') as f:
+      f.write(str(s.RF_multiplier))
+
+  with open(os.path.join(output_dir, 'mean_response.txt'), 'w') as f:
+    for row in mean_RF:
+      f.write(' '.join([str(v) for v in row]) + '\n')
   with open(os.path.join(output_dir, 'mean_connectome.csv'), 'w') as f:
     for row in mean_connectome:
       f.write(' '.join([str(v) for v in row]) + '\n')
