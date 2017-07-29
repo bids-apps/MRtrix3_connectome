@@ -58,45 +58,47 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 #### Options that are relevant to participant-level analysis
 
-+ **--atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
++ **-atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
 
-+ **--parc**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
++ **-parc**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
 
-+ **--streamlines**<br>The number of streamlines to generate for each subject
++ **-preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
+
++ **-streamlines**<br>The number of streamlines to generate for each subject
 
 #### Options specific to the batch processing of subject data
 
-+ **---participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
++ **--participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
 
 #### Standard options
 
-+ **--continue <TempDir> <LastFile>**<br>Continue the script from a previous execution; must provide the temporary directory path, and the name of the last successfully-generated file
++ **-continue <TempDir> <LastFile>**<br>Continue the script from a previous execution; must provide the temporary directory path, and the name of the last successfully-generated file
 
-+ **--force**<br>Force overwrite of output files if pre-existing
++ **-force**<br>Force overwrite of output files if pre-existing
 
-+ **--help**<br>Display help information for the script
++ **-help**<br>Display help information for the script
 
-+ **--nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
++ **-nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
 
-+ **--nthreads/-n_cpus number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
++ **-nthreads/--n_cpus number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
 
-+ **--tempdir /path/to/tmp/**<br>Manually specify the path in which to generate the temporary directory
++ **-tempdir /path/to/tmp/**<br>Manually specify the path in which to generate the temporary directory
 
-+ **--quiet**<br>Suppress all console output during script execution
++ **-quiet**<br>Suppress all console output during script execution
 
-+ **--info**<br>Display additional information and progress for every command invoked
++ **-info**<br>Display additional information and progress for every command invoked
 
-+ **--debug**<br>Display additional debugging information over and above the output of -info
++ **-debug**<br>Display additional debugging information over and above the output of -info
 
 #### optional arguments
 
-+ **--v/--version**<br>show program's version number and exit
++ **-v/--version**<br>show program's version number and exit
 
 ---
 
 **Author:** Robert E. Smith (robert.smith@florey.edu.au)
 
-**Copyright:** Copyright (c) 2008-2017 the MRtrix3 contributors
+**Copyright:** Copyright (c) 2008-2017 the MRtrix3 contributors.
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
