@@ -475,6 +475,8 @@ def runGroup(output_dir):
       self.label = label
 
   subject_list = ['sub-' + dir.split("-")[-1] for dir in glob.glob(os.path.join(output_dir, 'sub-*'))]
+  if not subject_list:
+    app.error('No processed subject data found in output directory for group analysis')
   subjects = []
   for label in subject_list:
     subjects.append(subjectPaths(label))
