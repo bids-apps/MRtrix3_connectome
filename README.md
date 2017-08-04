@@ -58,13 +58,13 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 #### Options that are relevant to participant-level analysis
 
-+ **-atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
++ **--atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
 
-+ **-parc**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
++ **--parc**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
 
-+ **-preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
++ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
 
-+ **-streamlines**<br>The number of streamlines to generate for each subject
++ **--streamlines**<br>The number of streamlines to generate for each subject
 
 #### Options specific to the batch processing of subject data
 
