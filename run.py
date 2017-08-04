@@ -646,11 +646,11 @@ participant_options.add_argument('--preprocessed', action='store_true', help='In
 participant_options.add_argument('--streamlines', type=int, help='The number of streamlines to generate for each subject')
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 # Modify the existing -nthreads option to also accept the usage '--n_cpus', for consistency with other BIDS Apps
-app.cmdline._option_string_actions['--nthreads'].option_strings = [ '--nthreads', '--n_cpus' ]
-app.cmdline._option_string_actions['--n_cpus'] = app.cmdline._option_string_actions['--nthreads']
+app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '--n_cpus' ]
+app.cmdline._option_string_actions['--n_cpus'] = app.cmdline._option_string_actions['-nthreads']
 for i in app.cmdline._actions:
   if i.dest == 'nthreads':
-    i.option_strings = [ '--nthreads', '--n_cpus' ]
+    i.option_strings = [ '-nthreads', '--n_cpus' ]
     break
 
 app.parse()
