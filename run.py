@@ -640,17 +640,17 @@ app.cmdline.add_argument('-v', '--version', action='version', version=__version_
 batch_options = app.cmdline.add_argument_group('Options specific to the batch processing of subject data')
 batch_options.add_argument('--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
-participant_options.add_argument('-atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
-participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
-participant_options.add_argument('-preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
-participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
+participant_options.add_argument('--atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
+participant_options.add_argument('--parc', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+participant_options.add_argument('--preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
+participant_options.add_argument('--streamlines', type=int, help='The number of streamlines to generate for each subject')
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 # Modify the existing -nthreads option to also accept the usage '--n_cpus', for consistency with other BIDS Apps
-app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '--n_cpus' ]
-app.cmdline._option_string_actions['--n_cpus'] = app.cmdline._option_string_actions['-nthreads']
+app.cmdline._option_string_actions['--nthreads'].option_strings = [ '--nthreads', '--n_cpus' ]
+app.cmdline._option_string_actions['--n_cpus'] = app.cmdline._option_string_actions['--nthreads']
 for i in app.cmdline._actions:
   if i.dest == 'nthreads':
-    i.option_strings = [ '-nthreads', '--n_cpus' ]
+    i.option_strings = [ '--nthreads', '--n_cpus' ]
     break
 
 app.parse()
