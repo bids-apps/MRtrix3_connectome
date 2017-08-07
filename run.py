@@ -638,12 +638,12 @@ app.cmdline.add_argument('output_dir', help='The directory where the output file
 app.cmdline.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
 app.cmdline.add_argument('-v', '--version', action='version', version=__version__)
 batch_options = app.cmdline.add_argument_group('Options specific to the batch processing of subject data')
-batch_options.add_argument('--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
+batch_options.add_argument('-participant_label', '--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
-participant_options.add_argument('-atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
-participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
-participant_options.add_argument('-preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
-participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
+participant_options.add_argument('-atlas_path', '--atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
+participant_options.add_argument('-parcellation', '--parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+participant_options.add_argument('-preprocessed', '--preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
+participant_options.add_argument('-streamlines', '--streamlines', type=int, help='The number of streamlines to generate for each subject')
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 # Modify the existing -nthreads option to also accept the usage '--n_cpus', for consistency with other BIDS Apps
 app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '--n_cpus' ]
@@ -651,6 +651,13 @@ app.cmdline._option_string_actions['--n_cpus'] = app.cmdline._option_string_acti
 for i in app.cmdline._actions:
   if i.dest == 'nthreads':
     i.option_strings = [ '-nthreads', '--n_cpus' ]
+    break
+# Also make the same modification to the -help option
+app.cmdline._option_string_actions['-help'].option_strings = [ '-help', '--help' ]
+app.cmdline._option_string_actions['--help'] = app.cmdline._option_string_actions['-help']
+for i in app.cmdline._actions:
+  if i.dest == 'help':
+    i.option_strings = [ '-help', '--help' ]
     break
 
 app.parse()
