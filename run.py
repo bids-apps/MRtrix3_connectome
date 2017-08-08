@@ -51,8 +51,8 @@ def runSubject(bids_dir, label, output_prefix):
       app.warn('Could not find ANTs program N4BiasFieldCorrection or FSL fast; '
                'cannot perform DWI bias field correction')
 
-  if not app.args.parc:
-    app.error('For participant-level analysis, desired parcellation must be provided using the -parc option')
+  if not app.args.parcellation:
+    app.error('For participant-level analysis, desired parcellation must be provided using the -parcellation option')
 
   parc_image_path = ''
   parc_lut_file = ''
@@ -63,22 +63,22 @@ def runSubject(bids_dir, label, output_prefix):
                                  'mrtrix3',
                                  'labelconvert')
 
-  if app.args.parc == 'fs_2005' or app.args.parc == 'fs_2009':
+  if app.args.parcellation == 'fs_2005' or app.args.parcellation == 'fs_2009':
     if not os.environ['FREESURFER_HOME']:
       app.error('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
     if not find_executable('recon-all'):
       app.error('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
     parc_lut_file = os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt')
-    if app.args.parc == 'fs_2005':
+    if app.args.parcellation == 'fs_2005':
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_default.txt')
     else:
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_a2009s.txt')
 
-  if app.args.parc == 'aal' or app.args.parc == 'aal2':
+  if app.args.parcellation == 'aal' or app.args.parcellation == 'aal2':
     mni152_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
     if not os.path.isfile(mni152_path):
       app.error('Could not find MNI152 template image within FSL installation (expected location: ' + mni152_path + ')')
-    if app.args.parc == 'aal':
+    if app.args.parcellation == 'aal':
       parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.nii'))
       parc_lut_file = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.txt'))
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal.txt')
@@ -330,7 +330,7 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 13: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
   run.command('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
-  if app.args.parc == 'fs_2005' or app.args.parc == 'fs_2009':
+  if app.args.parcellation == 'fs_2005' or app.args.parcellation == 'fs_2009':
 
     # Run FreeSurfer pipeline on this subject's T1 image
     run.command('recon-all -sd ' + app._tempDir + ' -subjid freesurfer -i T1_registered.nii')
@@ -338,7 +338,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
-    if app.args.parc == 'fs_2005':
+    if app.args.parcellation == 'fs_2005':
       parc_image_path = os.path.join(parc_image_path, 'aparc+aseg.mgz')
     else:
       parc_image_path = os.path.join(parc_image_path, 'aparc.a2009s+aseg.mgz')
@@ -352,7 +352,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('labelsgmfix parc_init.mif T1_registered.mif ' + mrtrix_lut_file + ' parc.mif')
     file.delTempFile('parc_init.mif')
 
-  elif app.args.parc == 'aal' or app.args.parc == 'aal2':
+  elif app.args.parcellation == 'aal' or app.args.parcellation == 'aal2':
 
     # Can use MNI152 image provided with FSL for registration
     # TODO Retain bias-corrected & brain-extracted T1, give mrhistmatch the ability to perform linear scaling of
@@ -369,7 +369,7 @@ def runSubject(bids_dir, label, output_prefix):
     file.delTempFile('AAL.mif')
 
   else:
-    app.error('Unknown parcellation scheme requested: ' + app.args.parc)
+    app.error('Unknown parcellation scheme requested: ' + app.args.parcellation)
   file.delTempFile('T1_registered.nii')
 
   # Step 14: Generate the tractogram
