@@ -51,8 +51,8 @@ def runSubject(bids_dir, label, output_prefix):
       app.warn('Could not find ANTs program N4BiasFieldCorrection or FSL fast; '
                'cannot perform DWI bias field correction')
 
-  if not app.args.parc:
-    app.error('For participant-level analysis, desired parcellation must be provided using the -parc option')
+  if not app.args.parcellation:
+    app.error('For participant-level analysis, desired parcellation must be provided using the -parcellation option')
 
   parc_image_path = ''
   parc_lut_file = ''
@@ -63,22 +63,22 @@ def runSubject(bids_dir, label, output_prefix):
                                  'mrtrix3',
                                  'labelconvert')
 
-  if app.args.parc == 'fs_2005' or app.args.parc == 'fs_2009':
+  if app.args.parcellation == 'fs_2005' or app.args.parcellation == 'fs_2009':
     if not os.environ['FREESURFER_HOME']:
       app.error('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
     if not find_executable('recon-all'):
       app.error('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
     parc_lut_file = os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt')
-    if app.args.parc == 'fs_2005':
+    if app.args.parcellation == 'fs_2005':
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_default.txt')
     else:
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_a2009s.txt')
 
-  if app.args.parc == 'aal' or app.args.parc == 'aal2':
+  if app.args.parcellation == 'aal' or app.args.parcellation == 'aal2':
     mni152_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
     if not os.path.isfile(mni152_path):
       app.error('Could not find MNI152 template image within FSL installation (expected location: ' + mni152_path + ')')
-    if app.args.parc == 'aal':
+    if app.args.parcellation == 'aal':
       parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.nii'))
       parc_lut_file = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.txt'))
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal.txt')
@@ -330,7 +330,7 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 13: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
   run.command('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
-  if app.args.parc == 'fs_2005' or app.args.parc == 'fs_2009':
+  if app.args.parcellation == 'fs_2005' or app.args.parcellation == 'fs_2009':
 
     # Run FreeSurfer pipeline on this subject's T1 image
     run.command('recon-all -sd ' + app._tempDir + ' -subjid freesurfer -i T1_registered.nii')
@@ -338,7 +338,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
-    if app.args.parc == 'fs_2005':
+    if app.args.parcellation == 'fs_2005':
       parc_image_path = os.path.join(parc_image_path, 'aparc+aseg.mgz')
     else:
       parc_image_path = os.path.join(parc_image_path, 'aparc.a2009s+aseg.mgz')
@@ -352,7 +352,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('labelsgmfix parc_init.mif T1_registered.mif ' + mrtrix_lut_file + ' parc.mif')
     file.delTempFile('parc_init.mif')
 
-  elif app.args.parc == 'aal' or app.args.parc == 'aal2':
+  elif app.args.parcellation == 'aal' or app.args.parcellation == 'aal2':
 
     # Can use MNI152 image provided with FSL for registration
     # TODO Retain bias-corrected & brain-extracted T1, give mrhistmatch the ability to perform linear scaling of
@@ -369,7 +369,7 @@ def runSubject(bids_dir, label, output_prefix):
     file.delTempFile('AAL.mif')
 
   else:
-    app.error('Unknown parcellation scheme requested: ' + app.args.parc)
+    app.error('Unknown parcellation scheme requested: ' + app.args.parcellation)
   file.delTempFile('T1_registered.nii')
 
   # Step 14: Generate the tractogram
@@ -638,12 +638,12 @@ app.cmdline.add_argument('output_dir', help='The directory where the output file
 app.cmdline.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
 app.cmdline.add_argument('-v', '--version', action='version', version=__version__)
 batch_options = app.cmdline.add_argument_group('Options specific to the batch processing of subject data')
-batch_options.add_argument('--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
+batch_options.add_argument('-participant_label', '--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
-participant_options.add_argument('-atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
-participant_options.add_argument('-parc', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
-participant_options.add_argument('-preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
-participant_options.add_argument('-streamlines', type=int, help='The number of streamlines to generate for each subject')
+participant_options.add_argument('-atlas_path', '--atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
+participant_options.add_argument('-parcellation', '--parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+participant_options.add_argument('-preprocessed', '--preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
+participant_options.add_argument('-streamlines', '--streamlines', type=int, help='The number of streamlines to generate for each subject')
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 # Modify the existing -nthreads option to also accept the usage '--n_cpus', for consistency with other BIDS Apps
 app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '--n_cpus' ]
@@ -651,6 +651,13 @@ app.cmdline._option_string_actions['--n_cpus'] = app.cmdline._option_string_acti
 for i in app.cmdline._actions:
   if i.dest == 'nthreads':
     i.option_strings = [ '-nthreads', '--n_cpus' ]
+    break
+# Also make the same modification to the -help option
+app.cmdline._option_string_actions['-help'].option_strings = [ '-help', '--help' ]
+app.cmdline._option_string_actions['--help'] = app.cmdline._option_string_actions['-help']
+for i in app.cmdline._actions:
+  if i.dest == 'help':
+    i.option_strings = [ '-help', '--help' ]
     break
 
 app.parse()

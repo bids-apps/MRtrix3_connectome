@@ -58,17 +58,17 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 #### Options that are relevant to participant-level analysis
 
-+ **-atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
++ **-atlas_path/--atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
 
-+ **-parc**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
++ **-parcellation/--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
 
-+ **-preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
++ **-preprocessed/--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
 
-+ **-streamlines**<br>The number of streamlines to generate for each subject
++ **-streamlines/--streamlines**<br>The number of streamlines to generate for each subject
 
 #### Options specific to the batch processing of subject data
 
-+ **--participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
++ **-participant_label/--participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
 
 #### Standard options
 
@@ -76,7 +76,7 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **-force**<br>Force overwrite of output files if pre-existing
 
-+ **-help**<br>Display help information for the script
++ **-help/--help**<br>Display help information for the script
 
 + **-nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
 
@@ -128,7 +128,7 @@ $ docker run -i --rm \
       -v /Users/yourname/data:/bids_dataset \
       -v /Users/yourname/outputs:/outputs \
       bids/mrtrix3_connectome \
-      /bids_dataset /outputs participant --participant_label 01 -parc fs_2005
+      /bids_dataset /outputs participant --participant_label 01 --parcellation fs_2005
 ```
 
 Following processing of all participants, the script can be run in group analysis mode using e.g.:
@@ -141,4 +141,4 @@ $ docker run -i --rm \
       /bids_dataset /outputs group
 ```
 
-If you wish to run this script on a computing cluster, we recommend the use of [Singularity](http://singularity.lbl.gov/). Although built for Docker, this container can be converted using the [`docker2singularity`](https://github.com/singularityware/docker2singularity) tool.
+If you wish to run this script on a computing cluster, we recommend the use of [Singularity](http://singularity.lbl.gov/). Although built for Docker, this container can be converted using the [`docker2singularity` tool](https://github.com/singularityware/docker2singularity).
