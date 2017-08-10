@@ -38,10 +38,6 @@ Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. Correction for di
 Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57
 ```
 
-### Usage
-
-Command-line usage of the processing script `run.py` is as follows (also accessible by running the script without any command-line options):
-
 ## Synopsis
 
 Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3
@@ -58,39 +54,23 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 #### Options that are relevant to participant-level analysis
 
-+ **-atlas_path/--atlas_path**<br>The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container
++ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
 
-+ **-parcellation/--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
++ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
 
-+ **-preprocessed/--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
-
-+ **-streamlines/--streamlines**<br>The number of streamlines to generate for each subject
++ **--streamlines**<br>The number of streamlines to generate for each subject
 
 #### Options specific to the batch processing of subject data
 
-+ **-participant_label/--participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
++ **--participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
 
 #### Standard options
 
-+ **-continue <TempDir> <LastFile>**<br>Continue the script from a previous execution; must provide the temporary directory path, and the name of the last successfully-generated file
++ **-d/--debug**<br>In the event of encountering an issue with the script, re-run with this flag set to provide more useful information to the developer
 
-+ **-force**<br>Force overwrite of output files if pre-existing
++ **-h/--help**<br>Display help information for the script
 
-+ **-help/--help**<br>Display help information for the script
-
-+ **-nocleanup**<br>Do not delete temporary files during script, or temporary directory at script completion
-
-+ **-nthreads/--n_cpus number**<br>Use this number of threads in MRtrix multi-threaded applications (0 disables multi-threading)
-
-+ **-tempdir /path/to/tmp/**<br>Manually specify the path in which to generate the temporary directory
-
-+ **-quiet**<br>Suppress all console output during script execution
-
-+ **-info**<br>Display additional information and progress for every command invoked
-
-+ **-debug**<br>Display additional debugging information over and above the output of -info
-
-#### optional arguments
++ **-n/--n_cpus number**<br>Use this number of threads in MRtrix3 multi-threaded applications (0 disables multi-threading)
 
 + **-v/--version**<br>show program's version number and exit
 
@@ -109,6 +89,8 @@ but WITHOUT ANY WARRANTY; without even the implied warranty
 of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 For more details, see http://www.mrtrix.org/.
+
+
 
 
 
@@ -142,3 +124,5 @@ $ docker run -i --rm \
 ```
 
 If you wish to run this script on a computing cluster, we recommend the use of [Singularity](http://singularity.lbl.gov/). Although built for Docker, this container can be converted using the [`docker2singularity` tool](https://github.com/singularityware/docker2singularity).
+
+The script ``run.py`` can additionally be used *outside* of this Docker container, as a stand-alone Python script build against the *MRtrix3* Python libraries. Using the script in this way requires setting the ``PYTHONPATH`` environment variable to include the path to the *MRtrix3* ``lib/`` directory where it is installed on your local system, as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library). When used in this way, the command-line interface of the script will be more consistent with the rest of *MRtrix3*.
