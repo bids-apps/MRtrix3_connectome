@@ -7,7 +7,6 @@ from mrtrix3 import app, file, fsl, image, path, run
 
 is_container = os.path.exists('/version')
 __version__ = 'BIDS-App \'MRtrix3_connectome\' version {}'.format(open('/version').read()) if is_container else 'BIDS-App \'MRtrix3_connectome\' standalone'
-is_container = True
 option_prefix = '--' if is_container else '-'
 
 
@@ -238,7 +237,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # If fmap images and DWIs have been concatenated, now is the time to split them back apart
     dwipreproc_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
-  
+
     if fmap_num_volumes:
       cat_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
       dwipreproc_se_epi = 'se_epi.mif'
@@ -662,7 +661,7 @@ participant_options.add_argument(option_prefix + 'streamlines', type=int, help='
 
 app.parse()
 
-  
+
 
 if app.isWindows():
   app.error('Script cannot be run on Windows due to FSL dependency')
