@@ -66,10 +66,32 @@ def runSubject(bids_dir, label, output_prefix):
                                  'labelconvert')
 
   if app.args.parcellation == 'fs_2005' or app.args.parcellation == 'fs_2009':
-    if not os.environ['FREESURFER_HOME']:
+    if not 'FREESURFER_HOME' in os.environ:
       app.error('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
-    if not find_executable('recon-all'):
+    reconall_path = find_executable('recon-all')
+    if not reconall_path:
       app.error('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
+    # Query contents of recon-all script, looking for "-openmp" and "-parallel" occurences
+    # Add options to end of recon-all -all call, based on which of these options are available
+    #   as well as the value of app.nthreads
+    # - In 5.3.0, just the -openmp option is available
+    # - In 6.0.0, -openmp needs to be preceded by -parallel
+    reconall_multithread_options = []
+    if app.nthreads is not None and app.nthreads != 0:
+      with open(reconall_path, 'r') as f:
+        reconall_text = f.read().splitlines()
+      for line in reconall_text:
+        line = line.strip()
+        if line == 'case \"-parallel\":':
+          reconall_multithread_options = [ '-parallel' ].extend(reconall_multithread_options)
+        # If number of threads in this script is not being explicitly controlled,
+        #   allow recon-all to use its own default number of threads
+        elif line == 'case \"-openmp\":' and app.nthreads is not None:
+          reconall_multithread_options = reconall_multithread_options.extend([ '-openmp', str(app.nthreads) ])
+    if reconall_multithread_options:
+      reconall_multithread_options = ' ' + ' '.join(reconall_multithread_options)
+    else:
+      reconall_multithread_options = ''
     parc_lut_file = os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt')
     if app.args.parcellation == 'fs_2005':
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_default.txt')
@@ -229,7 +251,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Step 2: Gibbs ringing removal (if available)
     if unring_cmd:
-      run.command('unring.a64 dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
+      run.command(unring_cmd + ' dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
       file.delTempFile('dwi_denoised.nii')
       run.command('mrconvert dwi_unring' + fsl_suffix + ' dwi_unring.mif -json_import input.json')
       file.delTempFile('dwi_unring' + fsl_suffix)
@@ -336,7 +358,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Run FreeSurfer pipeline on this subject's T1 image
     run.command('recon-all -sd ' + app._tempDir + ' -subjid freesurfer -i T1_registered.nii')
-    run.command('recon-all -sd ' + app._tempDir + ' -subjid freesurfer -all')
+    run.command('recon-all -sd ' + app._tempDir + ' -subjid freesurfer -all' + reconall_multithread_options)
 
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
@@ -400,11 +422,12 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Step 17: Generate the connectome
   #          Only provide the standard density-weighted connectome for now
-  run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv')
+  run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
   file.delTempFile('weights.csv')
 
   # Move necessary files to output directory
   run.function(shutil.copy, 'connectome.csv', os.path.join(output_dir, 'connectome', label + '_connectome.csv'))
+  run.command('mrconvert parc.mif ' + os.path.join(output_dir, 'connectome', label + '_parcellation.nii.gz'))
   run.command('mrconvert dwi.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi.nii.gz')
               + ' -export_grad_fsl ' + os.path.join(output_dir, 'dwi', label + '_dwi.bvec') + ' ' + os.path.join(output_dir, 'dwi', label + '_dwi.bval')
               + ' -json_export ' + os.path.join(output_dir, 'dwi', label + '_dwi.json'))
