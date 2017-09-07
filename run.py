@@ -44,14 +44,15 @@ def runSubject(bids_dir, label, output_prefix):
 
   dwibiascorrect_algo = '-ants'
   if not find_executable('N4BiasFieldCorrection'):
-    if findFSLBinary('fast'):
+    # Can't use findFSLBinary() here, since we want to proceed even if it's not found
+    if find_executable('fast') or find_executable('fsl5.0-fast'):
       dwibiascorrect_algo = '-fsl'
       app.console('Could not find ANTs program N4BiasFieldCorrection; '
                   'using FSL FAST for bias field correction')
     else:
       dwibiascorrect_algo = ''
-      app.warn('Could not find ANTs program N4BiasFieldCorrection or FSL fast; '
-               'cannot perform DWI bias field correction')
+      app.warn('Could not find ANTs program \'N4BiasFieldCorrection\' or FSL program \'fast\'; '
+               'will proceed without performing DWI bias field correction')
 
   if not app.args.parcellation:
     app.error('For participant-level analysis, desired parcellation must be provided using the -parcellation option')
@@ -159,10 +160,15 @@ def runSubject(bids_dir, label, output_prefix):
         continue
       if os.path.isfile(json_path):
         json_import_option = ' -json_import ' + json_path
-        # fmap files may not come with any gradient encoding in the JSON;
-        #   therefore we need to add it manually ourselves
+        # fmap files will not come with any gradient encoding in the JSON;
+        #   therefore we need to add it manually ourselves so that mrcat / mrconvert can
+        #   appropriately handle the table once these images are concatenated with the DWIs
+        fmap_image_size = [ int(i) for i in image.headerField(entry, 'size').strip().split() ]
+        fmap_image_num_volumes = 1 if len(fmap_image_size) == 3 else fmap_image_size[3]
         run.command('mrconvert ' + entry + json_import_option +
-                    ' -set_property dw_scheme \"0,0,1,0\" ' +
+                    ' -set_property dw_scheme \"' +
+                    '\\n'.join(['0,0,1,0'] * fmap_image_num_volumes) +
+                    '\" ' +
                      path.toTemp('fmap' + str(fmap_index) + '.mif', True))
         fmap_index += 1
       else:
@@ -666,7 +672,10 @@ app.parse()
 if app.isWindows():
   app.error('Script cannot be run on Windows due to FSL dependency')
 
-run.command('bids-validator ' + app.args.bids_dir)
+if find_executable('bids-validator'):
+  run.command('bids-validator ' + app.args.bids_dir)
+else:
+  app.warn('BIDS validator script not installed; proceeding without validation of input data')
 
 # Running participant level
 if app.args.analysis_level == 'participant':
