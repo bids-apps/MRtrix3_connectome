@@ -66,7 +66,7 @@ ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 # MRtrix3 setup
 ENV CXX=/usr/bin/g++-5
 # Note: Current commit being checked out includes various fixes that have been necessary to get test data working; eventually it will instead point to a release tag that includes these updates
-RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout 999cfdd && python configure -nogui && NUMBER_OF_PROCESSORS=1 python build && git describe --tags > /mrtrix3_version
+RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout e773629 && python configure -nogui && NUMBER_OF_PROCESSORS=1 python build && git describe --tags > /mrtrix3_version
 #RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables

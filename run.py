@@ -5,7 +5,9 @@ from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
 
-__version__ = 'BIDS-App \'MRtrix3_connectome\' version {}'.format(open('/version').read()) if os.path.exists('/version') else 'BIDS-App \'MRtrix3_connectome\' standalone'
+is_container = os.path.exists('/version')
+__version__ = 'BIDS-App \'MRtrix3_connectome\' version {}'.format(open('/version').read()) if is_container else 'BIDS-App \'MRtrix3_connectome\' standalone'
+option_prefix = '--' if is_container else '-'
 
 
 def runSubject(bids_dir, label, output_prefix):
@@ -42,14 +44,15 @@ def runSubject(bids_dir, label, output_prefix):
 
   dwibiascorrect_algo = '-ants'
   if not find_executable('N4BiasFieldCorrection'):
-    if findFSLBinary('fast'):
+    # Can't use findFSLBinary() here, since we want to proceed even if it's not found
+    if find_executable('fast') or find_executable('fsl5.0-fast'):
       dwibiascorrect_algo = '-fsl'
       app.console('Could not find ANTs program N4BiasFieldCorrection; '
                   'using FSL FAST for bias field correction')
     else:
       dwibiascorrect_algo = ''
-      app.warn('Could not find ANTs program N4BiasFieldCorrection or FSL fast; '
-               'cannot perform DWI bias field correction')
+      app.warn('Could not find ANTs program \'N4BiasFieldCorrection\' or FSL program \'fast\'; '
+               'will proceed without performing DWI bias field correction')
 
   if not app.args.parcellation:
     app.error('For participant-level analysis, desired parcellation must be provided using the -parcellation option')
@@ -157,10 +160,15 @@ def runSubject(bids_dir, label, output_prefix):
         continue
       if os.path.isfile(json_path):
         json_import_option = ' -json_import ' + json_path
-        # fmap files may not come with any gradient encoding in the JSON;
-        #   therefore we need to add it manually ourselves
+        # fmap files will not come with any gradient encoding in the JSON;
+        #   therefore we need to add it manually ourselves so that mrcat / mrconvert can
+        #   appropriately handle the table once these images are concatenated with the DWIs
+        fmap_image_size = [ int(i) for i in image.headerField(entry, 'size').strip().split() ]
+        fmap_image_num_volumes = 1 if len(fmap_image_size) == 3 else fmap_image_size[3]
         run.command('mrconvert ' + entry + json_import_option +
-                    ' -set_property dw_scheme \"0,0,1,0\" ' +
+                    ' -set_property dw_scheme \"' +
+                    '\\n'.join(['0,0,1,0'] * fmap_image_num_volumes) +
+                    '\" ' +
                      path.toTemp('fmap' + str(fmap_index) + '.mif', True))
         fmap_index += 1
       else:
@@ -235,7 +243,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # If fmap images and DWIs have been concatenated, now is the time to split them back apart
     dwipreproc_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
-  
+
     if fmap_num_volumes:
       cat_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
       dwipreproc_se_epi = 'se_epi.mif'
@@ -633,39 +641,41 @@ parcellation_choices = [ 'aal', 'aal2', 'fs_2005', 'fs_2009' ]
 
 app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3')
+
+# If running within a container, erase existing standard options, and fill with only desired options
+if is_container:
+  for i in reversed(app.cmdline._actions):
+    app.cmdline._handle_conflict_resolve(None, [(i.option_strings[0],i)])
+  # app.cmdline._action_groups[2] is "Standard options" that was created earlier
+  app.cmdline._action_groups[2].add_argument('-d', '--debug', dest='debug', action='store_true', help='In the event of encountering an issue with the script, re-run with this flag set to provide more useful information to the developer')
+  app.cmdline._action_groups[2].add_argument('-h', '--help', dest='help', action='store_true', help='Display help information for the script')
+  app.cmdline._action_groups[2].add_argument('-n', '--n_cpus', metavar='number', dest='nthreads', help='Use this number of threads in MRtrix3 multi-threaded applications (0 disables multi-threading)')
+  app.cmdline._action_groups[2].add_argument('-v', '--version', action='version', version=__version__)
+
 app.cmdline.add_argument('bids_dir', help='The directory with the input dataset formatted according to the BIDS standard.')
 app.cmdline.add_argument('output_dir', help='The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.')
 app.cmdline.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
-app.cmdline.add_argument('-v', '--version', action='version', version=__version__)
 batch_options = app.cmdline.add_argument_group('Options specific to the batch processing of subject data')
-batch_options.add_argument('-participant_label', '--participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
+batch_options.add_argument(option_prefix + 'participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
-participant_options.add_argument('-atlas_path', '--atlas_path', help='The path to search for an atlas parcellation (useful if the script is executed outside of the BIDS App container')
-participant_options.add_argument('-parcellation', '--parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
-participant_options.add_argument('-preprocessed', '--preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
-participant_options.add_argument('-streamlines', '--streamlines', type=int, help='The number of streamlines to generate for each subject')
+if not is_container:
+  participant_options.add_argument(option_prefix + 'atlas_path', help='The path to search for an atlas parcellation (may be necessary when the script is executed outside of the BIDS App container')
+participant_options.add_argument(option_prefix + 'parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
+participant_options.add_argument(option_prefix + 'preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
+participant_options.add_argument(option_prefix + 'streamlines', type=int, help='The number of streamlines to generate for each subject')
 # TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
-# Modify the existing -nthreads option to also accept the usage '--n_cpus', for consistency with other BIDS Apps
-app.cmdline._option_string_actions['-nthreads'].option_strings = [ '-nthreads', '--n_cpus' ]
-app.cmdline._option_string_actions['--n_cpus'] = app.cmdline._option_string_actions['-nthreads']
-for i in app.cmdline._actions:
-  if i.dest == 'nthreads':
-    i.option_strings = [ '-nthreads', '--n_cpus' ]
-    break
-# Also make the same modification to the -help option
-app.cmdline._option_string_actions['-help'].option_strings = [ '-help', '--help' ]
-app.cmdline._option_string_actions['--help'] = app.cmdline._option_string_actions['-help']
-for i in app.cmdline._actions:
-  if i.dest == 'help':
-    i.option_strings = [ '-help', '--help' ]
-    break
 
 app.parse()
+
+
 
 if app.isWindows():
   app.error('Script cannot be run on Windows due to FSL dependency')
 
-run.command('bids-validator ' + app.args.bids_dir)
+if find_executable('bids-validator'):
+  run.command('bids-validator ' + app.args.bids_dir)
+else:
+  app.warn('BIDS validator script not installed; proceeding without validation of input data')
 
 # Running participant level
 if app.args.analysis_level == 'participant':
