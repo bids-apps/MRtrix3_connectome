@@ -66,7 +66,7 @@ def runSubject(bids_dir, label, output_prefix):
                                  'labelconvert')
 
   if app.args.parcellation == 'fs_2005' or app.args.parcellation == 'fs_2009':
-    if not os.environ['FREESURFER_HOME']:
+    if not 'FREESURFER_HOME' in os.environ:
       app.error('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
     if not find_executable('recon-all'):
       app.error('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
@@ -234,7 +234,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Step 2: Gibbs ringing removal (if available)
     if unring_cmd:
-      run.command('unring.a64 dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
+      run.command(unring_cmd + ' dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
       file.delTemporary('dwi_denoised.nii')
       run.command('mrconvert dwi_unring' + fsl_suffix + ' dwi_unring.mif -json_import input.json')
       file.delTemporary('dwi_unring' + fsl_suffix)
