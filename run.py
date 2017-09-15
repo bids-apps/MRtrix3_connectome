@@ -531,7 +531,7 @@ def runGroup(output_dir):
   for s in subjects:
     run.command('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.temp_bzero + ' | '
                 'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
-    s.median_bzero = float(image.statistic(s.temp_bzero, 'median', s.temp_voxels))
+    s.median_bzero = float(image.statistic(s.temp_bzero, 'median', '-mask ' + s.temp_voxels))
     file.delTemporary(s.temp_bzero)
     file.delTemporary(s.temp_voxels)
     file.delTemporary(s.temp_warp)
