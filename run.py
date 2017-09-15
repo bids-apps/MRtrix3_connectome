@@ -147,7 +147,7 @@ def runSubject(bids_dir, label, output_prefix):
   fmap_index = 1
   if os.path.isdir(fmap_dir):
     if app.args.preprocessed:
-      app.error('fmap/ directory detected for subject \'' + label + '\' despite use of -preprocessed option')
+      app.error('fmap/ directory detected for subject \'' + label + '\' despite use of ' + option_prefix + 'preprocessed option')
     fmap_image_list = glob.glob(os.path.join(fmap_dir, label) + '_dir-*_epi.nii*')
     for entry in fmap_image_list:
       prefix = entry.split(os.extsep)[0]
@@ -199,7 +199,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     if len(dwi_image_list) > 1:
       app.error('If DWIs have been pre-processed, then only a single DWI file should need to be provided')
-    app.console('Skipping MP-PCA denoising, ' + ('Gibbs ringing removal, ' if unring_cmd else '') + 'distortion correction and bias field correction due to use of -preprocessed option')
+    app.console('Skipping MP-PCA denoising, ' + ('Gibbs ringing removal, ' if unring_cmd else '') + 'distortion correction and bias field correction due to use of ' + option_prefix + 'preprocessed option')
     run.function(os.rename, dwi_image_list[0], 'dwi.mif')
 
   else: # Do initial image pre-processing (denoising, Gibbs ringing removal if available, distortion correction & bias field correction) as normal
@@ -315,7 +315,7 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
 
   # Step 11: Determine whether we are working with single-shell or multi-shell data
-  shells = [int(round(value)) for value in image.mrinfo('dwi.mif', 'shellvalues')]
+  shells = [int(round(float(value))) for value in image.mrinfo('dwi.mif', 'shellvalues').strip().split()]
   multishell = (len(shells) > 2)
 
   # Step 12: Perform spherical deconvolution
