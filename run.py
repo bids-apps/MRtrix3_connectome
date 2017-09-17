@@ -352,7 +352,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Perform the index conversion
     run.command('labelconvert ' + parc_image_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc_init.mif')
-    if app.args.cleanup:
+    if app.cleanup:
       run.function(shutil.rmtree, 'freesurfer')
 
     # Fix the sub-cortical grey matter parcellations using FSL FIRST
