@@ -204,6 +204,8 @@ def runSubject(bids_dir, label, output_prefix):
 
   else: # Do initial image pre-processing (denoising, Gibbs ringing removal if available, distortion correction & bias field correction) as normal
 
+    # TODO If fmap images aren't on the same voxel grid as the DWIs, can't concatenate
+
     # Concatenate any SE EPI images with the DWIs before denoising (& unringing), then
     #   separate them again after the fact
     dwidenoise_input = 'dwidenoise_input.mif'
@@ -229,7 +231,7 @@ def runSubject(bids_dir, label, output_prefix):
     # Step 1: Denoise
     run.command('dwidenoise ' + dwidenoise_input + ' dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
     if unring_cmd:
-      run.command('mrinfo ' + dwidenoise_input + ' -json_export input.json')
+      run.command('mrinfo ' + dwidenoise_input + ' -json_keyval input.json')
     file.delTemporary(dwidenoise_input)
 
     # Step 2: Gibbs ringing removal (if available)
@@ -646,8 +648,8 @@ app.init('Robert E. Smith (robert.smith@florey.edu.au)',
 
 # If running within a container, erase existing standard options, and fill with only desired options
 if is_container:
-  for i in reversed(app.cmdline._actions):
-    app.cmdline._handle_conflict_resolve(None, [(i.option_strings[0],i)])
+  for option in reversed(app.cmdline._actions):
+    app.cmdline._handle_conflict_resolve(None, [(option.option_strings[0],option)])
   # app.cmdline._action_groups[2] is "Standard options" that was created earlier
   app.cmdline._action_groups[2].add_argument('-d', '--debug', dest='debug', action='store_true', help='In the event of encountering an issue with the script, re-run with this flag set to provide more useful information to the developer')
   app.cmdline._action_groups[2].add_argument('-h', '--help', dest='help', action='store_true', help='Display help information for the script')
@@ -669,6 +671,10 @@ participant_options.add_argument(option_prefix + 'streamlines', type=int, help='
 
 app.parse()
 
+
+# TODO If running in container mode, and user has provided -debug option,
+#   change temporary directory location to be the output directory?
+#   That way its contents can be sent to me by a user after the container has terminated.
 
 
 if app.isWindows():
