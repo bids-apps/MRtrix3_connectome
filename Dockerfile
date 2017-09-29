@@ -72,7 +72,8 @@ RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && gi
 # Setup environment variables
 ENV FSLDIR=/usr/share/fsl/5.0
 ENV FSLMULTIFILEQUIT=TRUE
-ENV FSLOUTPUTTYPE=NIFTI
+# Note: Would prefer NIFTI, but need to stick to compressed for now due to FSL Ubuntu not honoring this variable. May be able to revert once fsl.checkFirst() is merged in.
+ENV FSLOUTPUTTYPE=NIFTI_GZ
 ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
 ENV PATH=/opt/freesurfer/bin:/opt/freesurfer/mni/bin:/usr/lib/fsl/5.0:/usr/lib/ants:/mrtrix3/bin:/opt/reisert-unring-8e5eeba67a1d/fsl/:/opt/eddy:$PATH
 ENV PYTHONPATH=/mrtrix3/lib
