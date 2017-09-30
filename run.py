@@ -23,17 +23,8 @@ def runSubject(bids_dir, label, output_prefix):
   if not fsl_path:
     app.error('Environment variable FSLDIR is not set; please run appropriate FSL configuration script')
 
-  def findFSLBinary(name):
-    if find_executable(name):
-      return name
-    newname = 'fsl5.0-' + name
-    if find_executable(newname):
-      return newname
-    app.error('Could not find FSL program \'' + name + '\'; please verify FSL install')
-
-  flirt_cmd = findFSLBinary('flirt')
-  fslanat_cmd = findFSLBinary('fsl_anat')
-
+  flirt_cmd = fsl.exeName('flirt')
+  fslanat_cmd = fsl.exeName('fsl_anat')
   fsl_suffix = fsl.suffix()
 
   unring_cmd = 'unring.a64'
@@ -141,7 +132,6 @@ def runSubject(bids_dir, label, output_prefix):
     dwi_index += 1
 
   # Go hunting for reversed phase-encode data dedicated to field map estimation
-  # TODO Should ideally have compatibility with GE-based fieldmap data also
   fmap_image_list = []
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
   fmap_index = 1
@@ -229,15 +219,16 @@ def runSubject(bids_dir, label, output_prefix):
     # Step 1: Denoise
     run.command('dwidenoise ' + dwidenoise_input + ' dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
     if unring_cmd:
-      run.command('mrinfo ' + dwidenoise_input + ' -json_export input.json')
+      run.command('mrinfo ' + dwidenoise_input + ' -json_keyval input.json')
     file.delTemporary(dwidenoise_input)
 
     # Step 2: Gibbs ringing removal (if available)
     if unring_cmd:
       run.command(unring_cmd + ' dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
       file.delTemporary('dwi_denoised.nii')
-      run.command('mrconvert dwi_unring' + fsl_suffix + ' dwi_unring.mif -json_import input.json')
-      file.delTemporary('dwi_unring' + fsl_suffix)
+      unring_output_path = fsl.findImage('dwi_unring')
+      run.command('mrconvert ' + unring_output_path + ' dwi_unring.mif -json_import input.json')
+      file.delTemporary(unring_output_path)
       file.delTemporary('input.json')
 
     # If fmap images and DWIs have been concatenated, now is the time to split them back apart
@@ -276,8 +267,8 @@ def runSubject(bids_dir, label, output_prefix):
   #         Use fsl_anat script
   run.command('mrconvert T1.mif T1.nii -stride -1,+2,+3')
   run.command(fslanat_cmd + ' -i T1.nii --noseg --nosubcortseg')
-  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain_mask' + fsl_suffix) + ' T1_mask.mif -datatype bit')
-  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain' + fsl_suffix) + ' T1_biascorr_brain.mif')
+  run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain_mask') + ' T1_mask.mif -datatype bit')
+  run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain') + ' T1_biascorr_brain.mif')
   file.delTemporary('T1.anat')
 
   # Step 7: Generate target images for T1->DWI registration
@@ -362,8 +353,6 @@ def runSubject(bids_dir, label, output_prefix):
   elif app.args.parcellation == 'aal' or app.args.parcellation == 'aal2':
 
     # Can use MNI152 image provided with FSL for registration
-    # TODO Retain bias-corrected & brain-extracted T1, give mrhistmatch the ability to perform linear scaling of
-    #   input image only, and use mrregister for this step
     run.command(flirt_cmd + ' -ref ' + mni152_path + ' -in T1_registered.nii -omat T1_to_MNI_FLIRT.mat -dof 12')
     run.command('transformconvert T1_to_MNI_FLIRT.mat T1_registered.nii ' + mni152_path + ' flirt_import T1_to_MNI_MRtrix.mat')
     file.delTemporary('T1_to_MNI_FLIRT.mat')
@@ -416,8 +405,6 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('mrconvert tdi.mif ' + os.path.join(output_dir, 'dwi', label + '_tdi.nii.gz'))
   run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
   run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_response.txt'))
-  # TODO Write shell b-values to file;
-  #   If these are inconsistent between subjects, the inter-subject intensity normalisation won't work
 
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
   os.chdir(cwd)
@@ -524,10 +511,6 @@ def runGroup(output_dir):
   run.function(os.makedirs, 'voxels')
   sum_median_bzero = 0.0
   sum_RF = []
-  # TODO Detect variations in response functions
-  # This could be either:
-  # - Variations in length
-  # - Variations in b-values (would need to export this explicitly at subject stage)
   for s in subjects:
     run.command('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.temp_bzero + ' | '
                 'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
@@ -646,8 +629,8 @@ app.init('Robert E. Smith (robert.smith@florey.edu.au)',
 
 # If running within a container, erase existing standard options, and fill with only desired options
 if is_container:
-  for i in reversed(app.cmdline._actions):
-    app.cmdline._handle_conflict_resolve(None, [(i.option_strings[0],i)])
+  for option in reversed(app.cmdline._actions):
+    app.cmdline._handle_conflict_resolve(None, [(option.option_strings[0],option)])
   # app.cmdline._action_groups[2] is "Standard options" that was created earlier
   app.cmdline._action_groups[2].add_argument('-d', '--debug', dest='debug', action='store_true', help='In the event of encountering an issue with the script, re-run with this flag set to provide more useful information to the developer')
   app.cmdline._action_groups[2].add_argument('-h', '--help', dest='help', action='store_true', help='Display help information for the script')
@@ -665,10 +648,8 @@ if not is_container:
 participant_options.add_argument(option_prefix + 'parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument(option_prefix + 'preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
 participant_options.add_argument(option_prefix + 'streamlines', type=int, help='The number of streamlines to generate for each subject')
-# TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 
 app.parse()
-
 
 
 if app.isWindows():
