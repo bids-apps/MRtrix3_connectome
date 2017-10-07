@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import glob, json, math, os, shutil, sys
+import glob, json, math, os, shutil
 from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
@@ -11,7 +11,6 @@ option_prefix = '--' if is_container else '-'
 
 
 def runSubject(bids_dir, label, output_prefix):
-  from mrtrix3 import path, run
 
   output_dir = os.path.join(output_prefix, label)
   if os.path.exists(output_dir):
@@ -24,17 +23,8 @@ def runSubject(bids_dir, label, output_prefix):
   if not fsl_path:
     app.error('Environment variable FSLDIR is not set; please run appropriate FSL configuration script')
 
-  def findFSLBinary(name):
-    if find_executable(name):
-      return name
-    newname = 'fsl5.0-' + name
-    if find_executable(newname):
-      return newname
-    app.error('Could not find FSL program \'' + name + '\'; please verify FSL install')
-
-  flirt_cmd = findFSLBinary('flirt')
-  fslanat_cmd = findFSLBinary('fsl_anat')
-
+  flirt_cmd = fsl.exeName('flirt')
+  fslanat_cmd = fsl.exeName('fsl_anat')
   fsl_suffix = fsl.suffix()
 
   unring_cmd = 'unring.a64'
@@ -44,14 +34,15 @@ def runSubject(bids_dir, label, output_prefix):
 
   dwibiascorrect_algo = '-ants'
   if not find_executable('N4BiasFieldCorrection'):
-    if findFSLBinary('fast'):
+    # Can't use findFSLBinary() here, since we want to proceed even if it's not found
+    if find_executable('fast') or find_executable('fsl5.0-fast'):
       dwibiascorrect_algo = '-fsl'
       app.console('Could not find ANTs program N4BiasFieldCorrection; '
                   'using FSL FAST for bias field correction')
     else:
       dwibiascorrect_algo = ''
-      app.warn('Could not find ANTs program N4BiasFieldCorrection or FSL fast; '
-               'cannot perform DWI bias field correction')
+      app.warn('Could not find ANTs program \'N4BiasFieldCorrection\' or FSL program \'fast\'; '
+               'will proceed without performing DWI bias field correction')
 
   if not app.args.parcellation:
     app.error('For participant-level analysis, desired parcellation must be provided using the -parcellation option')
@@ -163,13 +154,12 @@ def runSubject(bids_dir, label, output_prefix):
     dwi_index += 1
 
   # Go hunting for reversed phase-encode data dedicated to field map estimation
-  # TODO Should ideally have compatibility with GE-based fieldmap data also
   fmap_image_list = []
   fmap_dir = os.path.join(bids_dir, label, 'fmap')
   fmap_index = 1
   if os.path.isdir(fmap_dir):
     if app.args.preprocessed:
-      app.error('fmap/ directory detected for subject \'' + label + '\' despite use of -preprocessed option')
+      app.error('fmap/ directory detected for subject \'' + label + '\' despite use of ' + option_prefix + 'preprocessed option')
     fmap_image_list = glob.glob(os.path.join(fmap_dir, label) + '_dir-*_epi.nii*')
     for entry in fmap_image_list:
       prefix = entry.split(os.extsep)[0]
@@ -181,22 +171,27 @@ def runSubject(bids_dir, label, output_prefix):
         continue
       if os.path.isfile(json_path):
         json_import_option = ' -json_import ' + json_path
-        # fmap files may not come with any gradient encoding in the JSON;
-        #   therefore we need to add it manually ourselves
+        # fmap files will not come with any gradient encoding in the JSON;
+        #   therefore we need to add it manually ourselves so that mrcat / mrconvert can
+        #   appropriately handle the table once these images are concatenated with the DWIs
+        fmap_image_size = image.Header(entry).size()
+        fmap_image_num_volumes = 1 if len(fmap_image_size) == 3 else fmap_image_size[3]
         run.command('mrconvert ' + entry + json_import_option +
-                    ' -set_property dw_scheme \"0,0,1,0\" ' +
-                     path.toTemp('fmap' + str(fmap_index) + '.mif', True))
+                    ' -set_property dw_scheme \"' +
+                    '\\n'.join(['0,0,1,0'] * fmap_image_num_volumes) +
+                    '\" ' +
+                    path.toTemp('fmap' + str(fmap_index) + '.mif', True))
         fmap_index += 1
       else:
         app.warn('No corresponding .json file found for image \'' + entry + '\'; skipping')
 
-    fmap_image_list = [ 'fmap' + str(i) + '.mif' for i in range(1, fmap_index) ]
+    fmap_image_list = [ 'fmap' + str(index) + '.mif' for index in range(1, fmap_index) ]
   # If there's no data in fmap/ directory, need to check to see if there's any phase-encoding
   #   contrast within the input DWI(s)
   elif len(dwi_image_list) < 2 and not app.args.preprocessed:
     app.error('Inadequate data for pre-processing of subject \'' + label + '\': No phase-encoding contrast in input DWIs or fmap/ directory')
 
-  dwi_image_list = [ 'dwi' + str(i) + '.mif' for i in range(1, dwi_index) ]
+  dwi_image_list = [ 'dwi' + str(index) + '.mif' for index in range(1, dwi_index) ]
 
   # Import anatomical image
   run.command('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' +
@@ -216,7 +211,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     if len(dwi_image_list) > 1:
       app.error('If DWIs have been pre-processed, then only a single DWI file should need to be provided')
-    app.console('Skipping MP-PCA denoising, ' + ('Gibbs ringing removal, ' if unring_cmd else '') + 'distortion correction and bias field correction due to use of -preprocessed option')
+    app.console('Skipping MP-PCA denoising, ' + ('Gibbs ringing removal, ' if unring_cmd else '') + 'distortion correction and bias field correction due to use of ' + option_prefix + 'preprocessed option')
     run.function(os.rename, dwi_image_list[0], 'dwi.mif')
 
   else: # Do initial image pre-processing (denoising, Gibbs ringing removal if available, distortion correction & bias field correction) as normal
@@ -225,37 +220,38 @@ def runSubject(bids_dir, label, output_prefix):
     #   separate them again after the fact
     dwidenoise_input = 'dwidenoise_input.mif'
     fmap_num_volumes = 0
-    if len(fmap_image_list):
+    if fmap_image_list:
       run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
       for i in fmap_image_list:
-        file.delTempFile(i)
-      fmap_num_volumes = int(image.headerField('fmap_cat.mif', 'size').strip().split()[3])
+        file.delTemporary(i)
+      fmap_num_volumes = image.Header('fmap_cat.mif').size()[3]
       dwidenoise_input = 'all_cat.mif'
       run.command('mrcat fmap_cat.mif ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
-      file.delTempFile('fmap_cat.mif')
+      file.delTemporary('fmap_cat.mif')
     else:
       # Even if no explicit fmap images, may still need to concatenate multiple DWI inputs
       if len(dwi_image_list) > 1:
         run.command('mrcat ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
       else:
-        run.function(os.move, dwi_image_list[0], dwidenoise_input)
+        run.function(shutil.move, dwi_image_list[0], dwidenoise_input)
 
     for i in dwi_image_list:
-      file.delTempFile(i)
+      file.delTemporary(i)
 
     # Step 1: Denoise
     run.command('dwidenoise ' + dwidenoise_input + ' dwi_denoised.' + ('nii' if unring_cmd else 'mif'))
     if unring_cmd:
-      run.command('mrinfo ' + dwidenoise_input + ' -json_export input.json')
-    file.delTempFile(dwidenoise_input)
+      run.command('mrinfo ' + dwidenoise_input + ' -json_keyval input.json')
+    file.delTemporary(dwidenoise_input)
 
     # Step 2: Gibbs ringing removal (if available)
     if unring_cmd:
       run.command(unring_cmd + ' dwi_denoised.nii dwi_unring' + fsl_suffix + ' -n 100')
-      file.delTempFile('dwi_denoised.nii')
-      run.command('mrconvert dwi_unring' + fsl_suffix + ' dwi_unring.mif -json_import input.json')
-      file.delTempFile('dwi_unring' + fsl_suffix)
-      file.delTempFile('input.json')
+      file.delTemporary('dwi_denoised.nii')
+      unring_output_path = fsl.findImage('dwi_unring')
+      run.command('mrconvert ' + unring_output_path + ' dwi_unring.mif -json_import input.json')
+      file.delTemporary(unring_output_path)
+      file.delTemporary('input.json')
 
     # If fmap images and DWIs have been concatenated, now is the time to split them back apart
     dwipreproc_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
@@ -263,25 +259,25 @@ def runSubject(bids_dir, label, output_prefix):
     if fmap_num_volumes:
       cat_input = 'dwi_unring.mif' if unring_cmd else 'dwi_denoised.mif'
       dwipreproc_se_epi = 'se_epi.mif'
-      run.command('mrconvert ' + dwipreproc_input + ' ' + dwipreproc_se_epi + ' -coord 3 0:' + str(fmap_num_volumes-1))
-      cat_num_volumes = int(image.headerField(dwipreproc_input, 'size').strip().split()[3])
-      run.command('mrconvert ' + dwipreproc_input + ' dwipreproc_in.mif -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
-      file.delTempFile(dwipreproc_input)
+      run.command('mrconvert ' + cat_input + ' ' + dwipreproc_se_epi + ' -coord 3 0:' + str(fmap_num_volumes-1))
+      cat_num_volumes = image.Header(cat_input).size()[3]
+      run.command('mrconvert ' + cat_input + ' dwipreproc_in.mif -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
+      file.delTemporary(dwipreproc_input)
       dwipreproc_input = 'dwipreproc_in.mif'
       dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
 
     # Step 3: Distortion correction
     run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option)
-    file.delTempFile(dwipreproc_input)
+    file.delTemporary(dwipreproc_input)
     if dwipreproc_se_epi:
-      file.delTempFile(dwipreproc_se_epi)
+      file.delTemporary(dwipreproc_se_epi)
 
     # Step 4: Bias field correction
     if dwibiascorrect_algo:
       run.command('dwibiascorrect dwi_preprocessed.mif dwi.mif ' + dwibiascorrect_algo)
-      file.delTempFile('dwi_preprocessed.mif')
+      file.delTemporary('dwi_preprocessed.mif')
     else:
-      run.function(os.move, 'dwi_preprocessed.mif', 'dwi.mif')
+      run.function(shutil.move, 'dwi_preprocessed.mif', 'dwi.mif')
 
   # No longer branching based on whether or not -preprocessed was specified
 
@@ -293,9 +289,9 @@ def runSubject(bids_dir, label, output_prefix):
   #         Use fsl_anat script
   run.command('mrconvert T1.mif T1.nii -stride -1,+2,+3')
   run.command(fslanat_cmd + ' -i T1.nii --noseg --nosubcortseg')
-  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain_mask' + fsl_suffix) + ' T1_mask.mif -datatype bit')
-  run.command('mrconvert ' + os.path.join('T1.anat', 'T1_biascorr_brain' + fsl_suffix) + ' T1_biascorr_brain.mif')
-  file.delTempFolder('T1.anat')
+  run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain_mask') + ' T1_mask.mif -datatype bit')
+  run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain') + ' T1_biascorr_brain.mif')
+  file.delTemporary('T1.anat')
 
   # Step 7: Generate target images for T1->DWI registration
   run.command('dwiextract dwi.mif -bzero - | '
@@ -311,28 +307,28 @@ def runSubject(bids_dir, label, output_prefix):
   #         generation of the two histogram-matched images means that you will get slightly different
   #         answers depending on which synthesized image & original image you use.
   run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_T1_to_pseudoT1.txt')
-  file.delTempFile('T1_biascorr_brain.mif')
+  file.delTemporary('T1_biascorr_brain.mif')
   run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_pseudobzero_to_bzero.txt')
-  file.delTempFile('dwi_meanbzero.mif')
+  file.delTemporary('dwi_meanbzero.mif')
   run.command('transformcalc rigid_T1_to_pseudoT1.txt rigid_pseudobzero_to_bzero.txt average rigid_T1_to_dwi.txt')
-  file.delTempFile('rigid_T1_to_pseudoT1.txt')
-  file.delTempFile('rigid_pseudobzero_to_bzero.txt')
+  file.delTemporary('rigid_T1_to_pseudoT1.txt')
+  file.delTemporary('rigid_pseudobzero_to_bzero.txt')
   run.command('mrtransform T1.mif T1_registered.mif -linear rigid_T1_to_dwi.txt')
-  file.delTempFile('T1.mif')
+  file.delTemporary('T1.mif')
   # Note: Since we're using a mask from fsl_anat (which crops the FoV), but using it as input to 5ttge fsl
   #   (which is receiving the raw T1), we need to resample in order to have the same dimensions between these two
   run.command('mrtransform T1_mask.mif T1_mask_registered.mif -linear rigid_T1_to_dwi.txt -template T1_registered.mif -interp nearest')
-  file.delTempFile('T1_mask.mif')
+  file.delTemporary('T1_mask.mif')
 
   # Step 9: Generate 5TT image for ACT
   run.command('5ttgen fsl T1_registered.mif 5TT.mif -mask T1_mask_registered.mif')
-  file.delTempFile('T1_mask_registered.mif')
+  file.delTemporary('T1_mask_registered.mif')
 
   # Step 10: Estimate response functions for spherical deconvolution
   run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
 
   # Step 11: Determine whether we are working with single-shell or multi-shell data
-  shells = [int(round(float(x))) for x in image.headerField('dwi.mif', 'shellvalues').split()]
+  shells = [int(round(float(value))) for value in image.mrinfo('dwi.mif', 'shellvalues').strip().split()]
   multishell = (len(shells) > 2)
 
   # Step 12: Perform spherical deconvolution
@@ -342,14 +338,14 @@ def runSubject(bids_dir, label, output_prefix):
   if multishell:
     run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_gm.txt FOD_GM.mif response_csf.txt FOD_CSF.mif '
                 '-mask dwi_mask_dilated.mif -lmax 10,0,0')
-    file.delTempFile('FOD_GM.mif')
-    file.delTempFile('FOD_CSF.mif')
+    file.delTemporary('FOD_GM.mif')
+    file.delTemporary('FOD_CSF.mif')
   else:
     # Still use the msmt_csd algorithm with single-shell data: Use hard non-negativity constraint
     # Also incorporate the CSF response to provide some fluid attenuation
     run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_csf.txt FOD_CSF.mif '
                 '-mask dwi_mask_dilated.mif -lmax 10,0')
-    file.delTempFile('FOD_CSF.mif')
+    file.delTemporary('FOD_CSF.mif')
 
   # Step 13: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
@@ -357,8 +353,8 @@ def runSubject(bids_dir, label, output_prefix):
   if app.args.parcellation == 'fs_2005' or app.args.parcellation == 'fs_2009':
 
     # Run FreeSurfer pipeline on this subject's T1 image
-    run.command('recon-all -sd ' + app._tempDir + ' -subjid freesurfer -i T1_registered.nii')
-    run.command('recon-all -sd ' + app._tempDir + ' -subjid freesurfer -all' + reconall_multithread_options)
+    run.command('recon-all -sd ' + app.tempDir + ' -subjid freesurfer -i T1_registered.nii')
+    run.command('recon-all -sd ' + app_tempDir + ' -subjid freesurfer -all' + reconall_multithread_options)
 
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
@@ -369,32 +365,30 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Perform the index conversion
     run.command('labelconvert ' + parc_image_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc_init.mif')
-    if not app.args.nocleanup:
+    if app.cleanup:
       run.function(shutil.rmtree, 'freesurfer')
 
     # Fix the sub-cortical grey matter parcellations using FSL FIRST
     run.command('labelsgmfix parc_init.mif T1_registered.mif ' + mrtrix_lut_file + ' parc.mif')
-    file.delTempFile('parc_init.mif')
+    file.delTemporary('parc_init.mif')
 
   elif app.args.parcellation == 'aal' or app.args.parcellation == 'aal2':
 
     # Can use MNI152 image provided with FSL for registration
-    # TODO Retain bias-corrected & brain-extracted T1, give mrhistmatch the ability to perform linear scaling of
-    #   input image only, and use mrregister for this step
-    run.command('flirt -ref ' + mni152_path + ' -in T1_registered.nii -omat T1_to_MNI_FLIRT.mat -dof 12')
+    run.command(flirt_cmd + ' -ref ' + mni152_path + ' -in T1_registered.nii -omat T1_to_MNI_FLIRT.mat -dof 12')
     run.command('transformconvert T1_to_MNI_FLIRT.mat T1_registered.nii ' + mni152_path + ' flirt_import T1_to_MNI_MRtrix.mat')
-    file.delTempFile('T1_to_MNI_FLIRT.mat')
+    file.delTemporary('T1_to_MNI_FLIRT.mat')
     run.command('transformcalc T1_to_MNI_MRtrix.mat invert MNI_to_T1_MRtrix.mat')
-    file.delTempFile('T1_to_MNI_MRtrix.mat')
+    file.delTemporary('T1_to_MNI_MRtrix.mat')
     run.command('mrtransform ' + parc_image_path + ' AAL.mif -linear MNI_to_T1_MRtrix.mat '
                 '-template T1_registered.mif -interp nearest')
-    file.delTempFile('MNI_to_T1_MRtrix.mat')
+    file.delTemporary('MNI_to_T1_MRtrix.mat')
     run.command('labelconvert AAL.mif ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc.mif')
-    file.delTempFile('AAL.mif')
+    file.delTemporary('AAL.mif')
 
   else:
     app.error('Unknown parcellation scheme requested: ' + app.args.parcellation)
-  file.delTempFile('T1_registered.nii')
+  file.delTemporary('T1_registered.nii')
 
   # Step 14: Generate the tractogram
   # If not manually specified, determine the appropriate number of streamlines based on the number of nodes in the parcellation:
@@ -423,7 +417,7 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 17: Generate the connectome
   #          Only provide the standard density-weighted connectome for now
   run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
-  file.delTempFile('weights.csv')
+  file.delTemporary('weights.csv')
 
   # Move necessary files to output directory
   run.function(shutil.copy, 'connectome.csv', os.path.join(output_dir, 'connectome', label + '_connectome.csv'))
@@ -434,18 +428,16 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('mrconvert tdi.mif ' + os.path.join(output_dir, 'dwi', label + '_tdi.nii.gz'))
   run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'connectome', label + '_mu.txt'))
   run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_response.txt'))
-  # TODO Write shell b-values to file;
-  #   If these are inconsistent between subjects, the inter-subject intensity normalisation won't work
 
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
   os.chdir(cwd)
-  if app._cleanup:
-    app.console('Deleting temporary directory ' + app._tempDir)
+  if app.cleanup:
+    app.console('Deleting temporary directory ' + app.tempDir)
     # Can't use run.function() here; it'll try to write to the log file that resides in the temp directory just deleted
-    shutil.rmtree(app._tempDir)
+    shutil.rmtree(app.tempDir)
   else:
-    app.console('Contents of temporary directory kept, location: ' + app._tempDir)
-  app._tempDir = ''
+    app.console('Contents of temporary directory kept, location: ' + app.tempDir)
+  app.tempDir = ''
 
 # End of runSubject() function
 
@@ -461,7 +453,7 @@ def runGroup(output_dir):
 
   # Check presence of all required input files before proceeding
   # Pre-calculate paths of all files since many will be used in more than one location
-  class subjectPaths:
+  class subjectPaths(object):
     def __init__(self, label):
       self.in_dwi = os.path.join(output_dir, label, 'dwi', label + '_dwi.nii.gz')
       self.in_bvec = os.path.join(output_dir, label, 'dwi', label + '_dwi.bvec')
@@ -499,7 +491,7 @@ def runGroup(output_dir):
 
       self.label = label
 
-  subject_list = ['sub-' + dir.split("-")[-1] for dir in glob.glob(os.path.join(output_dir, 'sub-*'))]
+  subject_list = ['sub-' + sub_dir.split("-")[-1] for sub_dir in glob.glob(os.path.join(output_dir, 'sub-*'))]
   if not subject_list:
     app.error('No processed subject data found in output directory for group analysis')
   subjects = []
@@ -530,8 +522,8 @@ def runGroup(output_dir):
   run.command('population_template images -mask_dir masks -warp_dir warps template.mif '
               '-type rigid_affine_nonlinear -rigid_scale 0.25,0.5,0.8,1.0 -affine_scale 0.7,0.8,1.0,1.0 '
               '-nl_scale 0.5,0.75,1.0,1.0,1.0 -nl_niter 5,5,5,5,5 -linear_no_pause')
-  file.delTempFolder('images')
-  file.delTempFolder('masks')
+  file.delTemporary('images')
+  file.delTemporary('masks')
 
   # Second pass through subject data in group analysis:
   #   - Warp template FA image back to subject space & threshold to define a WM mask in subject space
@@ -542,23 +534,22 @@ def runGroup(output_dir):
   run.function(os.makedirs, 'voxels')
   sum_median_bzero = 0.0
   sum_RF = []
-  RF_variable_warning = False
   for s in subjects:
     run.command('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.temp_bzero + ' | '
                 'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
-    s.median_bzero = float(image.statistic(s.temp_bzero, 'median', s.temp_voxels))
-    file.delTempFile(s.temp_bzero)
-    file.delTempFile(s.temp_voxels)
-    file.delTempFile(s.temp_warp)
+    s.median_bzero = float(image.statistic(s.temp_bzero, 'median', '-mask ' + s.temp_voxels))
+    file.delTemporary(s.temp_bzero)
+    file.delTemporary(s.temp_voxels)
+    file.delTemporary(s.temp_warp)
     sum_median_bzero += s.median_bzero
     if sum_RF:
       sum_RF = [[a+b for a, b in zip(one, two)] for one, two in zip(sum_RF, s.RF)]
     else:
       sum_RF = s.RF
     progress.increment()
-  file.delTempFolder('bzeros')
-  file.delTempFolder('voxels')
-  file.delTempFolder('warps')
+  file.delTemporary('bzeros')
+  file.delTemporary('voxels')
+  file.delTemporary('warps')
   progress.done()
 
   # Second group-level calculation:
@@ -661,8 +652,8 @@ app.init('Robert E. Smith (robert.smith@florey.edu.au)',
 
 # If running within a container, erase existing standard options, and fill with only desired options
 if is_container:
-  for i in reversed(app.cmdline._actions):
-    app.cmdline._handle_conflict_resolve(None, [(i.option_strings[0],i)])
+  for option in reversed(app.cmdline._actions):
+    app.cmdline._handle_conflict_resolve(None, [(option.option_strings[0],option)])
   # app.cmdline._action_groups[2] is "Standard options" that was created earlier
   app.cmdline._action_groups[2].add_argument('-d', '--debug', dest='debug', action='store_true', help='In the event of encountering an issue with the script, re-run with this flag set to provide more useful information to the developer')
   app.cmdline._action_groups[2].add_argument('-h', '--help', dest='help', action='store_true', help='Display help information for the script')
@@ -680,16 +671,17 @@ if not is_container:
 participant_options.add_argument(option_prefix + 'parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument(option_prefix + 'preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
 participant_options.add_argument(option_prefix + 'streamlines', type=int, help='The number of streamlines to generate for each subject')
-# TODO Option(s) to copy particular data files from participant level / group level processing into the output directory
 
 app.parse()
-
 
 
 if app.isWindows():
   app.error('Script cannot be run on Windows due to FSL dependency')
 
-run.command('bids-validator ' + app.args.bids_dir)
+if find_executable('bids-validator'):
+  run.command('bids-validator ' + app.args.bids_dir)
+else:
+  app.warn('BIDS validator script not installed; proceeding without validation of input data')
 
 # Running participant level
 if app.args.analysis_level == 'participant':
@@ -697,14 +689,14 @@ if app.args.analysis_level == 'participant':
   subjects_to_analyze = [ ]
   # Only run a subset of subjects
   if app.args.participant_label:
-    subjects_to_analyze = [ 'sub-' + i for i in app.args.participant_label ]
+    subjects_to_analyze = [ 'sub-' + sub_index for sub_index in app.args.participant_label ]
     for subject_dir in subjects_to_analyze:
       if not os.path.isdir(os.path.join(app.args.bids_dir, subject_dir)):
         app.error('Unable to find directory for subject: ' + subject_dir)
   # Run all subjects sequentially
   else:
     subject_dirs = glob.glob(os.path.join(app.args.bids_dir, 'sub-*'))
-    subjects_to_analyze = [ 'sub-' + dir.split("-")[-1] for dir in subject_dirs ]
+    subjects_to_analyze = [ 'sub-' + directory.split("-")[-1] for directory in subject_dirs ]
     if not subjects_to_analyze:
       app.error('Could not find any subjects in BIDS directory')
 
@@ -720,5 +712,3 @@ elif app.args.analysis_level == 'group':
   runGroup(os.path.abspath(app.args.output_dir))
 
 app.complete()
-
-
