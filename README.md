@@ -54,6 +54,8 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 #### Options that are relevant to participant-level analysis
 
++ **--output_verbosity**<br>The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory
+
 + **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
 
 + **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
@@ -125,4 +127,4 @@ $ docker run -i --rm \
 
 If you wish to run this script on a computing cluster, we recommend the use of [Singularity](http://singularity.lbl.gov/). Although built for Docker, this container can be converted using the [`docker2singularity` tool](https://github.com/singularityware/docker2singularity).
 
-The script ``run.py`` can additionally be used *outside* of this Docker container, as a stand-alone Python script build against the *MRtrix3* Python libraries. Using the script in this way requires setting the ``PYTHONPATH`` environment variable to include the path to the *MRtrix3* ``lib/`` directory where it is installed on your local system, as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library). When used in this way, the command-line interface of the script will be more consistent with the rest of *MRtrix3*.
+The script ``run.py`` can additionally be used *outside* of this Docker container, as a stand-alone Python script build against the *MRtrix3* Python libraries. Using the script in this way requires setting the ``PYTHONPATH`` environment variable to include the path to the *MRtrix3* ``lib/`` directory where it is installed on your local system, as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library). When used in this way, the command-line interface of the script will be more consistent with the rest of *MRtrix3*. Note however that this script may make use of *MRtrix3* features or bug fixes that have not yet been merged into the ``master`` branch; in tthis case, it may be necessary to install the same version of _MRtrix3_ as that installed within "``Dockerfile``".
