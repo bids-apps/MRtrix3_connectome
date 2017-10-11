@@ -520,7 +520,6 @@ def runGroup(output_dir):
       self.in_dwi = os.path.join(output_dir, label, 'dwi', label + '_dwi.nii.gz')
       self.in_bvec = os.path.join(output_dir, label, 'dwi', label + '_dwi.bvec')
       self.in_bval = os.path.join(output_dir, label, 'dwi', label + '_dwi.bval')
-      self.in_json = os.path.join(output_dir, label, 'dwi', label + '_dwi.json')
       self.in_rf = os.path.join(output_dir, label, 'dwi', label + '_tissue-WM_response.txt')
       self.in_connectome = os.path.join(output_dir, label, 'connectome', label + '_connectome.csv')
       self.in_mu = os.path.join(output_dir, label, 'tractogram', label + '_mu.txt')
