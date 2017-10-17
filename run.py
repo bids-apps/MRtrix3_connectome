@@ -22,7 +22,6 @@ def runSubject(bids_dir, label, output_prefix):
 
   flirt_cmd = fsl.exeName('flirt')
   fslanat_cmd = fsl.exeName('fsl_anat')
-  fsl_suffix = fsl.suffix()
 
   dwibiascorrect_algo = '-ants'
   if not find_executable('N4BiasFieldCorrection'):
@@ -39,6 +38,7 @@ def runSubject(bids_dir, label, output_prefix):
   if not app.args.parcellation:
     app.error('For participant-level analysis, desired parcellation must be provided using the -parcellation option')
 
+  template_image_path = ''
   parc_image_path = ''
   parc_lut_file = ''
   mrtrix_lut_file = os.path.join(os.path.dirname(os.path.abspath(app.__file__)),
@@ -56,11 +56,11 @@ def runSubject(bids_dir, label, output_prefix):
       app.error('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
     # Query contents of recon-all script, looking for "-openmp" and "-parallel" occurences
     # Add options to end of recon-all -all call, based on which of these options are available
-    #   as well as the value of app.nthreads
+    #   as well as the value of app.numThreads
     # - In 5.3.0, just the -openmp option is available
     # - In 6.0.0, -openmp needs to be preceded by -parallel
     reconall_multithread_options = []
-    if app.nthreads is not None and app.nthreads != 0:
+    if app.numThreads is not None and app.numThreads != 0:
       with open(reconall_path, 'r') as f:
         reconall_text = f.read().splitlines()
       for line in reconall_text:
@@ -69,8 +69,8 @@ def runSubject(bids_dir, label, output_prefix):
           reconall_multithread_options = [ '-parallel' ].extend(reconall_multithread_options)
         # If number of threads in this script is not being explicitly controlled,
         #   allow recon-all to use its own default number of threads
-        elif line == 'case \"-openmp\":' and app.nthreads is not None:
-          reconall_multithread_options = reconall_multithread_options.extend([ '-openmp', str(app.nthreads) ])
+        elif line == 'case \"-openmp\":' and app.numThreads is not None:
+          reconall_multithread_options = reconall_multithread_options.extend([ '-openmp', str(app.numThreads) ])
     if reconall_multithread_options:
       reconall_multithread_options = ' ' + ' '.join(reconall_multithread_options)
     else:
@@ -267,7 +267,7 @@ def runSubject(bids_dir, label, output_prefix):
       dwipreproc_se_epi = 'se_epi.mif'
       run.command('mrconvert ' + mrdegibbs_output + ' ' + dwipreproc_se_epi + ' -coord 3 0:' + str(fmap_num_volumes-1))
       cat_num_volumes = image.Header(mrdegibbs_output).size()[3]
-      run.command('mrconvert ' + mrdegibbs_output + ' ' + dwipreproc_in + ' -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
+      run.command('mrconvert ' + mrdegibbs_output + ' ' + dwipreproc_input + ' -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
       file.delTemporary(mrdegibbs_output)
       dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
     else:
@@ -368,7 +368,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Run FreeSurfer pipeline on this subject's T1 image
     run.command('recon-all -sd ' + app.tempDir + ' -subjid freesurfer -i T1_registered.nii')
-    run.command('recon-all -sd ' + app_tempDir + ' -subjid freesurfer -all' + reconall_multithread_options)
+    run.command('recon-all -sd ' + app.tempDir + ' -subjid freesurfer -all' + reconall_multithread_options)
 
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
