@@ -69,12 +69,13 @@ def runSubject(bids_dir, label, output_prefix):
           reconall_multithread_options = [ '-parallel' ] + reconall_multithread_options
         # If number of threads in this script is not being explicitly controlled,
         #   allow recon-all to use its own default number of threads
-        elif line == 'case \"-openmp\":' and app.numThreads is not None:
+        elif line == 'case "-openmp":' and app.numThreads is not None:
           reconall_multithread_options.extend([ '-openmp', str(app.numThreads) ])
     if reconall_multithread_options:
       reconall_multithread_options = ' ' + ' '.join(reconall_multithread_options)
     else:
       reconall_multithread_options = ''
+    app.var(reconall_multithread_options)
     parc_lut_file = os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt')
     if app.args.parcellation == 'fs_2005':
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'fs_default.txt')
