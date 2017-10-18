@@ -60,17 +60,17 @@ def runSubject(bids_dir, label, output_prefix):
     # - In 5.3.0, just the -openmp option is available
     # - In 6.0.0, -openmp needs to be preceded by -parallel
     reconall_multithread_options = []
-    if app.numThreads is not None and app.numThreads != 0:
+    if app.numThreads is None or app.numThreads != 0:
       with open(reconall_path, 'r') as f:
         reconall_text = f.read().splitlines()
       for line in reconall_text:
         line = line.strip()
-        if line == 'case \"-parallel\":':
-          reconall_multithread_options = [ '-parallel' ].extend(reconall_multithread_options)
+        if line == 'case "-parallel":':
+          reconall_multithread_options = [ '-parallel' ] + reconall_multithread_options
         # If number of threads in this script is not being explicitly controlled,
         #   allow recon-all to use its own default number of threads
         elif line == 'case \"-openmp\":' and app.numThreads is not None:
-          reconall_multithread_options = reconall_multithread_options.extend([ '-openmp', str(app.numThreads) ])
+          reconall_multithread_options.extend([ '-openmp', str(app.numThreads) ])
     if reconall_multithread_options:
       reconall_multithread_options = ' ' + ' '.join(reconall_multithread_options)
     else:
