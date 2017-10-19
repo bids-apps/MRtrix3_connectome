@@ -51,6 +51,12 @@ def runSubject(bids_dir, label, output_prefix):
   if app.args.parcellation in [ 'fs_2005', 'fs_2009' ]:
     if not 'FREESURFER_HOME' in os.environ:
       app.error('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
+    freesurfer_subjects_dir = os.environ['SUBJECTS_DIR'] if 'SUBJECTS_DIR' in os.environ else os.path.join(os.environ['FREESURFER_HOME'], 'subjects')
+    if not os.path.isdir(freesurfer_subjects_dir):
+      app.error('Could not find FreeSurfer subjects directory (expected location: ' + freesurfer_subjects_dir + ')')
+    for subdir in [ 'fsaverage', 'lh.EC_average', 'rh.EC_average' ]:
+      if not os.path.isdir(os.path.join(freesurfer_subjects_dir, subdir)):
+        app.error('Could not find requisite FreeSurfer subject directory \'' + subdir + '\' (expected location: ' + os.path.join(freesurfer_subjects_dir, subdir) + ')')
     reconall_path = find_executable('recon-all')
     if not reconall_path:
       app.error('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
@@ -366,6 +372,12 @@ def runSubject(bids_dir, label, output_prefix):
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
   run.command('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
   if app.args.parcellation in [ 'fs_2005', 'fs_2009' ]:
+
+    # Since we're instructing recon-all to use a different subject directory, we need to
+    #   construct softlinks to a number of directories provided by FreeSurfer that
+    #   recon-all will expect to find in the same directory as the overridden subject path
+    for subdir in [ 'fsaverage', 'lh.EC_average', 'rh.EC_average' ]:
+      run.function(os.symlink, os.path.join(freesurfer_subjects_dir, subdir), subdir)
 
     # Run FreeSurfer pipeline on this subject's T1 image
     run.command('recon-all -sd ' + app.tempDir + ' -subjid freesurfer -i T1_registered.nii')
