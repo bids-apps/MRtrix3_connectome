@@ -14,7 +14,7 @@ def runSubject(bids_dir, label, output_prefix):
 
   output_dir = os.path.join(output_prefix, label)
   if os.path.exists(output_dir):
-    app.warn('Output directory for subject \'' + label + '\' already exists; directory will be erased when this execution completes')
+    app.warn('Output directory for subject \'' + label + '\' already exists; contents will be erased when this execution completes')
 
   fsl_path = os.environ.get('FSLDIR', '')
   if not fsl_path:
@@ -66,7 +66,7 @@ def runSubject(bids_dir, label, output_prefix):
     # - In 5.3.0, just the -openmp option is available
     # - In 6.0.0, -openmp needs to be preceded by -parallel
     reconall_multithread_options = []
-    if app.numThreads is None or app.numThreads != 0:
+    if app.numThreads is None or app.numThreads:
       with open(reconall_path, 'r') as f:
         reconall_text = f.read().splitlines()
       for line in reconall_text:
@@ -99,6 +99,11 @@ def runSubject(bids_dir, label, output_prefix):
       parc_lut_file = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V5.txt'))
       mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'aal2.txt')
 
+  elif app.args.parcellation == 'perry512':
+    template_image_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
+    parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', '512inMNI.nii'))
+    parc_lut_file = mrtrix_lut_file = ''
+
   elif app.args.parcellation == 'sri24':
     template_image_path = os.path.join(os.sep, 'opt', 'sri24','spgr.nii')
     parc_image_path = os.path.join(os.sep, 'opt', 'sri24', 'lpba40.nii')
@@ -106,7 +111,7 @@ def runSubject(bids_dir, label, output_prefix):
     mrtrix_lut_file = os.path.join(mrtrix_lut_file, 'lpba40.txt')
 
   if template_image_path and not os.path.isfile(template_image_path):
-    if app.args.atlas_path:
+    if getattr(app.args, 'atlas_path', None):
       template_image_path = [ template_image_path, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(template_image_path)) ]
       if os.path.isfile(template_image_path[1]):
         template_image_path = template_image_path[1]
@@ -116,7 +121,7 @@ def runSubject(bids_dir, label, output_prefix):
       app.error('Could not find template image (expected location: ' + template_image_path + ')')
 
   if parc_image_path and not os.path.isfile(parc_image_path):
-    if app.args.atlas_path:
+    if getattr(app.args, 'atlas_path', None):
       parc_image_path = [ parc_image_path, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(parc_image_path)) ]
       if os.path.isfile(parc_image_path[1]):
         parc_image_path = parc_image_path[1]
@@ -125,8 +130,8 @@ def runSubject(bids_dir, label, output_prefix):
     else:
       app.error('Could not find parcellation image (expected location: ' + parc_image_path + ')')
 
-  if not os.path.isfile(parc_lut_file):
-    if app.args.atlas_path:
+  if parc_lut_file and not os.path.isfile(parc_lut_file):
+    if getattr(app.args, 'atlas_path', None):
       parc_lut_file = [ parc_lut_file, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(parc_lut_file)) ]
       if os.path.isfile(parc_lut_file[1]):
         parc_lut_file = parc_lut_file[1]
@@ -135,7 +140,7 @@ def runSubject(bids_dir, label, output_prefix):
     else:
       app.error('Could not find parcellation lookup table file (expected location: ' + parc_lut_file + ')')
 
-  if not os.path.exists(mrtrix_lut_file):
+  if mrtrix_lut_file and not os.path.exists(mrtrix_lut_file):
     app.error('Could not find MRtrix3 connectome lookup table file (expected location: ' + mrtrix_lut_file + ')')
 
   app.makeTempDir()
@@ -399,7 +404,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('labelsgmfix parc_init.mif T1_registered.mif ' + mrtrix_lut_file + ' parc.mif')
     file.delTemporary('parc_init.mif')
 
-  elif app.args.parcellation in [ 'aal', 'aal2', 'sri24' ]:
+  elif app.args.parcellation in [ 'aal', 'aal2', 'perry512', 'sri24' ]:
 
     # TODO Currently registration to SRI24 goes well and truly awry
     run.command(flirt_cmd + ' -ref ' + template_image_path + ' -in T1_registered.nii -omat T1_to_template_FLIRT.mat -dof 12')
@@ -410,12 +415,18 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('mrtransform ' + parc_image_path + ' atlas_transformed.mif -linear template_to_T1_MRtrix.mat '
                 '-template T1_registered.mif -interp nearest')
     file.delTemporary('template_to_T1_MRtrix.mat')
-    run.command('labelconvert atlas_transformed.mif ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc.mif')
-    file.delTemporary('atlas_transformed.mif')
+    if parc_lut_file or mrtrix_lut_file:
+      assert parc_lut_file and mrtrix_lut_file
+      run.command('labelconvert atlas_transformed.mif ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc.mif')
+      file.delTemporary('atlas_transformed.mif')
+    else: # Not all parcellations need to go through the labelconvert step; they're already numbered incrementally from 1
+      run.function(shutil.move, 'atlas_transformed.mif', 'parc.mif')
 
   else:
     app.error('Unknown parcellation scheme requested: ' + app.args.parcellation)
   file.delTemporary('T1_registered.nii')
+  if app.args.output_verbosity > 3 and mrtrix_lut_file:
+    run.command('label2colour parc.mif parcRGB.mif -lut ' + mrtrix_lut_file)
 
   # Step 14: Generate the tractogram
   # If not manually specified, determine the appropriate number of streamlines based on the number of nodes in the parcellation:
@@ -446,7 +457,7 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 17: Generate a conventional TDI at super-resolution
   #   (mostly just because we can)
   if app.args.output_verbosity > 2:
-    run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([value/3.0 for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
+    run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([str(value/3.0) for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
 
   # Step 18: Generate the connectome
   #          Also get the mean length for each edge; this is the most likely alternative contrast to be useful
@@ -455,7 +466,7 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Step 19: Produce additional data that can be used for visualisation within mrview's connectome toolbar
   if app.args.output_verbosity > 2:
-    run.command('connectome2tck tractogram.tck assignments.csv exemplars.tck -tck_weights_in weights.csv -exemplars -files single')
+    run.command('connectome2tck tractogram.tck assignments.csv exemplars.tck -tck_weights_in weights.csv -exemplars parc.mif -files single')
     run.command('label2mesh parc.mif nodes.obj')
     run.command('meshfilter nodes.obj smooth nodes_smooth.obj')
     file.delTemporary('nodes.obj')
@@ -486,6 +497,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('mrconvert dwi_mask.mif ' + os.path.join(output_dir, 'dwi', label + '_brainmask.nii.gz -datatype uint8'))
     run.command('mrconvert T1_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w.nii.gz'))
     run.command('mrconvert T1_mask_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w_brainmask.nii.gz'))
+    run.command('mrconvert vis.mif ' + os.path.join(output_dir, 'anat', label + '_tissues3D.nii.gz'))
     run.command('mrconvert FOD_WM.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-WM_ODF.nii.gz'))
     if multishell:
       run.function(shutil.copy, 'response_gm.txt', os.path.join(output_dir, 'dwi', label + '_tissue-GM_response.txt'))
@@ -493,7 +505,7 @@ def runSubject(bids_dir, label, output_prefix):
       run.command('mrconvert FOD_GM.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-GM_ODF.nii.gz'))
       run.command('mrconvert FOD_CSF.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-CSF_ODF.nii.gz'))
       run.command('mrconvert tissues.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-all.nii.gz'))
-    run.command('mrconvert parc.mif ' + os.path.join(output_dir, 'anat', label + '_parc-' + app.args.parcellation + '.nii.gz'))
+    run.command('mrconvert parc.mif ' + os.path.join(output_dir, 'anat', label + '_parc-' + app.args.parcellation + '_indices.nii.gz'))
   if app.args.output_verbosity > 2:
     # Move rather than copying the tractogram just because of its size
     run.function(shutil.move, 'tractogram.tck', os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
@@ -501,6 +513,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.function(shutil.copy, 'assignments.csv', os.path.join(output_dir, 'connectome', label + '_assignments.csv'))
     run.function(shutil.copy, 'exemplars.tck', os.path.join(output_dir, 'connectome', label + '_exemplars.tck'))
     run.function(shutil.copy, 'nodes_smooth.obj', os.path.join(output_dir, 'anat', label + '_parc-' + app.args.parcellation + '.obj'))
+    run.command('mrconvert parcRGB.mif ' + os.path.join(output_dir, 'anat', label + '_parc-' + app.args.parcellation +'_colour.nii.gz'))
     run.command('mrconvert tdi_native.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-native_tdi.nii.gz'))
     run.command('mrconvert tdi_highres.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-highres_tdi.nii.gz'))
 
@@ -726,7 +739,7 @@ def runGroup(output_dir):
 
 
 analysis_choices = [ 'participant', 'group' ]
-parcellation_choices = [ 'aal', 'aal2', 'fs_2005', 'fs_2009', 'sri24' ]
+parcellation_choices = [ 'aal', 'aal2', 'fs_2005', 'fs_2009', 'perry512', 'sri24' ]
 
 app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3')
