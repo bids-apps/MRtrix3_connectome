@@ -21,10 +21,24 @@ def runSubject(bids_dir, label, output_prefix):
     app.error('Environment variable FSLDIR is not set; please run appropriate FSL configuration script')
 
   flirt_cmd = fsl.exeName('flirt')
-  fslanat_cmd = fsl.exeName('fsl_anat')
+
+  robex_found = find_executable('ROBEX') and find_executable('runROBEX.sh')
+  N4_found = find_executable('N4BiasFieldCorrection')
+
+  if robex_found and N4_found:
+    app.console('N4BiasFieldCorrection and ROBEX found; will use for bias field correction and brain extraction')
+    brain_extraction_cmd = 'runROBEX.sh'
+  else:
+    if robex_found and not N4_found:
+      app.console('N4BiasFieldCorrection not found; will use FSL for bias field correction & brain extraction')
+    elif N4_found and not robex_found:
+      app.console('ROBEX not found; will use FSL for brain extraction')
+    else:
+      app.console('N4BiasFieldCorrection and ROBEX not found; will use FSL for brain extraction')
+    brain_extraction_cmd = fsl.exeName('fsl_anat')
 
   dwibiascorrect_algo = '-ants'
-  if not find_executable('N4BiasFieldCorrection'):
+  if not N4_found:
     # Can't use findFSLBinary() here, since we want to proceed even if it's not found
     if find_executable('fast') or find_executable('fsl5.0-fast'):
       dwibiascorrect_algo = '-fsl'
@@ -309,14 +323,33 @@ def runSubject(bids_dir, label, output_prefix):
 
   # TODO Crop DWIs based on brain mask
 
-  # Step 6: Perform brain extraction on the T1 image in its original space
-  #         (this is necessary for histogram matching prior to registration)
-  #         Use fsl_anat script
-  run.command('mrconvert T1.mif T1.nii -stride -1,+2,+3')
-  run.command(fslanat_cmd + ' -i T1.nii --noseg --nosubcortseg')
-  run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain_mask') + ' T1_mask.mif -datatype bit')
-  run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain') + ' T1_biascorr_brain.mif')
-  file.delTemporary('T1.anat')
+  # Step 6: Perform brain extraction and bias field correction on the T1 image
+  #         in its original space (this is necessary for histogram matching
+  #         prior to registration)
+  T1_header = image.Header('T1.mif')
+  T1_revert_stride_option = ' -stride ' + ','.join([str(i) for i in T1_header.stride()])
+  if brain_extraction_cmd == 'runROBEX.sh':
+    # Do a semi-iterative approach here: Get an initial brain mask, use that
+    #   mask to estimate a bias field, then re-compute the brain mask
+    run.command('mrconvert T1.mif T1.nii -stride +1,+2,+3')
+    run.command(brain_extraction_cmd + ' T1.nii T1_initial_brain.nii T1_initial_mask.nii')
+    file.delTemporary('T1_initial_brain.nii')
+    run.command('N4BiasFieldCorrection -i T1.nii -w T1_initial_mask.nii -o T1_biascorr.nii')
+    file.delTemporary('T1.nii')
+    file.delTemporary('T1_initial_mask.nii')
+    run.command(brain_extraction_cmd + ' T1_biascorr.nii T1_biascorr_brain.nii T1_biascorr_brain_mask.nii')
+    file.delTemporary('T1_biascorr.nii')
+    run.command('mrconvert T1_biascorr_brain.nii T1_biascorr_brain.mif' + T1_revert_stride_option)
+    file.delTemporary('T1_biascorr_brain.nii')
+    run.command('mrconvert T1_biascorr_brain_mask.nii T1_mask.mif -datatype bit' + T1_revert_stride_option)
+    file.delTemporary('T1_biascorr_brain_mask.nii')
+  else:
+    run.command('mrconvert T1.mif T1.nii -stride -1,+2,+3')
+    run.command(brain_extraction_cmd + ' -i T1.nii --noseg --nosubcortseg')
+    file.delTemporary('T1.nii')
+    run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain') + ' T1_biascorr_brain.mif' + T1_revert_stride_option)
+    run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain_mask') + ' T1_mask.mif -datatype bit' + T1_revert_stride_option)
+    file.delTemporary('T1.anat')
 
   # Step 7: Generate target images for T1->DWI registration
   run.command('dwiextract dwi.mif -bzero - | '
