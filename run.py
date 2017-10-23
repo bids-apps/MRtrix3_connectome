@@ -558,6 +558,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('mrconvert dwi_mask.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi_brainmask.nii.gz') + ' -datatype uint8 -stride +1,+2,+3')
     run.command('mrconvert T1_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w.nii.gz') + ' -stride +1,+2,+3')
     run.command('mrconvert T1_mask_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w_brainmask.nii.gz') + ' -datatype uint8 -stride +1,+2,+3')
+    run.command('mrconvert 5TT.mif ' + os.path.join(output_dir, 'anat', label + '_5TT.nii.gz') + ' -stride +1,+2,+3,+4')
     run.command('mrconvert vis.mif ' + os.path.join(output_dir, 'anat', label + '_tissues3D.nii.gz') + ' -stride +1,+2,+3,+4')
     run.command('mrconvert FOD_WM.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-WM_ODF.nii.gz') + ' -stride +1,+2,+3,+4')
     if multishell:
