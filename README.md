@@ -36,8 +36,9 @@ deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tra
 (Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al.,
 2012) and dynamic seeding (Smith et al., 2015b); SIFT2 (Smith et al., 2015b); T1
 parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al.,
-2006 OR Destrieux et al., 2010) ) OR Rohlfing et al., 2010 ); robust structural connectome
-construction (Smith et al., 2015a; Yeh et al., 2016).
+2006 OR Destrieux et al., 2010) ) OR (Zalesky et al., 2010 AND Perry et al., 2017) OR
+Rohlfing et al., 2010 ); robust structural connectome construction (Smith et al., 2015a;
+Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
@@ -62,6 +63,7 @@ Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J
 Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. Automated Anatomical Labeling of activations in SPM using a Macroscopic Anatomical Parcellation of the MNI MRI single-subject brain. NeuroImage, 15(1), 273–289
 Veraart, J.; Fieremans, E. & Novikov, D.S. Diffusion MRI noise mapping using random matrix theory Magn. Res. Med., 2016, early view, doi:10.1002/mrm.26059
 Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. Neuroimage, 2016, doi: 10.1016/j.neuroimage.2016.05.047
+Zalesky, A.; Fornito, A.; Harding, I. H.; Cocchi, L.; Yücel, M.; Pantelis, C. & Bullmore, E. T. Whole-brain anatomical networks: Does the choice of nodes matter? NeuroImage, 2010, 50, 970-983
 Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57
 ```
 
