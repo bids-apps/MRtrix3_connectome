@@ -1,18 +1,43 @@
 ### Description
-This BIDS App enables generation and subsequent group analysis of structural connectomes generated from diffusion MRI data. The analysis pipeline relies primarily on the *MRtrix3* software package, and includes a number of state-of-the-art methods for image processing, tractography reconstruction, connectome generation and inter-subject connection density normalisation.
+This BIDS App enables generation and subsequent group analysis of structural connectomes
+generated from diffusion MRI data. The analysis pipeline relies primarily on the *MRtrix3*
+software package, and includes a number of state-of-the-art methods for image processing,
+tractography reconstruction, connectome generation and inter-subject connection density
+normalisation.
 
-**NOTE**: App is still under development; script is not guaranteed to be operational for all use cases.
+**NOTE**: App is still under development; script is not guaranteed to be operational
+for all use cases.
 
 ### Documentation
-Please use the official [*MRtrix3* documentation](http://mrtrix.readthedocs.org) for reference. Additional information may be found in the [online *MRtrix3* community forum](http://community.mrtrix.org).
+Please use the official [*MRtrix3* documentation](http://mrtrix.readthedocs.org) for
+reference. Additional information may be found in the
+[online *MRtrix3* community forum](http://community.mrtrix.org).
 
 ### Error Reporting
-Experiencing problems? You can post a message on the [*MRtrix3* community forum](http://community.mrtrix.org); or if you are confident that what you are experiencing is a genuine issue, you can report it directly to the [GitHub issues list](https://github.com/MRtrix3/mrtrix3/issues). In both cases, please include as much information as possible.
+Experiencing problems? You can post a message on the
+[*MRtrix3* community forum](http://community.mrtrix.org); or if you are confident that
+what you are experiencing is a genuine issue, you can report it directly to the
+[GitHub issues list](https://github.com/MRtrix3/mrtrix3/issues). In both cases, please
+include as much information as possible; this may include re-running the script using
+the `--debug` option.
 
 ### Acknowledgement
-When using this pipeline, please use the following snippet to acknowledge the relevant work (amend as appropriate depending on options used):
+When using this pipeline, please use the following snippet to acknowledge the relevant
+work (amend as appropriate depending on options used):
 
-Structural connectomes were generated using tools provided in the MRtrix3 software package (http://mrtrix.org). This included: DWI denoising (Veraart et al., 2016), Gibbs ringing removal (Kellner et al., 2016), pre-processing (Andersson et al., 2003; Andersson and Sotiropoulos, 2015; Andersson et al., 2016) and bias field correction (Tustison et al., 2010); inter-modal registration (Bhushan et al., 2015); T1 tissue segmentation (Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography (Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al., 2012) and dynamic seeding (Smith et al., 2015); SIFT2 (Smith et al., 2015); T1 parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010) ) OR Rohlfing et al., 2010 ); robust structural connectome construction (Yeh et al., 2016).
+Structural connectomes were generated principally using tools provided in the *MRtrix3*
+software package (http://mrtrix.org). This included: DWI denoising (Veraart et al.,
+2016), Gibbs ringing removal (Kellner et al., 2016), pre-processing (Andersson et al.,
+2003; Andersson and Sotiropoulos, 2015; Andersson et al., 2016) and bias field correction
+(Tustison et al., 2010 OR Zhang et al., 2001); inter-modal registration (Bhushan et al.,
+2015); brain extraction (Smith, 2002 OR Iglesias et al., 2011), T1 tissue segmentation
+(Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical
+deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography
+(Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al.,
+2012) and dynamic seeding (Smith et al., 2015b); SIFT2 (Smith et al., 2015b); T1
+parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al.,
+2006 OR Destrieux et al., 2010) ) OR Rohlfing et al., 2010 ); robust structural connectome
+construction (Smith et al., 2015a; Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
@@ -22,13 +47,15 @@ Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. 
 Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction NeuroImage, 1999, 9, 179-194
 Desikan, R. S.; Ségonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980
 Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15
+Iglesias, J. E.; Liu, C. Y.; Thompson, P. M. & Tu, Z. Robust Brain Extraction Across Datasets and Comparison With Publicly Available Methods. IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634
 Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data NeuroImage, 2014, 103, 411-426
 Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581
 Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. A Bayesian model of shape and appearance for subcortical brain segmentation. NeuroImage, 2011, 56, 907-922
 Rohlfing, T.; Zahr, N. M.; Sullivan, E. V. & Pfefferbaum, A. The SRI24 Multi-Channel Atlas of Normal Adult Human Brain Structure. Human Brain Mapping, 2010, 31, 798-819
 Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 17, 143-155
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938
-Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dense quantitative assessment of brain white matter connectivity using streamlines tractography. NeuroImage, 2015, 119, 338-351
+Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. The effects of SIFT on the reproducibility and biological accuracy of the structural connectome. NeuroImage, 2015a, 104, 253-265
+Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dense quantitative assessment of brain white matter connectivity using streamlines tractography. NeuroImage, 2015b, 119, 338-351
 Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. Direct estimation of the fiber orientation density function from diffusion-weighted MRI data using spherical deconvolution. NeuroImage,     2004, 23, 1176-1185
 Tournier, J.-D.; Calamante, F. & Connelly, A. Improved probabilistic streamlines tractography by 2nd order integration over fibre orientation distributions. Proceedings of the International Society for Magnetic Resonance in Medicine, 2010, 1670
 Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J. N4ITK: Improved N3 Bias Correction. IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320
@@ -98,7 +125,10 @@ For more details, see http://www.mrtrix.org/.
 
 ### Instructions
 
-The [bids/MRtrix3_connectome](https://hub.docker.com/r/bids/mrtrix3_connectome/) Docker container enables users to generate structural connectomes from diffusion MRI data using state-of-the-art techniques. The pipeline requires that data be organized in accordance with the [BIDS specification](http://bids.neuroimaging.io).
+The [bids/MRtrix3_connectome](https://hub.docker.com/r/bids/mrtrix3_connectome/) Docker
+container enables users to generate structural connectomes from diffusion MRI data using
+state-of-the-art techniques. The pipeline requires that data be organized in accordance
+with the [BIDS specification](http://bids.neuroimaging.io).
 
 In your terminal, type:
 ```{bash}
@@ -115,7 +145,8 @@ $ docker run -i --rm \
       /bids_dataset /outputs participant --participant_label 01 --parcellation fs_2005
 ```
 
-Following processing of all participants, the script can be run in group analysis mode using e.g.:
+Following processing of all participants, the script can be run in group analysis mode
+using e.g.:
 
 ```{bash}
 $ docker run -i --rm \
@@ -125,6 +156,18 @@ $ docker run -i --rm \
       /bids_dataset /outputs group
 ```
 
-If you wish to run this script on a computing cluster, we recommend the use of [Singularity](http://singularity.lbl.gov/). Although built for Docker, this container can be converted using the [`docker2singularity` tool](https://github.com/singularityware/docker2singularity).
+If you wish to run this script on a computing cluster, we recommend the use of
+[Singularity](http://singularity.lbl.gov/). Although built for Docker, this container
+can be converted using the
+[`docker2singularity` tool](https://github.com/singularityware/docker2singularity).
 
-The script ``run.py`` can additionally be used *outside* of this Docker container, as a stand-alone Python script build against the *MRtrix3* Python libraries. Using the script in this way requires setting the ``PYTHONPATH`` environment variable to include the path to the *MRtrix3* ``lib/`` directory where it is installed on your local system, as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library). When used in this way, the command-line interface of the script will be more consistent with the rest of *MRtrix3*. Note however that this script may make use of *MRtrix3* features or bug fixes that have not yet been merged into the ``master`` branch; in tthis case, it may be necessary to install the same version of _MRtrix3_ as that installed within "``Dockerfile``".
+The script ``run.py`` can additionally be used *outside* of this Docker container, as
+a stand-alone Python script build against the *MRtrix3* Python libraries. Using the
+script in this way requires setting the ``PYTHONPATH`` environment variable to include
+the path to the *MRtrix3* ``lib/`` directory where it is installed on your local system,
+as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library).
+When used in this way, the command-line interface of the script will be more consistent
+with the rest of *MRtrix3*. Note however that this script may make use of *MRtrix3*
+features or bug fixes that have not yet been merged into the ``master`` branch; in this
+case, it may be necessary to install the same version of *MRtrix3* as that installed
+within "``Dockerfile``".

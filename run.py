@@ -5,7 +5,7 @@ from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
 
-is_container = os.path.exists('/version')
+is_container = os.path.exists('/version') and os.path.exists('/mrtrix3_version')
 __version__ = 'BIDS-App \'MRtrix3_connectome\' version {}'.format(open('/version').read()) if is_container else 'BIDS-App \'MRtrix3_connectome\' standalone'
 option_prefix = '--' if is_container else '-'
 
@@ -166,6 +166,7 @@ def runSubject(bids_dir, label, output_prefix):
   # May need to concatenate more than one input DWI, since if there's more than one phase-encode direction
   #   in the acquired DWIs (i.e. not just those used for estimating the inhomogeneity field), they will
   #   need to be stored as separate NIfTI files in the 'dwi/' directory.
+  app.console('Importing DWI data into temporary directory')
   dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label) + '*_dwi.nii*')
   dwi_index = 1
   for entry in dwi_image_list:
@@ -194,6 +195,7 @@ def runSubject(bids_dir, label, output_prefix):
   if os.path.isdir(fmap_dir):
     if app.args.preprocessed:
       app.error('fmap/ directory detected for subject \'' + label + '\' despite use of ' + option_prefix + 'preprocessed option')
+    app.console('Importing fmap data into temporary directory')
     fmap_image_list = glob.glob(os.path.join(fmap_dir, label) + '_dir-*_epi.nii*')
     for entry in fmap_image_list:
       prefix = entry.split(os.extsep)[0]
@@ -228,6 +230,7 @@ def runSubject(bids_dir, label, output_prefix):
   dwi_image_list = [ 'dwi' + str(index) + '.mif' for index in range(1, dwi_index) ]
 
   # Import anatomical image
+  app.console('Importing T1 image into temporary directory')
   run.command('mrconvert ' + os.path.join(bids_dir, label, 'anat', label + '_T1w.nii.gz') + ' ' +
               path.toTemp('T1.mif', True))
 
@@ -255,6 +258,7 @@ def runSubject(bids_dir, label, output_prefix):
     # TODO Note however that this may not be possible: the fmap/ images may not lie on the
     #   same grid as the DWIs. When this occurs, cannot apply denoising algorithm to fmap images.
     if fmap_image_list:
+      app.console('Concatenating DWI and fmap data for combined pre-processing')
       run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
       for i in fmap_image_list:
         file.delTemporary(i)
@@ -269,6 +273,7 @@ def runSubject(bids_dir, label, output_prefix):
       fmap_num_volumes = 0
       # Even if no explicit fmap images, may still need to concatenate multiple DWI inputs
       if len(dwi_image_list) > 1:
+        app.console('Concatenating input DWI series')
         dwidenoise_input = 'dwi_cat.mif'
         run.command('mrcat ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
         for i in dwi_image_list:
@@ -278,17 +283,20 @@ def runSubject(bids_dir, label, output_prefix):
 
 
     # Step 1: Denoise
+    app.console('Performing MP-PCA denoising of DWI' + (' and fmap' if fmap_num_volumes else '') + ' data')
     mrdegibbs_input = os.path.splitext(dwidenoise_input)[0] + '_denoised.mif'
     run.command('dwidenoise ' + dwidenoise_input + ' ' + mrdegibbs_input)
     file.delTemporary(dwidenoise_input)
 
     # Step 2: Gibbs ringing removal
+    app.console('Performing Gibbs ringing removal for DWI' + (' and fmap' if fmap_num_volumes else '') + ' data')
     mrdegibbs_output = os.path.splitext(mrdegibbs_input)[0] + '_degibbs.mif'
     run.command('mrdegibbs ' + mrdegibbs_input + ' ' + mrdegibbs_output + ' -nshifts 50')
     file.delTemporary(mrdegibbs_input)
 
     # If fmap images and DWIs have been concatenated, now is the time to split them back apart
     if fmap_num_volumes:
+      app.console('Separating DWIs and fmap images from concatenated series')
       dwipreproc_input = 'dwipreproc_in.mif'
       dwipreproc_se_epi = 'se_epi.mif'
       run.command('mrconvert ' + mrdegibbs_output + ' ' + dwipreproc_se_epi + ' -coord 3 0:' + str(fmap_num_volumes-1))
@@ -302,6 +310,9 @@ def runSubject(bids_dir, label, output_prefix):
       dwipreproc_se_epi_option = ''
 
     # Step 3: Distortion correction
+    app.console('Performing various geometric corrections of DWIs')
+    # TODO Query if --repol is available in eddy, and use it if it is
+    # TODO Query if CUDA & CUDA version of eddy are available
     run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option)
     file.delTemporary(dwipreproc_input)
     if dwipreproc_se_epi:
@@ -309,6 +320,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Step 4: Bias field correction
     if dwibiascorrect_algo:
+      app.console('Performing B1 bias field correction of DWIs')
       run.command('dwibiascorrect dwi_preprocessed.mif dwi.mif ' + dwibiascorrect_algo)
       file.delTemporary('dwi_preprocessed.mif')
     else:
@@ -318,6 +330,7 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Step 5: Generate a brain mask for DWI
   #   Also produce a dilated version of the mask for later use
+  app.console('Estimating a brain mask for DWIs')
   run.command('dwi2mask dwi.mif dwi_mask.mif')
   run.command('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
 
@@ -326,6 +339,7 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 6: Perform brain extraction and bias field correction on the T1 image
   #         in its original space (this is necessary for histogram matching
   #         prior to registration)
+  app.console('Performing brain extraction and B1 bias field correction of T1 image')
   T1_header = image.Header('T1.mif')
   T1_revert_stride_option = ' -stride ' + ','.join([str(i) for i in T1_header.stride()])
   if brain_extraction_cmd == 'runROBEX.sh':
@@ -352,6 +366,7 @@ def runSubject(bids_dir, label, output_prefix):
     file.delTemporary('T1.anat')
 
   # Step 7: Generate target images for T1->DWI registration
+  app.console('Generating contrast-matched images for inter-modal registration between DWIs and T1')
   run.command('dwiextract dwi.mif -bzero - | '
               'mrcalc - 0.0 -max - | '
               'mrmath - mean -axis 3 dwi_meanbzero.mif')
@@ -363,7 +378,8 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 8: Perform T1->DWI registration
   #         Note that two registrations are performed: Even though we have a symmetric registration,
   #         generation of the two histogram-matched images means that you will get slightly different
-  #         answers depending on which synthesized image & original image you use.
+  #         answers depending on which synthesized image & original image you use
+  app.console('Performing registration between DWIs and T1s')
   run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_T1_to_pseudoT1.txt')
   file.delTemporary('T1_biascorr_brain.mif')
   run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_pseudobzero_to_bzero.txt')
@@ -375,10 +391,11 @@ def runSubject(bids_dir, label, output_prefix):
   file.delTemporary('T1.mif')
   # Note: Since we're using a mask from fsl_anat (which crops the FoV), but using it as input to 5ttge fsl
   #   (which is receiving the raw T1), we need to resample in order to have the same dimensions between these two
-  run.command('mrtransform T1_mask.mif T1_mask_registered.mif -linear rigid_T1_to_dwi.txt -template T1_registered.mif -interp nearest')
+  run.command('mrtransform T1_mask.mif T1_mask_registered.mif -linear rigid_T1_to_dwi.txt -template T1_registered.mif -interp nearest -datatype bit')
   file.delTemporary('T1_mask.mif')
 
   # Step 9: Generate 5TT image for ACT
+  app.console('Generating five-tissue-type (5TT) image for Anatomically-Constrained Tractography (ACT)')
   run.command('5ttgen fsl T1_registered.mif 5TT.mif -mask T1_mask_registered.mif')
   if app.args.output_verbosity > 1:
     run.command('5tt2vis 5TT.mif vis.mif')
@@ -386,15 +403,17 @@ def runSubject(bids_dir, label, output_prefix):
     file.delTemporary('T1_mask_registered.mif')
 
   # Step 10: Estimate response functions for spherical deconvolution
+  app.console('Estimating tissue response functions for spherical deconvolution')
   run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
 
-  # Step 11: Determine whether we are working with single-shell or multi-shell data
+  # Determine whether we are working with single-shell or multi-shell data
   shells = [int(round(float(value))) for value in image.mrinfo('dwi.mif', 'shellvalues').strip().split()]
   multishell = (len(shells) > 2)
 
-  # Step 12: Perform spherical deconvolution
+  # Step 11: Perform spherical deconvolution
   #          Use a dilated mask for spherical deconvolution as a 'safety margin' -
   #          ACT should be responsible for stopping streamlines before they reach the edge of the DWI mask
+  app.console('Estimating' + ('' if multishell else ' white matter') + ' Fibre Orientation Distribution' + ('s' if multishell else ''))
   if multishell:
     run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_gm.txt FOD_GM.mif response_csf.txt FOD_CSF.mif '
                 '-mask dwi_mask_dilated.mif -lmax 10,0,0')
@@ -406,8 +425,9 @@ def runSubject(bids_dir, label, output_prefix):
                 '-mask dwi_mask_dilated.mif -lmax 10,0')
     file.delTemporary('FOD_CSF.mif')
 
-  # Step 13: Generate the grey matter parcellation
+  # Step 12: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
+  app.console('Getting grey matter parcellation in subject space')
   run.command('mrconvert T1_registered.mif T1_registered.nii -stride +1,+2,+3')
   if app.args.parcellation in [ 'fs_2005', 'fs_2009' ]:
 
@@ -458,14 +478,15 @@ def runSubject(bids_dir, label, output_prefix):
   else:
     app.error('Unknown parcellation scheme requested: ' + app.args.parcellation)
   file.delTemporary('T1_registered.nii')
-  if app.args.output_verbosity > 3 and mrtrix_lut_file:
+  if app.args.output_verbosity > 2 and mrtrix_lut_file:
     run.command('label2colour parc.mif parcRGB.mif -lut ' + mrtrix_lut_file)
 
-  # Step 14: Generate the tractogram
+  # Step 13: Generate the tractogram
   # If not manually specified, determine the appropriate number of streamlines based on the number of nodes in the parcellation:
   #   mean edge weight of 1,000 streamlines
   # A smaller FOD amplitude threshold of 0.06 (default 0.1) is used for tracking due to the use of the msmt_csd
   #   algorithm, which imposes a hard rather than soft non-negativity constraint
+  app.console('Performing whole-brain fibre-tracking')
   num_nodes = int(image.statistic('parc.mif', 'max'))
   num_streamlines = 500 * num_nodes * (num_nodes-1)
   if app.args.streamlines:
@@ -473,36 +494,42 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -cutoff 0.06 -maxlength 250 -power 0.33 '
               '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
 
-  # Step 15: Use SIFT2 to determine streamline weights
+  # Step 14: Use SIFT2 to determine streamline weights
+  app.console('Running the SIFT2 algorithm to assign weights to individual streamlines')
   fd_scale_gm_option = ''
   if not multishell:
     fd_scale_gm_option = ' -fd_scale_gm'
   run.command('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option)
 
-  # Step 16: Generate a TDI at DWI native resolution, with SIFT mu scaling, and precise mapping
-  #   (for comparison to WM ODF l=0 term, to verify that SIFT2 has worked correctly)
+
   if app.args.output_verbosity > 2:
+    # Generate TDIs:
+    # - a TDI at DWI native resolution, with SIFT mu scaling, and precise mapping
+    #   (for comparison to WM ODF l=0 term, to verify that SIFT2 has worked correctly)
+    app.console('Producing Track Density Images (TDIs)')
     with open('mu.txt', 'r') as f:
       mu = float(f.read())
     run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template FOD_WM.mif -precise - | '
                 'mrcalc - ' + str(mu) + ' -mult tdi_native.mif')
-
-  # Step 17: Generate a conventional TDI at super-resolution
-  #   (mostly just because we can)
-  if app.args.output_verbosity > 2:
+    # Conventional TDI at super-resolution (mostly just because we can)
     run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([str(value/3.0) for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
 
-  # Step 18: Generate the connectome
+
+  # Step 15: Generate the connectome
   #          Also get the mean length for each edge; this is the most likely alternative contrast to be useful
+  app.console('Combining whole-brain tractogram with grey matter parcellation to produce the connectome')
   run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
   run.command('tck2connectome tractogram.tck parc.mif meanlength.csv -tck_weights_in weights.csv -scale_length -stat_edge mean')
 
-  # Step 19: Produce additional data that can be used for visualisation within mrview's connectome toolbar
+
   if app.args.output_verbosity > 2:
+    # Produce additional data that can be used for visualisation within mrview's connectome toolbar
+    app.console('Generating geometric data for enhanced connectome visualisation')
     run.command('connectome2tck tractogram.tck assignments.csv exemplars.tck -tck_weights_in weights.csv -exemplars parc.mif -files single')
     run.command('label2mesh parc.mif nodes.obj')
     run.command('meshfilter nodes.obj smooth nodes_smooth.obj')
     file.delTemporary('nodes.obj')
+
 
   # TODO Eventually will want to move certain elements into .json files rather than text files
 
@@ -528,7 +555,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('mrconvert dwi.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi.nii.gz') + \
                 ' -export_grad_fsl ' + os.path.join(output_dir, 'dwi', label + '_dwi.bvec') + ' ' + os.path.join(output_dir, 'dwi', label + '_dwi.bval') + \
                 ' -stride +1,+2,+3,+4')
-    run.command('mrconvert dwi_mask.mif ' + os.path.join(output_dir, 'dwi', label + '_brainmask.nii.gz') + ' -datatype uint8 -stride +1,+2,+3')
+    run.command('mrconvert dwi_mask.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi_brainmask.nii.gz') + ' -datatype uint8 -stride +1,+2,+3')
     run.command('mrconvert T1_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w.nii.gz') + ' -stride +1,+2,+3')
     run.command('mrconvert T1_mask_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w_brainmask.nii.gz') + ' -datatype uint8 -stride +1,+2,+3')
     run.command('mrconvert vis.mif ' + os.path.join(output_dir, 'anat', label + '_tissues3D.nii.gz') + ' -stride +1,+2,+3,+4')
@@ -589,7 +616,7 @@ def runGroup(output_dir):
           app.error('Unable to find critical subject data (expected location: ' + entry + ')')
 
       # Permissible for this to not exist
-      self.in_mask = os.path.join(output_dir, label, 'dwi', label + '_brainmask.nii.gz')
+      self.in_mask = os.path.join(output_dir, label, 'dwi', label + '_dwi_brainmask.nii.gz')
 
       with open(self.in_mu, 'r') as f:
         self.mu = float(f.read())
