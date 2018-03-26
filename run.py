@@ -180,12 +180,11 @@ def runSubject(bids_dir, label, output_prefix):
         app.error('Unable to locate valid diffusion gradient table for image \'' + entry + '\'')
     grad_import_option = ' -fslgrad ' + prefix + 'bvec ' + prefix + 'bval'
     json_path = prefix + 'json'
-    if os.path.isfile(json_path):
-      json_import_option = ' -json_import ' + json_path
-    else:
-      json_import_option = ''
+    if not os.path.isfile(json_path):
+      app.error('No sidecar JSON file found for image \'' + entry + '\'')
     run.command('mrconvert ' + entry + grad_import_option + json_import_option
-                + ' ' + path.toTemp('dwi' + str(dwi_index) + '.mif', True))
+                + ' ' + path.toTemp('dwi' + str(dwi_index) + '.mif', True)
+                + ' -json_import ' + json_path)
     dwi_index += 1
 
   # Go hunting for reversed phase-encode data dedicated to field map estimation
@@ -205,21 +204,19 @@ def runSubject(bids_dir, label, output_prefix):
       if 'IntendedFor' in json_elements and not any(i.endswith(json_elements['IntendedFor']) for i in dwi_image_list):
         app.console('Image \'' + entry + '\' is not intended for use with DWIs; skipping')
         continue
-      if os.path.isfile(json_path):
-        json_import_option = ' -json_import ' + json_path
-        # fmap files will not come with any gradient encoding in the JSON;
-        #   therefore we need to add it manually ourselves so that mrcat / mrconvert can
-        #   appropriately handle the table once these images are concatenated with the DWIs
-        fmap_image_size = image.Header(entry).size()
-        fmap_image_num_volumes = 1 if len(fmap_image_size) == 3 else fmap_image_size[3]
-        run.command('mrconvert ' + entry + json_import_option +
-                    ' -set_property dw_scheme \"' +
-                    '\\n'.join(['0,0,1,0'] * fmap_image_num_volumes) +
-                    '\" ' +
-                    path.toTemp('fmap' + str(fmap_index) + '.mif', True))
-        fmap_index += 1
-      else:
-        app.warn('No corresponding .json file found for image \'' + entry + '\'; skipping')
+      if not os.path.isfile(json_path):
+        app.error('No sidecar JSON file found for image \'' + entry + '\'')
+      # fmap files will not come with any gradient encoding in the JSON;
+      #   therefore we need to add it manually ourselves so that mrcat / mrconvert can
+      #   appropriately handle the table once these images are concatenated with the DWIs
+      fmap_image_size = image.Header(entry).size()
+      fmap_image_num_volumes = 1 if len(fmap_image_size) == 3 else fmap_image_size[3]
+      run.command('mrconvert ' + entry + ' -json_import ' + json_path +
+                  ' -set_property dw_scheme \"' +
+                  '\\n'.join(['0,0,1,0'] * fmap_image_num_volumes) +
+                  '\" ' +
+                  path.toTemp('fmap' + str(fmap_index) + '.mif', True))
+      fmap_index += 1
 
     fmap_image_list = [ 'fmap' + str(index) + '.mif' for index in range(1, fmap_index) ]
   # If there's no data in fmap/ directory, need to check to see if there's any phase-encoding
