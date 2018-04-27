@@ -811,6 +811,7 @@ if is_container:
   app.cmdline._action_groups[2].add_argument('-d', '--debug', dest='debug', action='store_true', help='In the event of encountering an issue with the script, re-run with this flag set to provide more useful information to the developer')
   app.cmdline._action_groups[2].add_argument('-h', '--help', dest='help', action='store_true', help='Display help information for the script')
   app.cmdline._action_groups[2].add_argument('-n', '--n_cpus', type=int, metavar='number', dest='nthreads', help='Use this number of threads in MRtrix3 multi-threaded applications (0 disables multi-threading)')
+  app.cmdline._action_groups[2].add_argument('-s', '--skip-bids-validator', dest='skipbidsvalidator', action='store_true', help='Skip BIDS validation')
   app.cmdline._action_groups[2].add_argument('-v', '--version', action='version', version=__version__)
 
 app.cmdline.add_argument('bids_dir', help='The directory with the input dataset formatted according to the BIDS standard.')
@@ -832,7 +833,9 @@ app.parse()
 if app.isWindows():
   app.error('Script cannot be run on Windows due to FSL dependency')
 
-if find_executable('bids-validator'):
+if app.args.skipbidsvalidator:
+  app.console('Skipping BIDS validation based on user request')
+elif find_executable('bids-validator'):
   run.command('bids-validator ' + app.args.bids_dir)
 else:
   app.warn('BIDS validator script not installed; proceeding without validation of input data')
