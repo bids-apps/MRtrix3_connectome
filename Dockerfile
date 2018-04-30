@@ -39,7 +39,7 @@ RUN apt-get install -y fsl-mni152-templates
 #RUN apt-get install -y fsl-5.0-eddy-nonfree # Use direct download instead (below) - more up-to-date version
 RUN rm -f `which eddy`
 RUN mkdir /opt/eddy/
-RUN wget -q https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.9/centos6/eddy_openmp -O /opt/eddy/eddy_openmp
+RUN wget -q https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.11/centos6/eddy_openmp -O /opt/eddy/eddy_openmp
 RUN chmod 775 /opt/eddy/eddy_openmp
 RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | tar zx -C /opt
 RUN wget -qO- http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | tar zx -C /opt
@@ -48,6 +48,8 @@ RUN wget -q http://www.nitrc.org/frs/download.php/4508/sri24_labels_nifti.zip -O
 RUN wget -q https://github.com/AlistairPerry/CCA/raw/master/parcellations/512inMNI.nii -O /opt/512inMNI.nii
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
 RUN wget -q https://ndownloader.figshare.com/files/3133832 -O oasis.zip && unzip -qq oasis.zip -d /opt/ && rm -f oasis.zip
+RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot
+RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528819/rh.HCPMMP1.annot" -O /opt/freesurfer/subjects/fsaverage/label/rh.HCPMMP1.annot
 
 RUN npm install -g bids-validator
 
@@ -76,8 +78,7 @@ RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTX
 ENV PATH=/usr/lib/fsl/5.0:/opt/eddy:$PATH
 ENV FSLDIR=/usr/share/fsl/5.0
 ENV FSLMULTIFILEQUIT=TRUE
-# Note: Would prefer NIFTI, but need to stick to compressed for now due to FSL Ubuntu not honoring this variable. May be able to revert once fsl.checkFirst() is merged in.
-ENV FSLOUTPUTTYPE=NIFTI_GZ
+ENV FSLOUTPUTTYPE=NIFTI
 ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
 
 # Make ROBEX happy
@@ -86,7 +87,7 @@ ENV PATH=/opt/ROBEX:$PATH
 # MRtrix3 setup
 ENV CXX=/usr/bin/g++-5
 # Note: Current commit being checked out includes various fixes that have been necessary to get test data working; eventually it will instead point to a release tag that includes these updates
-RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout fc3fc21 && python configure -nogui && NUMBER_OF_PROCESSORS=1 python build && git describe --tags > /mrtrix3_version
+RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && cd mrtrix3 && git checkout 23c2e1d && python configure -nogui && python build -persistent && git describe --tags > /mrtrix3_version
 #RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables for MRtrix3

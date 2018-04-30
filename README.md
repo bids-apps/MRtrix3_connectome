@@ -14,12 +14,11 @@ reference. Additional information may be found in the
 [online *MRtrix3* community forum](http://community.mrtrix.org).
 
 ### Error Reporting
-Experiencing problems? You can post a message on the
-[*MRtrix3* community forum](http://community.mrtrix.org); or if you are confident that
-what you are experiencing is a genuine issue, you can report it directly to the
-[GitHub issues list](https://github.com/MRtrix3/mrtrix3/issues). In both cases, please
-include as much information as possible; this may include re-running the script using
-the `--debug` option.
+Experiencing problems? You can either post a private message to me on the
+[*MRtrix3* community forum](http://community.mrtrix.org/u/rsmith), or you can report it
+directly to the [GitHub issues list](https://github.com/BIDS-Apps/MRtrix3_connectome/issues).
+In both cases, please include as much information as possible; this may include re-running
+the script using the `--debug` option.
 
 ### Acknowledgement
 When using this pipeline, please use the following snippet to acknowledge the relevant
@@ -36,18 +35,19 @@ deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tra
 (Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al.,
 2012) and dynamic seeding (Smith et al., 2015b); SIFT2 (Smith et al., 2015b); T1
 parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al.,
-2006 OR Destrieux et al., 2010) ) OR (Zalesky et al., 2010 AND Perry et al., 2017) OR
-Rohlfing et al., 2010 ); robust structural connectome construction (Smith et al., 2015a;
-Yeh et al., 2016).
+2006 OR Destrieux et al., 2010 OR Glasser et al., 2016) ) OR (Zalesky et al., 2010 AND
+Perry et al., 2017) OR Rohlfing et al., 2010 ); robust structural connectome construction
+(Smith et al., 2015a; Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
 Andersson, J. L. & Sotiropoulos, S. N. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage, 2015, 125, 1063-1078
 Andersson, J. L. R. & Graham, M. S. & Zsoldos, E. & Sotiropoulos, S. N. Incorporating outlier detection and replacement into a non-parametric framework for movement and distortion correction of diffusion MR images. NeuroImage, 2016, 141, 556-572
 Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280
-Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction NeuroImage, 1999, 9, 179-194
+Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194
 Desikan, R. S.; Ségonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980
 Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15
+Glasser, M. F.; Coalson, T. S.; Robinson, E. C.; Hacker, C. D.; Harwell, J.; Yacoub, E.; Ugurbil, K.; Andersson, J.; Beckmann, C. F.; Jenkinson, M.; Smith, S. M. & Van Essen, D. C. A multi-modal parcellation of human cerebral cortex. Nature, 2016, 536, 171-178
 Iglesias, J. E.; Liu, C. Y.; Thompson, P. M. & Tu, Z. Robust Brain Extraction Across Datasets and Comparison With Publicly Available Methods. IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634
 Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data NeuroImage, 2014, 103, 411-426
 Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581
@@ -103,13 +103,15 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **-n/--n_cpus number**<br>Use this number of threads in MRtrix3 multi-threaded applications (0 disables multi-threading)
 
++ **-s/--skip-bids-validator**<br>Skip BIDS validation
+
 + **-v/--version**<br>show program's version number and exit
 
 ---
 
 **Author:** Robert E. Smith (robert.smith@florey.edu.au)
 
-**Copyright:** Copyright (c) 2008-2017 the MRtrix3 contributors.
+**Copyright:** Copyright (c) 2008-2018 the MRtrix3 contributors.
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -153,9 +155,9 @@ using e.g.:
 ```{bash}
 $ docker run -i --rm \
       -v /Users/yourname/data:/bids_dataset \
-      -v /Users/yourname/outputs:/outputs \
+      -v /Users/yourname/output:/output \
       bids/mrtrix3_connectome \
-      /bids_dataset /outputs group
+      /bids_dataset /output group
 ```
 
 If you wish to run this script on a computing cluster, we recommend the use of
