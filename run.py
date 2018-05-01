@@ -80,7 +80,7 @@ def runSubject(bids_dir, label, output_prefix):
     if not reconall_path:
       app.error('Could not find FreeSurfer script recon-all; please verify FreeSurfer installation')
     if app.args.parcellation == 'hcpmmp1':
-      for cmd in [ 'mri_surf2surf', 'mri_aparc2aseg' ]
+      for cmd in [ 'mri_surf2surf', 'mri_aparc2aseg' ]:
         if not find_executable(cmd):
           app.error('Could not find FreeSurfer command ' + cmd + ' (necessary for applying HCPMMP1 parcellation); please verify FreeSurfer installation')
       if not all(os.path.isfile(os.path.join(freesurfer_subjects_dir, 'fsaverage', 'label', hemi + 'h.HCPMMP1.annot')) for hemi in [ 'l', 'r' ]):
@@ -410,7 +410,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('dwi2fod msmt_csd dwi.mif response_wm.txt FOD_WM.mif response_csf.txt FOD_CSF.mif '
                 '-mask dwi_mask_dilated.mif -lmax 10,0')
     file.delTemporary('FOD_CSF.mif')
-  
+
   # TODO Include mtnormalise step
   # Note that this is going to need to include reading the estimated WM intensity factor, and
   #   making use of it appropriately in the group-level analysis
@@ -741,7 +741,7 @@ def runGroup(output_dir):
     run.command('dwiextract ' + s.in_dwi + grad_import_option + ' - -bzero | mrmath - mean ' + s.temp_bzero + ' -axis 3')
     progress.increment()
   progress.done()
-  
+
   # TODO Alternative intensity normalisation
   # Exploit benefits of dwi2response dhollander and mtnormalise
 
