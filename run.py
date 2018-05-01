@@ -202,8 +202,7 @@ def runSubject(bids_dir, label, output_prefix):
     elif not app.args.preprocessed:
       app.error('No sidecar JSON file found for image \'' + entry + '\'; cannot proceed with DWI preprocessing without this information')
     run.command('mrconvert ' + entry + grad_import_option + json_import_option
-                + ' ' + path.toTemp('dwi' + str(dwi_index) + '.mif', True)
-                + json_import_option)
+                + ' ' + path.toTemp('dwi' + str(dwi_index) + '.mif', True))
     dwi_index += 1
 
   # Go hunting for reversed phase-encode data dedicated to field map estimation
