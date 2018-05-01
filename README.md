@@ -52,6 +52,7 @@ Iglesias, J. E.; Liu, C. Y.; Thompson, P. M. & Tu, Z. Robust Brain Extraction Ac
 Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data NeuroImage, 2014, 103, 411-426
 Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581
 Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. A Bayesian model of shape and appearance for subcortical brain segmentation. NeuroImage, 2011, 56, 907-922
+Perry, A.; Wen, W.; Kochan, N. A.; Thalamuthu, A.; Sachdev, P. S.; Breakspear, M. The independent influences of age and education on functional brain networks and cognition in healthy older adults. Human Brain Mapping, 2017, 38(10), 5094-5114
 Rohlfing, T.; Zahr, N. M.; Sullivan, E. V. & Pfefferbaum, A. The SRI24 Multi-Channel Atlas of Normal Adult Human Brain Structure. Human Brain Mapping, 2010, 31, 798-819
 Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 17, 143-155
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938
