@@ -529,14 +529,40 @@ def runSubject(bids_dir, label, output_prefix):
 
   elif app.args.parcellation in [ 'aal', 'aal2', 'perry512', 'sri24' ]:
 
-    # TODO Currently registration to SRI24 goes well and truly awry
-    run.command(flirt_cmd + ' -ref ' + template_image_path + ' -in T1_registered.nii -omat T1_to_template_FLIRT.mat -dof 12')
-    run.command('transformconvert T1_to_template_FLIRT.mat T1_registered.nii ' + template_image_path + ' flirt_import T1_to_template_MRtrix.mat')
-    file.delTemporary('T1_to_template_FLIRT.mat')
-    run.command('transformcalc T1_to_template_MRtrix.mat invert template_to_T1_MRtrix.mat')
-    file.delTemporary('T1_to_template_MRtrix.mat')
+    if app.args.parcellation == 'sri24':
+      # Previously, registration to SRI24 went well and truly awry
+      # - Need to use brain-extracted T1 since template is also brain-extracted
+      # - Template has a crazy translation offset; shimmy it across to be vaguely centred at isocentre
+      template_header = image.Header(template_image_path)
+      template_centre = [ template_header.transform()[axis][3] + template_header.spacing()[axis]*template_header.size()[axis]/2 for axis in range(0,3) ]
+      with open('template_to_isocentre.txt', 'w') as f:
+        for axis in range(0,3):
+          rotation = [ 0, 0, 0 ]
+          rotation[axis] = 1
+          f.write(' '.join([ str(i) for i in rotation ]))
+          f.write(' ' + str(-template_centre[axis]) + '\n')
+      template_isocentre_image_path = 'template_isocentre.nii'
+      run.command('mrtransform ' + template_image_path + ' template_isocentre.nii -linear template_to_isocentre.txt')
+      run.command('mrcalc T1_registered.nii T1_mask_registered.mif -mult T1_registered_masked.nii')
+      run.command(flirt_cmd + ' -ref template_isocentre.nii -in T1_registered_masked.nii -omat T1_to_centred_template_FLIRT.mat -dof 12')
+      run.command('transformconvert T1_to_centred_template_FLIRT.mat T1_registered_masked.nii template_isocentre.nii flirt_import T1_to_centred_template_MRtrix.mat')
+      file.delTemporary('T1_registered_masked.nii')
+      file.delTemporary('template_isocentre.nii')
+      file.delTemporary('T1_to_centred_template_FLIRT.mat')
+      run.command('transformcalc T1_to_centred_template_MRtrix.mat invert centred_template_to_T1_MRtrix.mat')
+      file.delTemporary('T1_to_centred_template_MRtrix.mat')
+      run.command('transformcompose template_to_isocentre.txt centred_template_to_T1_MRtrix.mat template_to_T1_MRtrix.mat')
+      file.delTemporary('template_to_isocentre.txt')
+      file.delTemporary('centred_template_to_T1_MRtrix.mat')
+    else:
+      run.command(flirt_cmd + ' -ref ' + template_image_path + ' -in T1_registered.nii -omat T1_to_template_FLIRT.mat -dof 12')
+      run.command('transformconvert T1_to_template_FLIRT.mat T1_registered.nii ' + template_image_path + ' flirt_import T1_to_template_MRtrix.mat')
+      file.delTemporary('T1_to_template_FLIRT.mat')
+      run.command('transformcalc T1_to_template_MRtrix.mat invert template_to_T1_MRtrix.mat')
+      file.delTemporary('T1_to_template_MRtrix.mat')
+
     run.command('mrtransform ' + parc_image_path + ' atlas_transformed.mif -linear template_to_T1_MRtrix.mat '
-                '-template T1_registered.mif -interp nearest')
+                  '-template T1_registered.mif -interp nearest')
     file.delTemporary('template_to_T1_MRtrix.mat')
     if parc_lut_file or mrtrix_lut_file:
       assert parc_lut_file and mrtrix_lut_file
