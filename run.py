@@ -967,6 +967,15 @@ app.cmdline.addCitation('', 'Zhang, Y.; Brady, M. & Smith, S. Segmentation of br
 app.parse()
 
 
+# If running within a container, and the --debug option has been provided,
+#   modify the interlly-stored MRtrix3 configuration contents, so that any
+#   temporary directories will be constructed within the mounted output
+#   directory, and therefore temporary directory contents will not be lost
+#   upon container instance destruction if the script fails at any point.
+if is_container and app.args.debug and not 'ScriptTmpDir' in app.config:
+  app.config['ScriptTmpDir'] = os.path.abspath(app.args.output_dir)
+
+
 if app.isWindows():
   app.error('Script cannot be run on Windows due to FSL dependency')
 
