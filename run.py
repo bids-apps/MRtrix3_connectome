@@ -135,9 +135,9 @@ def runSubject(bids_dir, label, output_prefix):
     else:
       parc_lut_file = mrtrix_lut_file = ''
       if app.args.parcellation == 'craddock200':
-        parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'ADHD200_parcellations', 'ADHD200_parcellate_200.nii.gz'))
+        parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'ADHD200_parcellate_200.nii.gz'))
       elif app.args.parcellation == 'craddock400':
-        parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'ADHD200_parcellations', 'ADHD200_parcellate_400.nii.gz'))
+        parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'ADHD200_parcellate_400.nii.gz'))
       elif app.args.parcellation == 'perry512':
         parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', '512inMNI.nii'))
 
