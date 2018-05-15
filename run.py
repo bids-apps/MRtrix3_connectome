@@ -352,7 +352,7 @@ def runSubject(bids_dir, label, output_prefix):
       eddy_binary = fsl.eddyBinary(False)
       eddy_cuda = False
     app.var(eddy_binary, eddy_cuda)
-    (eddy_stdout, eddy_stderr) = run.command(eddy_binary)
+    (eddy_stdout, eddy_stderr) = run.command(eddy_binary, False)
     app.var(eddy_stdout, eddy_stderr)
     eddy_options = []
     for line in eddy_stderr:
