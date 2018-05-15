@@ -20,7 +20,7 @@ def runSubject(bids_dir, label, output_prefix):
   if not fsl_path:
     app.error('Environment variable FSLDIR is not set; please run appropriate FSL configuration script')
 
-  if app.args.parcellation in [ 'aal', 'aal2', 'perry512', 'sri24' ]:
+  if app.args.parcellation in [ 'aal', 'aal2', 'lpba40', 'perry512' ]:
     flirt_cmd = fsl.exeName('flirt')
 
   robex_found = find_executable('ROBEX') and find_executable('runROBEX.sh')
@@ -54,6 +54,8 @@ def runSubject(bids_dir, label, output_prefix):
     app.error('For participant-level analysis, desired parcellation must be provided using the ' + option_prefix + 'parcellation option')
 
   template_image_path = ''
+  template_premasked_image_path = ''
+  template_mask_path = ''
   parc_image_path = ''
   parc_lut_file = ''
   mrtrix_lut_dir = os.path.join(os.path.dirname(os.path.abspath(app.__file__)),
@@ -118,57 +120,52 @@ def runSubject(bids_dir, label, output_prefix):
     else:
       mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'hcpmmp1_ordered.txt')
 
-  elif app.args.parcellation in [ 'aal', 'aal2' ]:
+  elif app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'perry512' ]:
     template_image_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
+    template_premasked_image_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm_brain.nii.gz')
+    template_mask_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm_brain_mask.nii.gz')
     if app.args.parcellation == 'aal':
       parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.nii'))
       parc_lut_file = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.txt'))
       mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'aal.txt')
-    else:
+    elif app.args.parcellation == 'aal2':
       parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V5.nii'))
       parc_lut_file = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V5.txt'))
       mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'aal2.txt')
+    else:
+      parc_lut_file = mrtrix_lut_file = ''
+      if app.args.parcellation == 'craddock200':
+        parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'ADHD200_parcellations', 'ADHD200_parcellate_200.nii.gz'))
+      elif app.args.parcellation == 'craddock400':
+        parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'ADHD200_parcellations', 'ADHD200_parcellate_400.nii.gz'))
+      elif app.args.parcellation == 'perry512':
+        parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', '512inMNI.nii'))
 
-  elif app.args.parcellation == 'perry512':
-    template_image_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
-    parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', '512inMNI.nii'))
-    parc_lut_file = mrtrix_lut_file = ''
-
-  elif app.args.parcellation == 'sri24':
-    template_image_path = os.path.join(os.sep, 'opt', 'sri24','spgr.nii')
+  elif app.args.parcellation == 'lpba40':
+    template_premasked_image_path = os.path.join(os.sep, 'opt', 'sri24','spgr.nii')
     parc_image_path = os.path.join(os.sep, 'opt', 'sri24', 'lpba40.nii')
     parc_lut_file = os.path.join(os.sep, 'opt', 'sri24', 'LPBA40-labels.txt')
     mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'lpba40.txt')
 
-  if template_image_path and not os.path.isfile(template_image_path):
-    if getattr(app.args, 'atlas_path', None):
-      template_image_path = [ template_image_path, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(template_image_path)) ]
-      if os.path.isfile(template_image_path[1]):
-        template_image_path = template_image_path[1]
-      else:
-        app.error('Could not find template image (tested locations: ' + str(template_image_path) + ')')
-    else:
-      app.error('Could not find template image (expected location: ' + template_image_path + ')')
 
-  if parc_image_path and not os.path.isfile(parc_image_path):
-    if getattr(app.args, 'atlas_path', None):
-      parc_image_path = [ parc_image_path, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(parc_image_path)) ]
-      if os.path.isfile(parc_image_path[1]):
-        parc_image_path = parc_image_path[1]
-      else:
-        app.error('Could not find parcellation image (tested locations: ' + str(parc_image_path) + ')')
-    else:
-      app.error('Could not find parcellation image (expected location: ' + parc_image_path + ')')
+  def findAtlasFile(filepath, description):
+    if not filepath:
+      return ''
+    if os.path.isfile(filepath):
+      return filepath
+    if not getattr(app.args, 'atlas_path', None):
+      app.error('Could not find ' + description + ' (expected location: ' + filepath + ')')
+    newpath = os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(filepath))
+    if os.path.isfile(newpath):
+      return newpath
+    app.error('Could not find ' + description + ' (tested locations: \'' + filepath + '\', \'' + newpath + '\')')
 
-  if parc_lut_file and not os.path.isfile(parc_lut_file):
-    if getattr(app.args, 'atlas_path', None):
-      parc_lut_file = [ parc_lut_file, os.path.join(os.path.dirname(app.args.atlas_path), os.path.basename(parc_lut_file)) ]
-      if os.path.isfile(parc_lut_file[1]):
-        parc_lut_file = parc_lut_file[1]
-      else:
-        app.error('Could not find parcellation lookup table file (tested locations: ' + str(parc_lut_file) + ')')
-    else:
-      app.error('Could not find parcellation lookup table file (expected location: ' + parc_lut_file + ')')
+
+  template_image_path = findAtlasFile(template_image_path, 'template image')
+  template_premasked_image_path = findAtlasFile(template_premasked_image_path, 'brain-extracted template image')
+  template_mask_path = findAtlasFile(template_mask_path, 'template brain mask image')
+  parc_image_path = findAtlasFile(parc_image_path, 'parcellation image')
+  parc_lut_file = findAtlasFile(parc_lut_file, 'parcellation lookup table file')
 
   if mrtrix_lut_file and not os.path.exists(mrtrix_lut_file):
     app.error('Could not find MRtrix3 connectome lookup table file (expected location: ' + mrtrix_lut_file + ')')
@@ -454,9 +451,9 @@ def runSubject(bids_dir, label, output_prefix):
               'mrcalc - 0.0 -max - | '
               'mrmath - mean -axis 3 dwi_meanbzero.mif')
   run.command('mrcalc 1 dwi_meanbzero.mif -div dwi_mask.mif -mult - | '
-              'mrhistmatch - T1_biascorr_brain.mif dwi_pseudoT1.mif -mask_input dwi_mask.mif -mask_target T1_mask.mif')
+              'mrhistmatch nonlinear - T1_biascorr_brain.mif dwi_pseudoT1.mif -mask_input dwi_mask.mif -mask_target T1_mask.mif')
   run.command('mrcalc 1 T1_biascorr_brain.mif -div T1_mask.mif -mult - | '
-              'mrhistmatch - dwi_meanbzero.mif T1_pseudobzero.mif -mask_input T1_mask.mif -mask_target dwi_mask.mif')
+              'mrhistmatch nonlinear - dwi_meanbzero.mif T1_pseudobzero.mif -mask_input T1_mask.mif -mask_target dwi_mask.mif')
 
   # Step 10: Perform T1->DWI registration
   #         Note that two registrations are performed: Even though we have a symmetric registration,
@@ -527,9 +524,12 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('labelsgmfix parc_init.mif T1_registered.mif ' + mrtrix_lut_file + ' parc.mif')
     file.delTemporary('parc_init.mif')
 
-  elif app.args.parcellation in [ 'aal', 'aal2', 'perry512', 'sri24' ]:
+  elif app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'lpba40', 'perry512' ]:
 
-    if app.args.parcellation == 'sri24':
+    # TODO Consider use of non-linear registration to template
+    # TODO Try to do this using MRtrix registration, now that mrhistmatch is available
+
+    if app.args.parcellation == 'lpba40':
       # Previously, registration to SRI24 went well and truly awry
       # - Need to use brain-extracted T1 since template is also brain-extracted
       # - Template has a crazy translation offset; shimmy it across to be vaguely centred at isocentre
@@ -541,10 +541,14 @@ def runSubject(bids_dir, label, output_prefix):
           rotation[axis] = 1
           f.write(' '.join([ str(i) for i in rotation ]))
           f.write(' ' + str(-template_centre[axis]) + '\n')
-      template_isocentre_image_path = 'template_isocentre.nii'
       run.command('mrtransform ' + template_image_path + ' template_isocentre.nii -linear template_to_isocentre.txt')
-      run.command('mrcalc T1_registered.nii T1_mask_registered.mif -mult T1_registered_masked.nii')
-      run.command(flirt_cmd + ' -ref template_isocentre.nii -in T1_registered_masked.nii -omat T1_to_centred_template_FLIRT.mat -dof 12')
+      # SRI24 template image used is pre-masked; need to get an explicit mask image to provide to mrhistmatch
+      run.command('mrthrehsold template_isocentre.nii -abs 0.5 template_mask_isocentre.mif')
+      run.command('mrhistmatch linear T1_registered.nii -mask_input T1_mask_registered.mif template_isocentre.nii -mask_target template_mask_isocentre.mif - | ' \
+                    'mrcalc - T1_mask_registered.mif -mult T1_registered_masked_templatehistmatch.nii')
+      file.delTemporary('template_mask_isocentre.mif')
+      run.command(flirt_cmd + ' -ref template_isocentre.nii -in T1_registered_masked_templatehistmatch.nii -omat T1_to_centred_template_FLIRT.mat -dof 12')
+      file.delTemporary('T1_registered_masked_templatehistmatch.nii')
       run.command('transformconvert T1_to_centred_template_FLIRT.mat T1_registered_masked.nii template_isocentre.nii flirt_import T1_to_centred_template_MRtrix.mat')
       file.delTemporary('T1_registered_masked.nii')
       file.delTemporary('template_isocentre.nii')
@@ -555,14 +559,17 @@ def runSubject(bids_dir, label, output_prefix):
       file.delTemporary('template_to_isocentre.txt')
       file.delTemporary('centred_template_to_T1_MRtrix.mat')
     else:
-      run.command(flirt_cmd + ' -ref ' + template_image_path + ' -in T1_registered.nii -omat T1_to_template_FLIRT.mat -dof 12')
-      run.command('transformconvert T1_to_template_FLIRT.mat T1_registered.nii ' + template_image_path + ' flirt_import T1_to_template_MRtrix.mat')
+      run.command('mrhistmatch linear T1_registered.nii -mask_input T1_mask_registered.mif ' + template_image_path + ' -mask_target ' + template_mask_path + ' - | ' \
+                  'mrcalc - T1_mask_registered.mif -mult T1_registered_masked_templatehistmatch.nii')
+      run.command(flirt_cmd + ' -ref ' + template_premasked_image_path + ' -in T1_registered_masked_templatehistmatch.nii -omat T1_to_template_FLIRT.mat -dof 12')
+      run.command('transformconvert T1_to_template_FLIRT.mat T1_registered_masked_templatehistmatch.nii ' + template_premasked_image_path + ' flirt_import T1_to_template_MRtrix.mat')
       file.delTemporary('T1_to_template_FLIRT.mat')
+      file.delTemporary('T1_registered_masked_templatehistmatch.nii')
       run.command('transformcalc T1_to_template_MRtrix.mat invert template_to_T1_MRtrix.mat')
       file.delTemporary('T1_to_template_MRtrix.mat')
 
-    run.command('mrtransform ' + parc_image_path + ' atlas_transformed.mif -linear template_to_T1_MRtrix.mat '
-                  '-template T1_registered.mif -interp nearest')
+    run.command('mrtransform ' + parc_image_path + ' atlas_transformed.mif -linear template_to_T1_MRtrix.mat ' \
+                '-template T1_registered.mif -interp nearest')
     file.delTemporary('template_to_T1_MRtrix.mat')
     if parc_lut_file or mrtrix_lut_file:
       assert parc_lut_file and mrtrix_lut_file
@@ -585,7 +592,7 @@ def runSubject(bids_dir, label, output_prefix):
   num_streamlines = 500 * num_nodes * (num_nodes-1)
   if app.args.streamlines:
     num_streamlines = app.args.streamlines
-  run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -maxlength 250 -power 0.33 '
+  run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -maxlength 250 -power 0.33 ' \
               '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
 
   # Step 14: Use SIFT2 to determine streamline weights
@@ -603,7 +610,7 @@ def runSubject(bids_dir, label, output_prefix):
     app.console('Producing Track Density Images (TDIs)')
     with open('mu.txt', 'r') as f:
       mu = float(f.read())
-    run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template FOD_WM.mif -precise - | '
+    run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template FOD_WM.mif -precise - | ' \
                 'mrcalc - ' + str(mu) + ' -mult tdi_native.mif')
     # - Conventional TDI at super-resolution (mostly just because we can)
     run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([str(value/3.0) for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
@@ -898,7 +905,7 @@ def runGroup(output_dir):
 
 
 analysis_choices = [ 'participant', 'group' ]
-parcellation_choices = [ 'aal', 'aal2', 'fs_2005', 'fs_2009', 'hcpmmp1', 'perry512', 'sri24' ]
+parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'fs_2005', 'fs_2009', 'hcpmmp1', 'lpba40', 'perry512' ]
 
 app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3')
@@ -932,6 +939,7 @@ app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'And
 app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Andersson, J. L. & Sotiropoulos, S. N. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage, 2015, 125, 1063-1078', True)
 app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Andersson, J. L. R. & Graham, M. S. & Zsoldos, E. & Sotiropoulos, S. N. Incorporating outlier detection and replacement into a non-parametric framework for movement and distortion correction of diffusion MR images. NeuroImage, 2016, 141, 556-572', True)
 app.cmdline.addCitation('', 'Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280', True)
+app.cmdline.addCitation('If using ' + option_prefix + 'parcellation craddock200 or ' + option_prefix + 'parcellation craddock400', 'Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; Mayberg, H. S. A whole brain fMRI atlas generated via spatially constrained spectral clustering. Human Brain Mapping, 2012, 33(8), 1914-1928', True)
 app.cmdline.addCitation('If using \'fs_2005\', \'fs_2009\' or \'hcpmmp1\' value for ' + option_prefix + 'parcellation option', 'Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation fs_2005', 'Desikan, R. S.; Segonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation fs_2009', 'Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15', True)
@@ -941,7 +949,7 @@ app.cmdline.addCitation('', 'Jeurissen, B; Tournier, J-D; Dhollander, T; Connell
 app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581', True)
 app.cmdline.addCitation('', 'Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. A Bayesian model of shape and appearance for subcortical brain segmentation. NeuroImage, 2011, 56, 907-922', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation perry512', 'Perry, A.; Wen, W.; Kochan, N. A.; Thalamuthu, A.; Sachdev, P. S.; Breakspear, M. The independent influences of age and education on functional brain networks and cognition in healthy older adults. Human Brain Mapping, 2017, 38(10), 5094-5114', True)
-app.cmdline.addCitation('If using ' + option_prefix + 'parcellation sri24', 'Rohlfing, T.; Zahr, N. M.; Sullivan, E. V. & Pfefferbaum, A. The SRI24 Multi-Channel Atlas of Normal Adult Human Brain Structure. Human Brain Mapping, 2010, 31, 798-819', True)
+app.cmdline.addCitation('If using ' + option_prefix + 'parcellation lpba40', 'Rohlfing, T.; Zahr, N. M.; Sullivan, E. V. & Pfefferbaum, A. The SRI24 Multi-Channel Atlas of Normal Adult Human Brain Structure. Human Brain Mapping, 2010, 31, 798-819', True)
 if not is_container:
   app.cmdline.addCitation('If not using ROBEX for brain extraction', 'Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 17, 143-155', True)
 app.cmdline.addCitation('', 'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938', False)
