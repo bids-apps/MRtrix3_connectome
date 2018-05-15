@@ -36,16 +36,17 @@ software package (http://mrtrix.org). This included: DWI denoising (Veraart et a
 deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography
 (Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al.,
 2012) and dynamic seeding (Smith et al., 2015b); SIFT2 (Smith et al., 2015b); T1
-parcellation (Tzourio-Mazoyer et al., 2002 OR (Dale et al., 1999 AND (Desikan et al.,
-2006 OR Destrieux et al., 2010 OR Glasser et al., 2016) ) OR (Zalesky et al., 2010 AND
-Perry et al., 2017) OR Rohlfing et al., 2010 ); robust structural connectome construction
-(Smith et al., 2015a; Yeh et al., 2016).
+parcellation (Tzourio-Mazoyer et al., 2002 OR Craddock et al., 2012 OR (Dale et al.,
+1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010 OR Glasser et al., 2016) ) OR
+(Zalesky et al., 2010 AND Perry et al., 2017) OR Rohlfing et al., 2010 ); robust
+structural connectome construction (Smith et al., 2015a; Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
 Andersson, J. L. & Sotiropoulos, S. N. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage, 2015, 125, 1063-1078
 Andersson, J. L. R. & Graham, M. S. & Zsoldos, E. & Sotiropoulos, S. N. Incorporating outlier detection and replacement into a non-parametric framework for movement and distortion correction of diffusion MR images. NeuroImage, 2016, 141, 556-572
 Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280
+Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; Mayberg, H. S. A whole brain fMRI atlas generated via spatially constrained spectral clustering. Human Brain Mapping, 2012, 33(8), 1914-1928
 Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194
 Desikan, R. S.; Ségonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980
 Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15
