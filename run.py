@@ -65,7 +65,7 @@ def runSubject(bids_dir, label, output_prefix):
                                 'mrtrix3',
                                 'labelconvert')
 
-  if app.args.parcellation in [ 'fs_2005', 'fs_2009', 'hcpmmp1' ]:
+  if app.args.parcellation in [ 'desikan', 'destrieux', 'hcpmmp1' ]:
     if not 'FREESURFER_HOME' in os.environ:
       app.error('Environment variable FREESURFER_HOME not set; please verify FreeSurfer installation')
     freesurfer_subjects_dir = os.environ['SUBJECTS_DIR'] if 'SUBJECTS_DIR' in os.environ else os.path.join(os.environ['FREESURFER_HOME'], 'subjects')
@@ -109,13 +109,13 @@ def runSubject(bids_dir, label, output_prefix):
     else:
       reconall_multithread_options = ''
     app.var(reconall_multithread_options)
-    if app.args.parcellation in [ 'fs_2005', 'fs_2009' ]:
+    if app.args.parcellation in [ 'desikan', 'destrieux' ]:
       parc_lut_file = os.path.join(os.environ['FREESURFER_HOME'], 'FreeSurferColorLUT.txt')
     else:
       parc_lut_file = os.path.join(mrtrix_lut_dir, 'hcpmmp1_original.txt')
-    if app.args.parcellation == 'fs_2005':
+    if app.args.parcellation == 'desikan':
       mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'fs_default.txt')
-    elif app.args.parcellation == 'fs_2009':
+    elif app.args.parcellation == 'destrieux':
       mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'fs_a2009s.txt')
     else:
       mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'hcpmmp1_ordered.txt')
@@ -486,7 +486,7 @@ def runSubject(bids_dir, label, output_prefix):
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
   app.console('Getting grey matter parcellation in subject space')
   run.command('mrconvert T1_registered.mif T1_registered.nii -strides +1,+2,+3')
-  if app.args.parcellation in [ 'fs_2005', 'fs_2009', 'hcpmmp1' ]:
+  if app.args.parcellation in [ 'desikan', 'destrieux', 'hcpmmp1' ]:
 
     # Since we're instructing recon-all to use a different subject directory, we need to
     #   construct softlinks to a number of directories provided by FreeSurfer that
@@ -500,9 +500,9 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Grab the relevant parcellation image and target lookup table for conversion
     parc_image_path = os.path.join('freesurfer', 'mri')
-    if app.args.parcellation == 'fs_2005':
+    if app.args.parcellation == 'desikan':
       parc_image_path = os.path.join(parc_image_path, 'aparc+aseg.mgz')
-    elif app.args.parcellation == 'fs_2009':
+    elif app.args.parcellation == 'destrieux':
       parc_image_path = os.path.join(parc_image_path, 'aparc.a2009s+aseg.mgz')
     else:
       # The HCPMMP1 parcellation is not applied as part of the recon-all command;
@@ -905,7 +905,7 @@ def runGroup(output_dir):
 
 
 analysis_choices = [ 'participant', 'group' ]
-parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'fs_2005', 'fs_2009', 'hcpmmp1', 'lpba40', 'perry512' ]
+parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'desikan', 'destrieux', 'hcpmmp1', 'lpba40', 'perry512' ]
 
 app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3')
@@ -940,9 +940,9 @@ app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'And
 app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Andersson, J. L. R. & Graham, M. S. & Zsoldos, E. & Sotiropoulos, S. N. Incorporating outlier detection and replacement into a non-parametric framework for movement and distortion correction of diffusion MR images. NeuroImage, 2016, 141, 556-572', True)
 app.cmdline.addCitation('', 'Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation craddock200 or ' + option_prefix + 'parcellation craddock400', 'Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; Mayberg, H. S. A whole brain fMRI atlas generated via spatially constrained spectral clustering. Human Brain Mapping, 2012, 33(8), 1914-1928', True)
-app.cmdline.addCitation('If using \'fs_2005\', \'fs_2009\' or \'hcpmmp1\' value for ' + option_prefix + 'parcellation option', 'Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194', True)
-app.cmdline.addCitation('If using ' + option_prefix + 'parcellation fs_2005', 'Desikan, R. S.; Segonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980', True)
-app.cmdline.addCitation('If using ' + option_prefix + 'parcellation fs_2009', 'Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15', True)
+app.cmdline.addCitation('If using \'desikan\', \'destrieux\' or \'hcpmmp1\' value for ' + option_prefix + 'parcellation option', 'Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194', True)
+app.cmdline.addCitation('If using ' + option_prefix + 'parcellation desikan', 'Desikan, R. S.; Segonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980', True)
+app.cmdline.addCitation('If using ' + option_prefix + 'parcellation destrieux', 'Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation hcpmmp1', 'Glasser, M. F.; Coalson, T. S.; Robinson, E. C.; Hacker, C. D.; Harwell, J.; Yacoub, E.; Ugurbil, K.; Andersson, J.; Beckmann, C. F.; Jenkinson, M.; Smith, S. M. & Van Essen, D. C. A multi-modal parcellation of human cerebral cortex. Nature, 2016, 536, 171-178', True)
 app.cmdline.addCitation(('' if is_container else 'If using ROBEX for brain extraction'), 'Iglesias, J. E.; Liu, C. Y.; Thompson, P. M. & Tu, Z. Robust Brain Extraction Across Datasets and Comparison With Publicly Available Methods. IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634', True)
 app.cmdline.addCitation('', 'Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data NeuroImage, 2014, 103, 411-426', False)

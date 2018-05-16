@@ -89,7 +89,7 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **--output_verbosity**<br>The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory
 
-+ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, fs_2005, fs_2009
++ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal,aal2,craddock200,craddock400,desikan,destrieux,hcpmmp1,lpba40,perry512
 
 + **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
 
@@ -150,7 +150,7 @@ $ docker run -i --rm \
       -v /Users/yourname/data:/bids_dataset \
       -v /Users/yourname/outputs:/outputs \
       bids/mrtrix3_connectome \
-      /bids_dataset /outputs participant --participant_label 01 --parcellation fs_2005
+      /bids_dataset /outputs participant --participant_label 01 --parcellation desikan
 ```
 
 Following processing of all participants, the script can be run in group analysis mode
