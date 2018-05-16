@@ -20,7 +20,7 @@ def runSubject(bids_dir, label, output_prefix):
   if not fsl_path:
     app.error('Environment variable FSLDIR is not set; please run appropriate FSL configuration script')
 
-  if app.args.parcellation in [ 'aal', 'aal2', 'lpba40', 'perry512' ]:
+  if app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'lpba40', 'perry512' ]:
     flirt_cmd = fsl.exeName('flirt')
 
   robex_found = find_executable('ROBEX') and find_executable('runROBEX.sh')
@@ -40,7 +40,7 @@ def runSubject(bids_dir, label, output_prefix):
 
   dwibiascorrect_algo = '-ants'
   if not N4_found:
-    # Can't use findFSLBinary() here, since we want to proceed even if it's not found
+    # Can't use fsl.exeName() here, since we want to proceed even if it's not found
     if find_executable('fast') or find_executable('fsl5.0-fast'):
       dwibiascorrect_algo = '-fsl'
       app.console('Could not find ANTs program N4BiasFieldCorrection; '
@@ -160,12 +160,12 @@ def runSubject(bids_dir, label, output_prefix):
       return newpath
     app.error('Could not find ' + description + ' (tested locations: \'' + filepath + '\', \'' + newpath + '\')')
 
-
   template_image_path = findAtlasFile(template_image_path, 'template image')
   template_premasked_image_path = findAtlasFile(template_premasked_image_path, 'brain-extracted template image')
   template_mask_path = findAtlasFile(template_mask_path, 'template brain mask image')
   parc_image_path = findAtlasFile(parc_image_path, 'parcellation image')
   parc_lut_file = findAtlasFile(parc_lut_file, 'parcellation lookup table file')
+
 
   if mrtrix_lut_file and not os.path.exists(mrtrix_lut_file):
     app.error('Could not find MRtrix3 connectome lookup table file (expected location: ' + mrtrix_lut_file + ')')
@@ -352,7 +352,7 @@ def runSubject(bids_dir, label, output_prefix):
       eddy_binary = fsl.eddyBinary(False)
       eddy_cuda = False
     app.var(eddy_binary, eddy_cuda)
-    (eddy_stdout, eddy_stderr) = run.command(eddy_binary, False)
+    (eddy_stdout, eddy_stderr) = run.command(eddy_binary + ' --help', False)
     app.var(eddy_stdout, eddy_stderr)
     eddy_options = []
     for line in eddy_stderr:
@@ -415,6 +415,11 @@ def runSubject(bids_dir, label, output_prefix):
   # Get the b=0 l=0 CSF RF coefficient, taking into account mtnormalise factor
   # This represents the reference signal amplitude
   # The interpreted fibre density should then be based on the maximum-b l=0 WM RF coefficient, taking into account mtnormalise factor
+  #   (Or some weighted average that places greater emphasis on the WM RF size of higher b-values)
+  #
+  # Need to take care to ensure that mtnormalise scaling factors are used correctly:
+  #   Re-running dwi2fod with re-scaled response functions, then re-running mtnormalise,
+  #   shouuld yield near-unity factors in the second run
 
   # Step 8: Perform brain extraction and bias field correction on the T1 image
   #         in its original space (this is necessary for histogram matching
@@ -545,7 +550,7 @@ def runSubject(bids_dir, label, output_prefix):
       # SRI24 template image used is pre-masked; need to get an explicit mask image to provide to mrhistmatch
       run.command('mrthrehsold template_isocentre.nii -abs 0.5 template_mask_isocentre.mif')
       run.command('mrhistmatch linear T1_registered.nii -mask_input T1_mask_registered.mif template_isocentre.nii -mask_target template_mask_isocentre.mif - | ' \
-                    'mrcalc - T1_mask_registered.mif -mult T1_registered_masked_templatehistmatch.nii')
+                  'mrcalc - T1_mask_registered.mif -mult T1_registered_masked_templatehistmatch.nii')
       file.delTemporary('template_mask_isocentre.mif')
       run.command(flirt_cmd + ' -ref template_isocentre.nii -in T1_registered_masked_templatehistmatch.nii -omat T1_to_centred_template_FLIRT.mat -dof 12')
       file.delTemporary('T1_registered_masked_templatehistmatch.nii')
@@ -931,6 +936,10 @@ participant_options = app.cmdline.add_argument_group('Options that are relevant 
 if not is_container:
   participant_options.add_argument(option_prefix + 'atlas_path', help='The path to search for an atlas parcellation (may be necessary when the script is executed outside of the BIDS App container')
 participant_options.add_argument(option_prefix + 'output_verbosity', type=int, default=2, help='The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory')
+# TODO Would like to modify script to handle more than one parcellation within a single execution
+#  - Would need to restructure subject-level analysis to perform processing steps needed for multiple parcellations only once
+#  - Use BIDS-like naming convention to separate parcellation images & connectomes from one another in output
+#  - In group-level analysis, would need to look for parcellations present in all input subject directories
 participant_options.add_argument(option_prefix + 'parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument(option_prefix + 'preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
 participant_options.add_argument(option_prefix + 'streamlines', type=int, help='The number of streamlines to generate for each subject')
