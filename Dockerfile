@@ -74,16 +74,19 @@ RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | \
     tar zx -C /opt
 RUN wget -qO- http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | \
     tar zx -C /opt
-RUN wget -q http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && \
-    unzip -qq -o sri24_anatomy_nifti.zip -d /opt/ && \
-    rm -f sri24_anatomy_nifti.zip
-RUN wget -q http://www.nitrc.org/frs/download.php/4508/sri24_labels_nifti.zip -O sri24_labels_nifti.zip && \
-    unzip -qq -o sri24_labels_nifti.zip -d /opt/ && \
-    rm -f sri24_labels_nifti.zip
+#RUN wget -q http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && \
+#    unzip -qq -o sri24_anatomy_nifti.zip -d /opt/ && \
+#    rm -f sri24_anatomy_nifti.zip
+#RUN wget -q http://www.nitrc.org/frs/download.php/4502/sri24_anatomy_unstripped_nifti.zip -O sri24_anatomy_unstripped_nifti.zip && \
+#    unzip -qq -o sri24_anatomy_unstripped_nifti.zip -d /opt/ && \
+#    rm -f sri24_anatomy_unstripped_nifti.zip
+#RUN wget -q http://www.nitrc.org/frs/download.php/4508/sri24_labels_nifti.zip -O sri24_labels_nifti.zip && \
+#    unzip -qq -o sri24_labels_nifti.zip -d /opt/ && \
+#    rm -f sri24_labels_nifti.zip
 RUN wget -q https://github.com/AlistairPerry/CCA/raw/master/parcellations/512inMNI.nii -O /opt/512inMNI.nii
-RUN wget -q https://ndownloader.figshare.com/files/3133832 -O oasis.zip && \
-    unzip -qq oasis.zip -d /opt/ && \
-    rm -f oasis.zip
+#RUN wget -q https://ndownloader.figshare.com/files/3133832 -O oasis.zip && \
+#    unzip -qq oasis.zip -d /opt/ && \
+#    rm -f oasis.zip
 RUN wget -qO- http://www.nitrc.org/frs/download.php/5906/ADHD200_parcellations.tar.gz | \
     tar zx -C /opt
 RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot

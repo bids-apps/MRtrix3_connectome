@@ -38,8 +38,8 @@ deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tra
 2012) and dynamic seeding (Smith et al., 2015b); SIFT2 (Smith et al., 2015b); T1
 parcellation (Tzourio-Mazoyer et al., 2002 OR Craddock et al., 2012 OR (Dale et al.,
 1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010 OR Glasser et al., 2016) ) OR
-(Zalesky et al., 2010 AND Perry et al., 2017) OR Rohlfing et al., 2010 ); robust
-structural connectome construction (Smith et al., 2015a; Yeh et al., 2016).
+(Zalesky et al., 2010 AND Perry et al., 2017) ); robust structural connectome construction
+(Smith et al., 2015a; Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
@@ -56,7 +56,6 @@ Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tiss
 Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581
 Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. A Bayesian model of shape and appearance for subcortical brain segmentation. NeuroImage, 2011, 56, 907-922
 Perry, A.; Wen, W.; Kochan, N. A.; Thalamuthu, A.; Sachdev, P. S.; Breakspear, M. The independent influences of age and education on functional brain networks and cognition in healthy older adults. Human Brain Mapping, 2017, 38(10), 5094-5114
-Rohlfing, T.; Zahr, N. M.; Sullivan, E. V. & Pfefferbaum, A. The SRI24 Multi-Channel Atlas of Normal Adult Human Brain Structure. Human Brain Mapping, 2010, 31, 798-819
 Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 17, 143-155
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. The effects of SIFT on the reproducibility and biological accuracy of the structural connectome. NeuroImage, 2015a, 104, 253-265
@@ -89,7 +88,7 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **--output_verbosity**<br>The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory
 
-+ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal,aal2,craddock200,craddock400,desikan,destrieux,hcpmmp1,lpba40,perry512
++ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal,aal2,craddock200,craddock400,desikan,destrieux,hcpmmp1,perry512
 
 + **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
 

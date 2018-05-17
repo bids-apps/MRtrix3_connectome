@@ -20,8 +20,15 @@ def runSubject(bids_dir, label, output_prefix):
   if not fsl_path:
     app.error('Environment variable FSLDIR is not set; please run appropriate FSL configuration script')
 
-  if app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'lpba40', 'perry512' ]:
+  if app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'perry512' ]:
     flirt_cmd = fsl.exeName('flirt')
+    fnirt_cmd = fsl.exeName('fnirt')
+    invwarp_cmd = fsl.exeName('invwarp')
+    applywarp_cmd = fsl.exeName('applywarp')
+    fnirt_config_basename = 'T1_2_MNI152_2mm.cnf'
+    fnirt_config_path = os.path.join(fsl_path, 'etc', 'flirtsch', fnirt_config_basename)
+    if not os.path.isfile(fnirt_config_path):
+      app.error('Unable to find configuration file for FNI FNIRT (expected location: ' + fnirt_config_path + ')')
 
   robex_found = find_executable('ROBEX') and find_executable('runROBEX.sh')
   N4_found = find_executable('N4BiasFieldCorrection')
@@ -54,7 +61,6 @@ def runSubject(bids_dir, label, output_prefix):
     app.error('For participant-level analysis, desired parcellation must be provided using the ' + option_prefix + 'parcellation option')
 
   template_image_path = ''
-  template_premasked_image_path = ''
   template_mask_path = ''
   parc_image_path = ''
   parc_lut_file = ''
@@ -122,7 +128,6 @@ def runSubject(bids_dir, label, output_prefix):
 
   elif app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'perry512' ]:
     template_image_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm.nii.gz')
-    template_premasked_image_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm_brain.nii.gz')
     template_mask_path = os.path.join(fsl_path, 'data', 'standard', 'MNI152_T1_1mm_brain_mask.nii.gz')
     if app.args.parcellation == 'aal':
       parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', 'aal', 'ROI_MNI_V4.nii'))
@@ -141,12 +146,6 @@ def runSubject(bids_dir, label, output_prefix):
       elif app.args.parcellation == 'perry512':
         parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', '512inMNI.nii'))
 
-  elif app.args.parcellation == 'lpba40':
-    template_premasked_image_path = os.path.join(os.sep, 'opt', 'sri24','spgr.nii')
-    parc_image_path = os.path.join(os.sep, 'opt', 'sri24', 'lpba40.nii')
-    parc_lut_file = os.path.join(os.sep, 'opt', 'sri24', 'LPBA40-labels.txt')
-    mrtrix_lut_file = os.path.join(mrtrix_lut_dir, 'lpba40.txt')
-
 
   def findAtlasFile(filepath, description):
     if not filepath:
@@ -161,7 +160,6 @@ def runSubject(bids_dir, label, output_prefix):
     app.error('Could not find ' + description + ' (tested locations: \'' + filepath + '\', \'' + newpath + '\')')
 
   template_image_path = findAtlasFile(template_image_path, 'template image')
-  template_premasked_image_path = findAtlasFile(template_premasked_image_path, 'brain-extracted template image')
   template_mask_path = findAtlasFile(template_mask_path, 'template brain mask image')
   parc_image_path = findAtlasFile(parc_image_path, 'parcellation image')
   parc_lut_file = findAtlasFile(parc_lut_file, 'parcellation lookup table file')
@@ -490,8 +488,10 @@ def runSubject(bids_dir, label, output_prefix):
   # Step 12: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
   app.console('Getting grey matter parcellation in subject space')
-  run.command('mrconvert T1_registered.mif T1_registered.nii -strides +1,+2,+3')
+
   if app.args.parcellation in [ 'desikan', 'destrieux', 'hcpmmp1' ]:
+
+    run.command('mrconvert T1_registered.mif T1_registered.nii -strides +1,+2,+3')
 
     # Since we're instructing recon-all to use a different subject directory, we need to
     #   construct softlinks to a number of directories provided by FreeSurfer that
@@ -529,59 +529,52 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('labelsgmfix parc_init.mif T1_registered.mif ' + mrtrix_lut_file + ' parc.mif')
     file.delTemporary('parc_init.mif')
 
-  elif app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'lpba40', 'perry512' ]:
+  elif app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'perry512' ]:
 
-    # TODO Consider use of non-linear registration to template
-    # TODO Try to do this using MRtrix registration, now that mrhistmatch is available
+    # Use non-dilated brain masks for performing histogram matching & linear registration
+    run.command('mrhistmatch linear T1_registered.mif -mask_input T1_mask_registered.mif ' + template_image_path + ' -mask_target ' + template_mask_path + ' - | ' \
+                'mrconvert - T1_registered_histmatch.nii -strides -1,+2,+3')
+    # Subject T1, brain masked; for flirt -in
+    run.command('mrcalc T1_registered_histmatch.nii T1_mask_registered.mif -mult T1_registered_histmatch_masked.nii')
+    # Template T1, brain masked; for flirt -ref
+    run.command('mrcalc ' + template_image_path + ' ' + template_mask_path + ' -mult template_masked.nii')
+    # Now have data required to run flirt
+    run.command(flirt_cmd + ' -ref template_masked.nii -in T1_registered_histmatch_masked.nii -omat T1_to_template.mat -dof 12 -cost leastsq')
+    file.delTemporary('T1_registered_histmatch_masked.nii')
+    file.delTemporary('template_masked.nii')
 
-    if app.args.parcellation == 'lpba40':
-      # Previously, registration to SRI24 went well and truly awry
-      # - Need to use brain-extracted T1 since template is also brain-extracted
-      # - Template has a crazy translation offset; shimmy it across to be vaguely centred at isocentre
-      template_header = image.Header(template_image_path)
-      template_centre = [ template_header.transform()[axis][3] + template_header.spacing()[axis]*template_header.size()[axis]/2 for axis in range(0,3) ]
-      with open('template_to_isocentre.txt', 'w') as f:
-        for axis in range(0,3):
-          rotation = [ 0, 0, 0 ]
-          rotation[axis] = 1
-          f.write(' '.join([ str(i) for i in rotation ]))
-          f.write(' ' + str(-template_centre[axis]) + '\n')
-      run.command('mrtransform ' + template_image_path + ' template_isocentre.nii -linear template_to_isocentre.txt')
-      # SRI24 template image used is pre-masked; need to get an explicit mask image to provide to mrhistmatch
-      run.command('mrthrehsold template_isocentre.nii -abs 0.5 template_mask_isocentre.mif')
-      run.command('mrhistmatch linear T1_registered.nii -mask_input T1_mask_registered.mif template_isocentre.nii -mask_target template_mask_isocentre.mif - | ' \
-                  'mrcalc - T1_mask_registered.mif -mult T1_registered_masked_templatehistmatch.nii')
-      file.delTemporary('template_mask_isocentre.mif')
-      run.command(flirt_cmd + ' -ref template_isocentre.nii -in T1_registered_masked_templatehistmatch.nii -omat T1_to_centred_template_FLIRT.mat -dof 12')
-      file.delTemporary('T1_registered_masked_templatehistmatch.nii')
-      run.command('transformconvert T1_to_centred_template_FLIRT.mat T1_registered_masked.nii template_isocentre.nii flirt_import T1_to_centred_template_MRtrix.mat')
-      file.delTemporary('T1_registered_masked.nii')
-      file.delTemporary('template_isocentre.nii')
-      file.delTemporary('T1_to_centred_template_FLIRT.mat')
-      run.command('transformcalc T1_to_centred_template_MRtrix.mat invert centred_template_to_T1_MRtrix.mat')
-      file.delTemporary('T1_to_centred_template_MRtrix.mat')
-      run.command('transformcompose template_to_isocentre.txt centred_template_to_T1_MRtrix.mat template_to_T1_MRtrix.mat')
-      file.delTemporary('template_to_isocentre.txt')
-      file.delTemporary('centred_template_to_T1_MRtrix.mat')
-    else:
-      run.command('mrhistmatch linear T1_registered.nii -mask_input T1_mask_registered.mif ' + template_image_path + ' -mask_target ' + template_mask_path + ' - | ' \
-                  'mrcalc - T1_mask_registered.mif -mult T1_registered_masked_templatehistmatch.nii')
-      run.command(flirt_cmd + ' -ref ' + template_premasked_image_path + ' -in T1_registered_masked_templatehistmatch.nii -omat T1_to_template_FLIRT.mat -dof 12')
-      run.command('transformconvert T1_to_template_FLIRT.mat T1_registered_masked_templatehistmatch.nii ' + template_premasked_image_path + ' flirt_import T1_to_template_MRtrix.mat')
-      file.delTemporary('T1_to_template_FLIRT.mat')
-      file.delTemporary('T1_registered_masked_templatehistmatch.nii')
-      run.command('transformcalc T1_to_template_MRtrix.mat invert template_to_T1_MRtrix.mat')
-      file.delTemporary('T1_to_template_MRtrix.mat')
+    # Use dilated brain masks for non-linear registration to mitigate mask edge effects
+    # Subject T1, unmasked; for fnirt --in
+    run.command('mrconvert T1_registered.mif T1_registered.nii -strides -1,+2,+3')
+    # Subject brain mask, dilated; for fnirt --inmask
+    run.command('maskfilter T1_mask_registered.mif dilate - -npass 3 | ' \
+                'mrconvert - T1_mask_registered_dilated.nii -strides -1,+2,+3')
+    # Template brain mask, dilated; for fnirt --refmask
+    run.command('maskfilter ' + template_mask_path + ' dilate template_mask_dilated.nii -npass 3')
+    # Now have data required to run fnirt
+    run.command(fnirt_cmd + ' --config=' + fnirt_config_basename + ' --ref=' + template_image_path + ' --in=T1_registered_histmatch.nii ' \
+                '--aff=T1_to_template.mat --refmask=template_mask_dilated.nii --inmask=T1_mask_registered_dilated.nii ' \
+                '--cout=T1_to_template_warpcoef.nii')
+    file.delTemporary('T1_registered_histmatch.nii')
+    file.delTemporary('T1_mask_registered_dilated.nii')
+    file.delTemporary('template_mask_dilated.nii')
+    file.delTemporary('T1_to_template.mat')
+    fnirt_warp_subject2template_path = fsl.findImage('T1_to_template_warpcoef')
 
-    run.command('mrtransform ' + parc_image_path + ' atlas_transformed.mif -linear template_to_T1_MRtrix.mat ' \
-                '-template T1_registered.mif -interp nearest')
-    file.delTemporary('template_to_T1_MRtrix.mat')
+    # Use result of registration to transform atlas parcellation to subject space
+    run.command(invwarp_cmd + ' --ref=T1_registered.nii --warp=' + fnirt_warp_subject2template_path + ' --out=template_to_T1_warpcoef.nii')
+    file.delTemporary(fnirt_warp_subject2template_path)
+    fnirt_warp_template2subject_path = fsl.findImage('template_to_T1_warpcoef')
+    run.command(applywarp_cmd + ' --ref=T1_registered.nii --in=' + parc_image_path + ' --warp=' + fnirt_warp_template2subject_path + ' --out=atlas_transformed.nii --interp=nn')
+    file.delTemporary(fnirt_warp_template2subject_path)
+    applywarp_output_path = fsl.findImage('atlas_transformed')
+
     if parc_lut_file or mrtrix_lut_file:
       assert parc_lut_file and mrtrix_lut_file
-      run.command('labelconvert atlas_transformed.mif ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc.mif')
-      file.delTemporary('atlas_transformed.mif')
+      run.command('labelconvert ' + applywarp_output_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc.mif')
     else: # Not all parcellations need to go through the labelconvert step; they may already be numbered incrementally from 1
-      run.function(shutil.move, 'atlas_transformed.mif', 'parc.mif')
+      run.command('mrconvert ' + applywarp_output_path + ' parc.mif -strides T1_registered.mif')
+    file.delTemporary(applywarp_output_path)
 
   else:
     app.error('Unknown parcellation scheme requested: ' + app.args.parcellation)
@@ -910,7 +903,7 @@ def runGroup(output_dir):
 
 
 analysis_choices = [ 'participant', 'group' ]
-parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'desikan', 'destrieux', 'hcpmmp1', 'lpba40', 'perry512' ]
+parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'desikan', 'destrieux', 'hcpmmp1', 'perry512' ]
 
 app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3')
@@ -958,7 +951,6 @@ app.cmdline.addCitation('', 'Jeurissen, B; Tournier, J-D; Dhollander, T; Connell
 app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581', True)
 app.cmdline.addCitation('', 'Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. A Bayesian model of shape and appearance for subcortical brain segmentation. NeuroImage, 2011, 56, 907-922', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation perry512', 'Perry, A.; Wen, W.; Kochan, N. A.; Thalamuthu, A.; Sachdev, P. S.; Breakspear, M. The independent influences of age and education on functional brain networks and cognition in healthy older adults. Human Brain Mapping, 2017, 38(10), 5094-5114', True)
-app.cmdline.addCitation('If using ' + option_prefix + 'parcellation lpba40', 'Rohlfing, T.; Zahr, N. M.; Sullivan, E. V. & Pfefferbaum, A. The SRI24 Multi-Channel Atlas of Normal Adult Human Brain Structure. Human Brain Mapping, 2010, 31, 798-819', True)
 if not is_container:
   app.cmdline.addCitation('If not using ROBEX for brain extraction', 'Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 17, 143-155', True)
 app.cmdline.addCitation('', 'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938', False)
