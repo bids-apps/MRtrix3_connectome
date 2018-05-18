@@ -20,9 +20,10 @@ RUN DEBIAN_FRONTEND=noninteractive \
     apt-get install -y tzdata
 
 # NeuroDebian setup
-RUN wget -qO- http://neuro.debian.net/lists/artful.au.full | \
+RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
     tee /etc/apt/sources.list.d/neurodebian.sources.list
-RUN apt-key adv --recv-keys --keyserver hkp://pool.sks-keyservers.net:80 0xA5D32F012649A5A9 && apt-get update
+RUN apt-key adv --recv-keys --keyserver hkp://pool.sks-keyservers.net:80 0xA5D32F012649A5A9
+RUN apt-get update
 
 # Additional dependencies for MRtrix3 compilation
 RUN apt-get install -y \

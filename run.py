@@ -900,7 +900,7 @@ def runGroup(output_dir):
 
 
 
-
+# TODO Add Lausanne FreeSurfer atlas parcellations
 
 analysis_choices = [ 'participant', 'group' ]
 parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'desikan', 'destrieux', 'hcpmmp1', 'perry512' ]
