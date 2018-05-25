@@ -142,9 +142,9 @@ ENV PATH=/mrtrix3/bin:$PATH
 ENV PYTHONPATH=/mrtrix3/lib:$PYTHONPATH
 
 # Acquire script to be executed
-COPY run.py /run.py
-RUN chmod 775 /run.py
+COPY mrtrix3_connectome.py /mrtrix3_connectome.py
+RUN chmod 775 /mrtrix3_connectome.py
 
 COPY version /version
 
-ENTRYPOINT ["/run.py"]
+ENTRYPOINT ["/mrtrix3_connectome.py"]

@@ -101,7 +101,7 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 ## Usage
 
-    run.py bids_dir output_dir analysis_level [ options ]
+    mrtrix3_connectome.py bids_dir output_dir analysis_level [ options ]
 
 -  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
 -  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
@@ -195,11 +195,11 @@ If you wish to run this script on a computing cluster, we recommend the use of
 can be converted using the
 [`docker2singularity` tool](https://github.com/singularityware/docker2singularity).
 
-The script ``run.py`` can additionally be used *outside* of this Docker container, as
-a stand-alone Python script build against the *MRtrix3* Python libraries. Using the
-script in this way requires setting the ``PYTHONPATH`` environment variable to include
-the path to the *MRtrix3* ``lib/`` directory where it is installed on your local system,
-as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library).
+The script ``mrtrix3_connectome.py`` can additionally be used *outside* of this Docker
+container, as a stand-alone Python script build against the *MRtrix3* Python libraries.
+Using the script in this way requires setting the ``PYTHONPATH`` environment variable to
+include the path to the *MRtrix3* ``lib/`` directory where it is installed on your local
+system, as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library).
 When used in this way, the command-line interface of the script will be more consistent
 with the rest of *MRtrix3*. Note however that this script may make use of *MRtrix3*
 features or bug fixes that have not yet been merged into the ``master`` branch; in this
