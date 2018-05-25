@@ -8,6 +8,29 @@ normalisation.
 **NOTE**: App is still under development; script is not guaranteed to be operational
 for all use cases.
 
+### Requirements
+
+Due to use of the Anatomically-Constrained Tractography (ACT) framework, correction of
+EPI susceptibility distortions is a prerequisite for this pipeline. Currently, this is
+only possible within this pipeline through use of the FSL tool `topup`, which relies
+on the presence of spin-echo EPI images with differences in phase encoding to estimate
+the causative inhomogeneity field. In the absence of such data, this pipeline is not
+currently applicable; though recommendations for alternative mechanisms for such
+correction in the Issues page are welcome, and development of novel techniques for
+performing this correction are additionally underway.
+
+While many common DICOM conversion software are capable of providing data characterising
+the phase and slice encoding performed in the acquisition protocol, which are subsequently
+used by this pipeline to automate DWI data pre-processing, for some softwares and/or
+some data (particularly those not acquired on a Siemens platform), such data may not be
+present in the sidecar JSON files for files in the BIDS `dwi/` and `fmap/` directories.
+In this circumstance, it will be necessary for users to manually enter the relevant
+information into these files in order for this script to be capable of processing the
+data. Every JSON file in these two directories should contain the BIDS fields
+`PhaseEncodingDirection` and `TotalReadoutTime`. For DWI data, it is also preferable to
+provide the `SliceEncodingDirection` and `SliceTiming` fields. More information on these
+data can be found in the [BIDS documentation](http://bids.neuroimaging.io/).
+
 ### Documentation
 Please use the official [*MRtrix3* documentation](http://mrtrix.readthedocs.org) for
 reference. Additional information may be found in the
