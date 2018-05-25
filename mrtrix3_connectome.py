@@ -556,7 +556,9 @@ def runSubject(bids_dir, label, output_prefix):
       run.command('ANTS 3 -m PR[' + template_image_path + ', T1_registered_histmatch.nii, 1, 2] -o ANTS -r Gauss[2,0] -t SyN[0.5] -i 30x99x11 --use-Histogram-Matching')
       transformed_atlas_path = 'atlas_transformed.nii'
       run.command('WarpImageMultiTransform 3 ' + parc_image_path + ' ' + transformed_atlas_path + ' -R ' + template_image_path + ' -i ANTSAffine.txt ANTSInverseWarp.nii --use-NN')
-      file.delTemporary([ 'ANTSWarp.nii', 'ANTSInverseWarp.nii', 'ANTSAffine.txt' ])
+      file.delTemporary('ANTSWarp.nii')
+      file.delTemporary('ANTSInverseWarp.nii')
+      file.delTemporary('ANTSAffine.txt')
 
     elif template_registration_software == 'fsl':
 
