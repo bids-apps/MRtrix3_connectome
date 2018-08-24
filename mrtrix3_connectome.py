@@ -371,7 +371,8 @@ def runSubject(bids_dir, label, output_prefix):
       elif line.startswith('--mporder') and have_slice_timing and eddy_cuda:
         eddy_options.append('--mporder=' + str(mporder))
     dwipreproc_eddy_option = ' -eddy_options \" ' + ' '.join(eddy_options) + '\"' if eddy_options else ''
-    run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option + dwipreproc_eddy_option)
+    run.function(os.makedirs, 'eddyqc')
+    run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option + dwipreproc_eddy_option + '-eddyqc_text eddyqc/')
     file.delTemporary(dwipreproc_input)
     if dwipreproc_se_epi:
       file.delTemporary(dwipreproc_se_epi)
@@ -398,8 +399,8 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
 
   # Determine whether we are working with single-shell or multi-shell data
-  shells = [int(round(float(value))) for value in image.mrinfo('dwi.mif', 'shell_bvalues').strip().split()]
-  multishell = (len(shells) > 2)
+  bvalues = [int(round(float(value))) for value in image.mrinfo('dwi.mif', 'shell_bvalues').strip().split()]
+  multishell = (len(bvalues) > 2)
 
   # Step 7: Perform spherical deconvolution
   #          Use a dilated mask for spherical deconvolution as a 'safety margin' -
@@ -672,19 +673,19 @@ def runSubject(bids_dir, label, output_prefix):
     run.function(os.makedirs, os.path.join(output_dir, 'anat'))
 
   # Copy / convert necessary files to output directory
-  run.function(shutil.copy, 'connectome.csv', os.path.join(output_dir, 'connectome', label + '_connectome.csv'))
-  run.function(shutil.copy, 'meanlength.csv', os.path.join(output_dir, 'connectome', label + '_meanlength.csv'))
+  run.function(shutil.copy, 'connectome.csv', os.path.join(output_dir, 'connectome', label + '_level-participant_connectome.csv'))
   run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'tractogram', label + '_mu.txt'))
   run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_tissue-WM_response.txt'))
-  with open(os.path.join(output_dir, 'dwi', label + '_shells.txt'), 'w') as f:
-    f.write(' '.join([str(value) for value in shells]))
+  with open(os.path.join(output_dir, 'dwi', label + '_bvalues.txt'), 'w') as f:
+    f.write(' '.join([str(value) for value in bvalues]))
   if app.args.output_verbosity > 1:
+    run.function(shutil.copy, 'meanlength.csv', os.path.join(output_dir, 'connectome', label + '_meanlength.csv'))
     run.command('mrconvert dwi.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi.nii.gz') + \
                 ' -export_grad_fsl ' + os.path.join(output_dir, 'dwi', label + '_dwi.bvec') + ' ' + os.path.join(output_dir, 'dwi', label + '_dwi.bval') + \
                 ' -strides +1,+2,+3,+4')
-    run.command('mrconvert dwi_mask.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi_brainmask.nii.gz') + ' -datatype uint8 -strides +1,+2,+3')
+    run.command('mrconvert dwi_mask.mif ' + os.path.join(output_dir, 'dwi', label + '_brainmask.nii.gz') + ' -datatype uint8 -strides +1,+2,+3')
     run.command('mrconvert T1_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w.nii.gz') + ' -strides +1,+2,+3')
-    run.command('mrconvert T1_mask_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w_brainmask.nii.gz') + ' -datatype uint8 -strides +1,+2,+3')
+    run.command('mrconvert T1_mask_registered.mif ' + os.path.join(output_dir, 'anat', label + '_brainmask.nii.gz') + ' -datatype uint8 -strides +1,+2,+3')
     run.command('mrconvert 5TT.mif ' + os.path.join(output_dir, 'anat', label + '_5TT.nii.gz') + ' -strides +1,+2,+3,+4')
     run.command('mrconvert vis.mif ' + os.path.join(output_dir, 'anat', label + '_tissues3D.nii.gz') + ' -strides +1,+2,+3,+4')
     run.command('mrconvert FOD_WM.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-WM_ODF.nii.gz') + ' -strides +1,+2,+3,+4')
@@ -698,6 +699,7 @@ def runSubject(bids_dir, label, output_prefix):
   if app.args.output_verbosity > 2:
     # Move rather than copying the tractogram just because of its size
     run.function(shutil.move, 'tractogram.tck', os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
+    run.function(shutil.copytree, 'eddyqc', os.path.join(output_dir, 'dwi'))
     run.function(shutil.copy, 'weights.csv', os.path.join(output_dir, 'tractogram', label + '_weights.csv'))
     run.function(shutil.copy, 'assignments.csv', os.path.join(output_dir, 'connectome', label + '_assignments.csv'))
     run.function(shutil.copy, 'exemplars.tck', os.path.join(output_dir, 'connectome', label + '_exemplars.tck'))
@@ -736,7 +738,7 @@ def runGroup(output_dir):
       self.in_bvec = os.path.join(output_dir, label, 'dwi', label + '_dwi.bvec')
       self.in_bval = os.path.join(output_dir, label, 'dwi', label + '_dwi.bval')
       self.in_rf = os.path.join(output_dir, label, 'dwi', label + '_tissue-WM_response.txt')
-      self.in_connectome = os.path.join(output_dir, label, 'connectome', label + '_connectome.csv')
+      self.in_connectome = os.path.join(output_dir, label, 'connectome', label + '_level-participant_connectome.csv')
       self.in_mu = os.path.join(output_dir, label, 'tractogram', label + '_mu.txt')
 
       for entry in vars(self).values():
@@ -764,9 +766,9 @@ def runGroup(output_dir):
       self.RF_multiplier = 1.0
       self.global_multiplier = 1.0
       self.temp_connectome = os.path.join('connectomes', label + '.csv')
-      self.out_scale_bzero = os.path.join(output_dir, label, 'connectome', label + '_scalefactor_bzero.csv')
-      self.out_scale_RF = os.path.join(output_dir, label, 'connectome', label + '_scalefactor_response.csv')
-      self.out_connectome = os.path.join(output_dir, label, 'connectome', label + '_connectome_scaled.csv')
+      self.out_scale_intensity = os.path.join(output_dir, label, 'connectome', label + '_factor-intensity_multiplier.txt')
+      self.out_scale_RF = os.path.join(output_dir, label, 'connectome', label + '_factor-response_multiplier.txt')
+      self.out_connectome = os.path.join(output_dir, label, 'connectome', label + '_level-group_connectome.csv')
 
       self.label = label
 
@@ -906,17 +908,17 @@ def runGroup(output_dir):
   progress = app.progressBar('Writing results to output directory', len(subjects)+2)
   for s in subjects:
     run.function(shutil.copyfile, s.temp_connectome, s.out_connectome)
-    with open(s.out_scale_bzero, 'w') as f:
+    with open(s.out_scale_intensity, 'w') as f:
       f.write(str(s.bzero_multiplier))
     with open(s.out_scale_RF, 'w') as f:
       f.write(str(s.RF_multiplier))
     progress.increment()
 
-  with open(os.path.join(output_dir, 'mean_response.txt'), 'w') as f:
+  with open(os.path.join(output_dir, 'tissue-WM_response.txt'), 'w') as f:
     for row in mean_RF:
       f.write(' '.join([str(v) for v in row]) + '\n')
   progress.increment()
-  with open(os.path.join(output_dir, 'mean_connectome.csv'), 'w') as f:
+  with open(os.path.join(output_dir, 'connectome.csv'), 'w') as f:
     for row in mean_connectome:
       f.write(' '.join([str(v) for v in row]) + '\n')
   progress.done()
@@ -956,16 +958,16 @@ batch_options = app.cmdline.add_argument_group('Options specific to the batch pr
 batch_options.add_argument(option_prefix + 'participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
 if not is_container:
-  participant_options.add_argument(option_prefix + 'atlas_path', help='The path to search for an atlas parcellation (may be necessary when the script is executed outside of the BIDS App container')
+  participant_options.add_argument(option_prefix + 'atlas_path', metavar='path', help='The filesystem path in which to search for an atlas parcellation (may be necessary if not installed in the same location as they are placed within the BIDS App container)')
 participant_options.add_argument(option_prefix + 'output_verbosity', type=int, default=2, help='The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory')
 # TODO Would like to modify script to handle more than one parcellation within a single execution
 #  - Would need to restructure subject-level analysis to perform processing steps needed for multiple parcellations only once
 #  - Use BIDS-like naming convention to separate parcellation images & connectomes from one another in output
 #  - In group-level analysis, would need to look for parcellations present in all input subject directories
 participant_options.add_argument(option_prefix + 'parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
-participant_options.add_argument(option_prefix + 'preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)')
-participant_options.add_argument(option_prefix + 'streamlines', type=int, help='The number of streamlines to generate for each subject')
-participant_options.add_argument(option_prefix + 'template_reg', help='The choice of registration software for mapping subject to template space. Options are: ' + ', '.join(registration_choices), choices=registration_choices)
+participant_options.add_argument(option_prefix + 'preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped')
+participant_options.add_argument(option_prefix + 'streamlines', type=int, help='The number of streamlines to generate for each subject (will be determined heuristically if not explicitly set)')
+participant_options.add_argument(option_prefix + 'template_reg', metavar='software', help='The choice of registration software for mapping subject to template space. Options are: ' + ', '.join(registration_choices), choices=registration_choices)
 
 app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'template_reg fsl', 'Andersson, J. L. R.; Jenkinson, M. & Smith, S. Non-linear registration, aka spatial normalisation. FMRIB technical report, 2010, TR07JA2', True)
@@ -974,7 +976,7 @@ app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'And
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation aal, ' + option_prefix + 'parcellation aal2, ' + option_prefix + 'parcellation craddock200, ' + option_prefix + 'parcellation craddock400 or ' + option_prefix + 'parcellation perry512, and not using ' + option_prefix + 'template_reg fsl', 'Avants, B. B.; Epstein, C. L.; Grossman, M.; Gee, J. C. Symmetric diffeomorphic image registration with cross-correlation: Evaluating automated labeling of elderly and neurodegenerative brain. Medical Image Analysis, 2008, 12, 26-41', True)
 app.cmdline.addCitation('', 'Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation craddock200 or ' + option_prefix + 'parcellation craddock400', 'Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; Mayberg, H. S. A whole brain fMRI atlas generated via spatially constrained spectral clustering. Human Brain Mapping, 2012, 33(8), 1914-1928', True)
-app.cmdline.addCitation('If using \'desikan\', \'destrieux\' or \'hcpmmp1\' value for ' + option_prefix + 'parcellation option', 'Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194', True)
+app.cmdline.addCitation('If using ' + option_prefix + 'parcellation desikan, ' + option_prefix + 'parcellation destrieux or ' + option_prefix + 'parcellation hcpmmp1', 'Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation desikan', 'Desikan, R. S.; Segonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation destrieux', 'Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15', True)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation hcpmmp1', 'Glasser, M. F.; Coalson, T. S.; Robinson, E. C.; Hacker, C. D.; Harwell, J.; Yacoub, E.; Ugurbil, K.; Andersson, J.; Beckmann, C. F.; Jenkinson, M.; Smith, S. M. & Van Essen, D. C. A multi-modal parcellation of human cerebral cortex. Nature, 2016, 536, 171-178', True)
@@ -992,8 +994,8 @@ app.cmdline.addCitation('', 'Tournier, J.-D.; Calamante, F., Gadian, D.G. & Conn
 app.cmdline.addCitation('', 'Tournier, J.-D.; Calamante, F. & Connelly, A. Improved probabilistic streamlines tractography by 2nd order integration over fibre orientation distributions. Proceedings of the International Society for Magnetic Resonance in Medicine, 2010, 1670', False)
 app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J. N4ITK: Improved N3 Bias Correction. IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320', True)
 app.cmdline.addCitation('If using \'aal\' or \'aal2\' value for ' + option_prefix + 'parcellation option', 'Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. Automated Anatomical Labeling of activations in SPM using a Macroscopic Anatomical Parcellation of the MNI MRI single-subject brain. NeuroImage, 15(1), 273-289', True)
-app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Veraart, J.; Fieremans, E. & Novikov, D.S. Diffusion MRI noise mapping using random matrix theory Magn. Res. Med., 2016, early view, doi:10.1002/mrm.26059', False)
-app.cmdline.addCitation('', 'Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. Neuroimage, 2016, doi: 10.1016/j.neuroimage.2016.05.047', False)
+app.cmdline.addCitation('If ' + option_prefix + 'preprocessed is not used', 'Veraart, J.; Fieremans, E. & Novikov, D.S. Diffusion MRI noise mapping using random matrix theory. NeuroImage, 2016, 142, 394-406', False)
+app.cmdline.addCitation('', 'Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. Neuroimage, 2016, 142, 150-162', False)
 app.cmdline.addCitation('If using ' + option_prefix + 'parcellation perry512', 'Zalesky, A.; Fornito, A.; Harding, I. H.; Cocchi, L.; Yucel, M.; Pantelis, C. & Bullmore, E. T. Whole-brain anatomical networks: Does the choice of nodes matter? NeuroImage, 2010, 50, 970-983', True)
 app.cmdline.addCitation('', 'Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57', True)
 
