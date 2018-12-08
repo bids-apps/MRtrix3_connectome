@@ -174,9 +174,9 @@ To run the script in participant level mode (for processing one subject only), u
 ```{bash}
 $ docker run -i --rm \
       -v /Users/yourname/data:/bids_dataset \
-      -v /Users/yourname/outputs:/outputs \
+      -v /Users/yourname/output:/output \
       bids/mrtrix3_connectome \
-      /bids_dataset /outputs participant --participant_label 01 --parcellation desikan
+      /bids_dataset /output participant --participant_label 01 --parcellation desikan
 ```
 
 Following processing of all participants, the script can be run in group analysis mode
