@@ -252,7 +252,7 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Import anatomical image
   app.console('Importing T1 image into temporary directory')
-  t1w_image_list = glob.glob(os.path.join(bids_dir, label, 'anat') + label + '*_T1w.nii*')
+  t1w_image_list = glob.glob(os.path.join(bids_dir, label, 'anat', label + '*_T1w.nii*'))
   if len(t1w_image_list) > 1:
     app.error('More than one T1-weighted image found for subject ' + label + '; script not yet compatible with this')
   elif not t1w_image_list:
