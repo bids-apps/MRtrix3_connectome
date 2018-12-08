@@ -169,6 +169,7 @@ def runSubject(bids_dir, label, output_prefix):
     if os.path.isfile(newpath):
       return newpath
     app.error('Could not find ' + description + ' (tested locations: \'' + filepath + '\', \'' + newpath + '\')')
+    return None
 
   template_image_path = findAtlasFile(template_image_path, 'template image')
   template_mask_path = findAtlasFile(template_mask_path, 'template brain mask image')
@@ -766,9 +767,9 @@ def runGroup(output_dir):
       self.in_bval = os.path.join(output_dir, label, 'dwi', label + '_dwi.bval')
       self.in_rf = os.path.join(output_dir, label, 'dwi', label + '_tissue-WM_response.txt')
       connectome_files = glob.glob(os.path.join(output_dir, label, 'connectome', label + '_parc-*_level-participant_connectome.csv'))
-      if not len(connectome_files):
+      if not connectome_files:
         app.error('No participant-level connectome file found for subject \'' + label + '\'')
-      elif len(conectome_files) > 1:
+      elif len(connectome_files) > 1:
         app.error('Connectomes from multiple parcellations detected for subject \'' + label + '\'; this is not yet supported')
       self.in_connectome = connectome_files[0]
       self.parcellation = re.match('(?<=_parc-)[a-zA-Z0-9]*', os.path.basename(self.in_connectome))
@@ -1048,7 +1049,7 @@ app.parse()
 #   temporary directories will be constructed within the mounted output
 #   directory, and therefore temporary directory contents will not be lost
 #   upon container instance destruction if the script fails at any point.
-if is_container and app.args.debug and not 'ScriptTmpDir' in app.config:
+if is_container and app.args.debug and 'ScriptTmpDir' not in app.config:
   app.config['ScriptTmpDir'] = os.path.abspath(app.args.output_dir)
 
 
