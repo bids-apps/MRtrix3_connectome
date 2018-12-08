@@ -5,6 +5,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
+    libopenblas-dev \
     nano \
     nodejs \
     npm \
@@ -57,20 +58,14 @@ RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 RUN apt-get install -y ants
-RUN apt-get install -y fsl-5.0-core
-RUN apt-get install -y fsl-first-data
-RUN apt-get install -y fsl-mni152-templates
-# FSL installer appears to not yet be ready for use; encountered a lot of dict key errors
-#RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
-#    chmod 775 fslinstaller.py
-#RUN apt-get install -y fsl-5.0-eddy-nonfree # Use direct download instead (below) - more up-to-date version
-RUN rm -f `which eddy`
-RUN mkdir /opt/eddy/
-RUN wget -q https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.11/centos6/eddy_openmp -O /opt/eddy/eddy_openmp
-#RUN wget -q https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.11/centos6/eddy_cuda8.0 -O /opt/eddy/eddy_cuda8.0
+# FSL installer appears to now be ready for use with version 6.0.0
+# eddy is also now included in FSL6
+RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
+    chmod 775 fslinstaller.py
+RUN /fslinstaller.py -d /opt/fsl -V 6.0.0
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
-RUN npm install -g bids-validator
+RUN npm install -gq bids-validator
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
 RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | \
@@ -117,21 +112,20 @@ ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
 
 # Make FSL happy
-ENV PATH=/usr/lib/fsl/5.0:/opt/eddy:$PATH
-ENV FSLDIR=/usr/share/fsl/5.0
+ENV FSLDIR=/opt/fsl
+ENV PATH=$FSLDIR/bin:$PATH
+RUN /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
 ENV FSLMULTIFILEQUIT=TRUE
 ENV FSLOUTPUTTYPE=NIFTI
-ENV LD_LIBRARY_PATH=/usr/lib/fsl/5.0
-RUN chmod 775 /opt/eddy/eddy_openmp
-#RUN chmod 775 /opt/eddy/eddy_cuda8.0
 
 # Make ROBEX happy
 ENV PATH=/opt/ROBEX:$PATH
 
 # MRtrix3 setup
+# 3.0_RC3 tag with subsequent bugfixes
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
-    git checkout 3.0_RC3 && \
+    git checkout 9c3de06d643a89b5bba459c8a7134191a5d18f2e && \
     python configure -nogui && \
     python build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version
