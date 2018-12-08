@@ -772,12 +772,13 @@ def runGroup(output_dir):
       elif len(connectome_files) > 1:
         app.error('Connectomes from multiple parcellations detected for subject \'' + label + '\'; this is not yet supported')
       self.in_connectome = connectome_files[0]
-      self.parcellation = re.match('(?<=_parc-)[a-zA-Z0-9]*', os.path.basename(self.in_connectome))
       self.in_mu = os.path.join(output_dir, label, 'tractogram', label + '_mu.txt')
 
       for entry in vars(self).values():
         if not os.path.exists(entry):
           app.error('Unable to find critical subject data (expected location: ' + entry + ')')
+
+      self.parcellation = re.findall('(?<=_parc-)[a-zA-Z0-9]*', os.path.basename(self.in_connectome))[0]
 
       # Permissible for this to not exist
       self.in_mask = os.path.join(output_dir, label, 'dwi', label + '_dwi_brainmask.nii.gz')
