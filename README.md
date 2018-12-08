@@ -104,7 +104,9 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
     mrtrix3_connectome.py bids_dir output_dir analysis_level [ options ]
 
 -  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
+
 -  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
+
 -  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
 
 ## Options
@@ -113,13 +115,13 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **--output_verbosity**<br>The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory
 
-+ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal,aal2,craddock200,craddock400,desikan,destrieux,hcpmmp1,perry512
++ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512
 
-+ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
++ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped
 
 + **--streamlines**<br>The number of streamlines to generate for each subject
 
-+ **--template_reg**<br>The choice of registration software for mapping subject to template space. Options are: ants, fsl
++ **--template_reg software**<br>The choice of registration software for mapping subject to template space. Options are: ants, fsl
 
 #### Options specific to the batch processing of subject data
 
