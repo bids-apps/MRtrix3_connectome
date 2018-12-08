@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import glob, json, math, os, shutil
+import glob, json, math, os, re, shutil
 from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
@@ -81,6 +81,7 @@ def runSubject(bids_dir, label, output_prefix):
                                 'share',
                                 'mrtrix3',
                                 'labelconvert')
+  mrtrix_lut_file = ''
 
   if app.args.parcellation in [ 'desikan', 'destrieux', 'hcpmmp1' ]:
     if not 'FREESURFER_HOME' in os.environ:
@@ -157,7 +158,6 @@ def runSubject(bids_dir, label, output_prefix):
       elif app.args.parcellation == 'perry512':
         parc_image_path = os.path.abspath(os.path.join(os.sep, 'opt', '512inMNI.nii'))
 
-
   def findAtlasFile(filepath, description):
     if not filepath:
       return ''
@@ -189,7 +189,7 @@ def runSubject(bids_dir, label, output_prefix):
   #   in the acquired DWIs (i.e. not just those used for estimating the inhomogeneity field), they will
   #   need to be stored as separate NIfTI files in the 'dwi/' directory.
   app.console('Importing DWI data into temporary directory')
-  dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label) + '*_dwi.nii*')
+  dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label + '*_dwi.nii*'))
   dwi_index = 1
   for entry in dwi_image_list:
     # os.path.split() falls over with .nii.gz extensions; only removes the .gz
@@ -219,7 +219,7 @@ def runSubject(bids_dir, label, output_prefix):
     if app.args.preprocessed:
       app.error('fmap/ directory detected for subject \'' + label + '\' despite use of ' + option_prefix + 'preprocessed option; this directory should not be present if DWIs have already been pre-processed')
     app.console('Importing fmap data into temporary directory')
-    fmap_image_list = glob.glob(os.path.join(fmap_dir, label) + '_dir-*_epi.nii*')
+    fmap_image_list = glob.glob(os.path.join(fmap_dir, label + '*_dir-*_epi.nii*'))
     for entry in fmap_image_list:
       prefix = entry.split(os.extsep)[0]
       json_path = prefix + '.json'
@@ -284,14 +284,19 @@ def runSubject(bids_dir, label, output_prefix):
     #   same grid as the DWIs. When this occurs, cannot apply denoising algorithm to fmap images.
     if fmap_image_list:
       app.console('Concatenating DWI and fmap data for combined pre-processing')
-      run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
+      dwidenoise_input = 'dwi_fmap_cat.mif'
+      if len(fmap_image_list) > 1:
+        run.command('mrcat ' + ' '.join(fmap_image_list) + ' fmap_cat.mif -axis 3')
+        fmap_header = image.Header('fmap_cat.mif')
+        fmap_num_volumes = fmap_header.size()[3]
+        run.command('mrcat fmap_cat.mif ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
+        file.delTemporary('fmap_cat.mif')
+      else:
+        fmap_header = image.Header(fmap_image_list[0])
+        fmap_num_volumes = 1 if len(fmap_header.size()) < 4 else fmap_header.size()[3]
+        run.command('mrcat ' + fmap_image_list[0] + ' ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
       for i in fmap_image_list:
         file.delTemporary(i)
-      fmap_header = image.Header('fmap_cat.mif')
-      fmap_num_volumes = fmap_header.size()[3]
-      dwidenoise_input = 'dwi_fmap_cat.mif'
-      run.command('mrcat fmap_cat.mif ' + ' '.join(dwi_image_list) + ' ' + dwidenoise_input + ' -axis 3')
-      file.delTemporary('fmap_cat.mif')
       for i in dwi_image_list:
         file.delTemporary(i)
     else:
@@ -329,7 +334,7 @@ def runSubject(bids_dir, label, output_prefix):
       app.var(cat_num_volumes)
       run.command('mrconvert ' + mrdegibbs_output + ' ' + dwipreproc_input + ' -coord 3 ' + str(fmap_num_volumes) + ':' + str(cat_num_volumes-1))
       file.delTemporary(mrdegibbs_output)
-      dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi
+      dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi + ' -align_seepi'
     else:
       dwipreproc_input = mrdegibbs_output
       dwipreproc_se_epi = None
@@ -376,7 +381,7 @@ def runSubject(bids_dir, label, output_prefix):
         eddy_options.append('--mporder=' + str(mporder))
     dwipreproc_eddy_option = ' -eddy_options \" ' + ' '.join(eddy_options) + '\"' if eddy_options else ''
     run.function(os.makedirs, 'eddyqc')
-    run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option + dwipreproc_eddy_option + '-eddyqc_text eddyqc/')
+    run.command('dwipreproc ' + dwipreproc_input + ' dwi_preprocessed.mif -rpe_header' + dwipreproc_se_epi_option + dwipreproc_eddy_option + ' -eddyqc_text eddyqc/')
     file.delTemporary(dwipreproc_input)
     if dwipreproc_se_epi:
       file.delTemporary(dwipreproc_se_epi)
@@ -503,9 +508,10 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Step 12: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
-  app.console('Getting grey matter parcellation in subject space')
 
   if app.args.parcellation in [ 'desikan', 'destrieux', 'hcpmmp1' ]:
+
+    app.console('Getting grey matter parcellation in subject space using FreeSurfer')
 
     run.command('mrconvert T1_registered.mif T1_registered.nii -strides +1,+2,+3')
 
@@ -546,6 +552,8 @@ def runSubject(bids_dir, label, output_prefix):
     file.delTemporary('parc_init.mif')
 
   elif app.args.parcellation in [ 'aal', 'aal2', 'craddock200', 'craddock400', 'perry512' ]:
+
+    app.console('Registering to template and transforming grey matter parcellation back to subject space')
 
     # Use non-dilated brain masks for performing histogram matching & linear registration
     run.command('mrhistmatch linear T1_registered.mif -mask_input T1_mask_registered.mif ' + template_image_path + ' -mask_target ' + template_mask_path + ' - | ' \
@@ -609,58 +617,66 @@ def runSubject(bids_dir, label, output_prefix):
       run.command('mrconvert ' + transformed_atlas_path + ' parc.mif -strides T1_registered.mif')
     file.delTemporary(transformed_atlas_path)
 
-  else:
+  elif app.args.parcellation != 'none':
     app.error('Unknown parcellation scheme requested: ' + app.args.parcellation)
+
   file.delTemporary('T1_registered.nii')
   if app.args.output_verbosity > 2 and mrtrix_lut_file:
     run.command('label2colour parc.mif parcRGB.mif -lut ' + mrtrix_lut_file)
 
-  # Step 13: Generate the tractogram
-  # If not manually specified, determine the appropriate number of streamlines based on the number of nodes in the parcellation:
-  #   mean edge weight of 1,000 streamlines
-  app.console('Performing whole-brain fibre-tracking')
-  num_nodes = int(image.statistic('parc.mif', 'max'))
-  num_streamlines = 500 * num_nodes * (num_nodes-1)
+
+  # If no parcellation is requested, it is still possible to generate a whole-brain tractogram by
+  #   explicitly providing the -streamlines option
+  num_streamlines = None
   if app.args.streamlines:
     num_streamlines = app.args.streamlines
-  run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -maxlength 250 -power 0.33 ' \
-              '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
+  elif app.args.parcellation != 'none':
+    # If not manually specified, determine the appropriate number of streamlines based on the number of nodes in the parcellation:
+    #   mean edge weight of 1,000 streamlines
+    num_nodes = int(image.statistic('parc.mif', 'max'))
+    num_streamlines = 500 * num_nodes * (num_nodes-1)
+  if num_streamlines:
 
-  # Step 14: Use SIFT2 to determine streamline weights
-  app.console('Running the SIFT2 algorithm to assign weights to individual streamlines')
-  fd_scale_gm_option = ''
-  if not multishell:
-    fd_scale_gm_option = ' -fd_scale_gm'
-  run.command('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option)
+    # Step 13: Generate the tractogram
+    app.console('Performing whole-brain fibre-tracking')
+    run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -maxlength 250 -power 0.33 ' \
+                '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
+
+    # Step 14: Use SIFT2 to determine streamline weights
+    app.console('Running the SIFT2 algorithm to assign weights to individual streamlines')
+    fd_scale_gm_option = ''
+    if not multishell:
+      fd_scale_gm_option = ' -fd_scale_gm'
+    run.command('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option)
 
 
-  if app.args.output_verbosity > 2:
-    # Generate TDIs:
-    # - A TDI at DWI native resolution, with SIFT mu scaling, and precise mapping
-    #   (for comparison to WM ODF l=0 term, to verify that SIFT2 has worked correctly)
-    app.console('Producing Track Density Images (TDIs)')
-    with open('mu.txt', 'r') as f:
-      mu = float(f.read())
-    run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template FOD_WM.mif -precise - | ' \
+    if app.args.output_verbosity > 2:
+      # Generate TDIs:
+      # - A TDI at DWI native resolution, with SIFT mu scaling, and precise mapping
+      #   (for comparison to WM ODF l=0 term, to verify that SIFT2 has worked correctly)
+      app.console('Producing Track Density Images (TDIs)')
+      with open('mu.txt', 'r') as f:
+        mu = float(f.read())
+      run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template FOD_WM.mif -precise - | ' \
                 'mrcalc - ' + str(mu) + ' -mult tdi_native.mif')
-    # - Conventional TDI at super-resolution (mostly just because we can)
-    run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([str(value/3.0) for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
+      # - Conventional TDI at super-resolution (mostly just because we can)
+      run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([str(value/3.0) for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
 
 
-  # Step 15: Generate the connectome
-  #          Also get the mean length for each edge; this is the most likely alternative contrast to be useful
-  app.console('Combining whole-brain tractogram with grey matter parcellation to produce the connectome')
-  run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
-  run.command('tck2connectome tractogram.tck parc.mif meanlength.csv -tck_weights_in weights.csv -scale_length -stat_edge mean')
+  if app.args.parcellation != 'none':
+    # Step 15: Generate the connectome
+    #          Also get the mean length for each edge; this is the most likely alternative contrast to be useful
+    app.console('Combining whole-brain tractogram with grey matter parcellation to produce the connectome')
+    run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
+    run.command('tck2connectome tractogram.tck parc.mif meanlength.csv -tck_weights_in weights.csv -scale_length -stat_edge mean')
 
-
-  if app.args.output_verbosity > 2:
-    # Produce additional data that can be used for visualisation within mrview's connectome toolbar
-    app.console('Generating geometric data for enhanced connectome visualisation')
-    run.command('connectome2tck tractogram.tck assignments.csv exemplars.tck -tck_weights_in weights.csv -exemplars parc.mif -files single')
-    run.command('label2mesh parc.mif nodes.obj')
-    run.command('meshfilter nodes.obj smooth nodes_smooth.obj')
-    file.delTemporary('nodes.obj')
+    if app.args.output_verbosity > 2:
+      # Produce additional data that can be used for visualisation within mrview's connectome toolbar
+      app.console('Generating geometric data for enhanced connectome visualisation')
+      run.command('connectome2tck tractogram.tck assignments.csv exemplars.tck -tck_weights_in weights.csv -exemplars parc.mif -files single')
+      run.command('label2mesh parc.mif nodes.obj')
+      run.command('meshfilter nodes.obj smooth nodes_smooth.obj')
+      file.delTemporary('nodes.obj')
 
 
   # TODO Eventually will want to move certain elements into .json files rather than text files
@@ -676,14 +692,20 @@ def runSubject(bids_dir, label, output_prefix):
   if app.args.output_verbosity > 1:
     run.function(os.makedirs, os.path.join(output_dir, 'anat'))
 
+  parc_string = '_parc-' + app.args.parcellation
+
   # Copy / convert necessary files to output directory
-  run.function(shutil.copy, 'connectome.csv', os.path.join(output_dir, 'connectome', label + '_level-participant_connectome.csv'))
-  run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'tractogram', label + '_mu.txt'))
+  if app.args.parcellation != 'none':
+    run.function(shutil.copy, 'connectome.csv', os.path.join(output_dir, 'connectome', label + parc_string + '_level-participant_connectome.csv'))
+  if num_streamlines:
+    run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'tractogram', label + '_mu.txt'))
   run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_tissue-WM_response.txt'))
   with open(os.path.join(output_dir, 'dwi', label + '_bvalues.txt'), 'w') as f:
     f.write(' '.join([str(value) for value in bvalues]))
   if app.args.output_verbosity > 1:
-    run.function(shutil.copy, 'meanlength.csv', os.path.join(output_dir, 'connectome', label + '_meanlength.csv'))
+    if app.args.parcellation != 'none':
+      run.command('mrconvert parc.mif ' + os.path.join(output_dir, 'anat', label + parc_string + '_indices.nii.gz') + ' -strides +1,+2,+3')
+      run.function(shutil.copy, 'meanlength.csv', os.path.join(output_dir, 'connectome', label + parc_string + '_meanlength.csv'))
     run.command('mrconvert dwi.mif ' + os.path.join(output_dir, 'dwi', label + '_dwi.nii.gz') + \
                 ' -export_grad_fsl ' + os.path.join(output_dir, 'dwi', label + '_dwi.bvec') + ' ' + os.path.join(output_dir, 'dwi', label + '_dwi.bval') + \
                 ' -strides +1,+2,+3,+4')
@@ -699,18 +721,19 @@ def runSubject(bids_dir, label, output_prefix):
       run.command('mrconvert FOD_GM.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-GM_ODF.nii.gz') + ' -strides +1,+2,+3,+4')
       run.command('mrconvert FOD_CSF.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-CSF_ODF.nii.gz') + ' -strides +1,+2,+3,+4')
       run.command('mrconvert tissues.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-all.nii.gz') + ' -strides +1,+2,+3,+4')
-    run.command('mrconvert parc.mif ' + os.path.join(output_dir, 'anat', label + '_parc-' + app.args.parcellation + '_indices.nii.gz') + ' -strides +1,+2,+3')
   if app.args.output_verbosity > 2:
-    # Move rather than copying the tractogram just because of its size
-    run.function(shutil.move, 'tractogram.tck', os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
     run.function(shutil.copytree, 'eddyqc', os.path.join(output_dir, 'dwi'))
-    run.function(shutil.copy, 'weights.csv', os.path.join(output_dir, 'tractogram', label + '_weights.csv'))
-    run.function(shutil.copy, 'assignments.csv', os.path.join(output_dir, 'connectome', label + '_assignments.csv'))
-    run.function(shutil.copy, 'exemplars.tck', os.path.join(output_dir, 'connectome', label + '_exemplars.tck'))
-    run.function(shutil.copy, 'nodes_smooth.obj', os.path.join(output_dir, 'anat', label + '_parc-' + app.args.parcellation + '.obj'))
-    run.command('mrconvert parcRGB.mif ' + os.path.join(output_dir, 'anat', label + '_parc-' + app.args.parcellation +'_colour.nii.gz') + ' -strides +1,+2,+3')
-    run.command('mrconvert tdi_native.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-native_tdi.nii.gz') + ' -strides +1,+2,+3')
-    run.command('mrconvert tdi_highres.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-highres_tdi.nii.gz') + ' -strides +1,+2,+3')
+    if num_streamlines:
+      # Move rather than copying the tractogram just because of its size
+      run.function(shutil.move, 'tractogram.tck', os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
+      run.function(shutil.copy, 'weights.csv', os.path.join(output_dir, 'tractogram', label + '_weights.csv'))
+      run.command('mrconvert tdi_native.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-native_tdi.nii.gz') + ' -strides +1,+2,+3')
+      run.command('mrconvert tdi_highres.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-highres_tdi.nii.gz') + ' -strides +1,+2,+3')
+    if app.args.parcellation != 'none':
+      run.function(shutil.copy, 'assignments.csv', os.path.join(output_dir, 'connectome', label + parc_string + '_assignments.csv'))
+      run.function(shutil.copy, 'exemplars.tck', os.path.join(output_dir, 'connectome', label + parc_string + '_exemplars.tck'))
+      run.function(shutil.copy, 'nodes_smooth.obj', os.path.join(output_dir, 'anat', label + parc_string + '.obj'))
+      run.command('mrconvert parcRGB.mif ' + os.path.join(output_dir, 'anat', label + parc_string +'_colour.nii.gz') + ' -strides +1,+2,+3')
 
   # Manually wipe and zero the temp directory (since we might be processing more than one subject)
   os.chdir(cwd)
@@ -742,7 +765,13 @@ def runGroup(output_dir):
       self.in_bvec = os.path.join(output_dir, label, 'dwi', label + '_dwi.bvec')
       self.in_bval = os.path.join(output_dir, label, 'dwi', label + '_dwi.bval')
       self.in_rf = os.path.join(output_dir, label, 'dwi', label + '_tissue-WM_response.txt')
-      self.in_connectome = os.path.join(output_dir, label, 'connectome', label + '_level-participant_connectome.csv')
+      connectome_files = glob.glob(os.path.join(output_dir, label, 'connectome', label + '_parc-*_level-participant_connectome.csv'))
+      if not len(connectome_files):
+        app.error('No participant-level connectome file found for subject \'' + label + '\'')
+      elif len(conectome_files) > 1:
+        app.error('Connectomes from multiple parcellations detected for subject \'' + label + '\'; this is not yet supported')
+      self.in_connectome = connectome_files[0]
+      self.parcellation = re.match('(?<=_parc-)[a-zA-Z0-9]*', os.path.basename(self.in_connectome))
       self.in_mu = os.path.join(output_dir, label, 'tractogram', label + '_mu.txt')
 
       for entry in vars(self).values():
@@ -772,7 +801,7 @@ def runGroup(output_dir):
       self.temp_connectome = os.path.join('connectomes', label + '.csv')
       self.out_scale_intensity = os.path.join(output_dir, label, 'connectome', label + '_factor-intensity_multiplier.txt')
       self.out_scale_RF = os.path.join(output_dir, label, 'connectome', label + '_factor-response_multiplier.txt')
-      self.out_connectome = os.path.join(output_dir, label, 'connectome', label + '_level-group_connectome.csv')
+      self.out_connectome = os.path.join(output_dir, label, 'connectome', os.path.basename(self.in_connectome).replace('_level-participant', '_level-group'))
 
       self.label = label
 
@@ -891,21 +920,28 @@ def runGroup(output_dir):
   #   analysis is therefore to achieve inter-subject connection density normalisation; users
   #   then have the flexibility to subsequently analyse the data however they choose (ideally
   #   based on subject classification data provided with the BIDS-compliant dataset).
-  progress = app.progressBar('Calculating group mean connectome', len(subjects)+1)
-  mean_connectome = []
-  for s in subjects:
-    connectome = []
-    with open(s.temp_connectome, 'r') as f:
-      for line in f:
-        connectome.append([float(v) for v in line.split()])
-    if mean_connectome:
-      mean_connectome = [[c1+c2 for c1, c2 in zip(r1, r2)] for r1, r2 in zip(mean_connectome, connectome)]
-    else:
-      mean_connectome = connectome
-    progress.increment()
+  # Can only do this if the parcellation is identical across subjects;
+  #   this needs to be explicitly checked
+  parcellation = subjects[0].parcellation
+  consistent_parcellation = all(s.parcellation == parcellation for s in subjects)
+  if consistent_parcellation:
+    progress = app.progressBar('Calculating group mean connectome', len(subjects)+1)
+    mean_connectome = []
+    for s in subjects:
+      connectome = []
+      with open(s.temp_connectome, 'r') as f:
+        for line in f:
+          connectome.append([float(v) for v in line.split()])
+      if mean_connectome:
+        mean_connectome = [[c1+c2 for c1, c2 in zip(r1, r2)] for r1, r2 in zip(mean_connectome, connectome)]
+      else:
+        mean_connectome = connectome
+      progress.increment()
 
-  mean_connectome = [[v/len(subjects) for v in row] for row in mean_connectome]
-  progress.done()
+    mean_connectome = [[v/len(subjects) for v in row] for row in mean_connectome]
+    progress.done()
+  else:
+    app.warn('Different parcellations across subjects; cannot calculate a group mean connectome')
 
   # Write results of interest back to the output directory;
   #   both per-subject and group information
@@ -922,9 +958,10 @@ def runGroup(output_dir):
     for row in mean_RF:
       f.write(' '.join([str(v) for v in row]) + '\n')
   progress.increment()
-  with open(os.path.join(output_dir, 'connectome.csv'), 'w') as f:
-    for row in mean_connectome:
-      f.write(' '.join([str(v) for v in row]) + '\n')
+  if consistent_parcellation:
+    with open(os.path.join(output_dir, 'parc_' + parcellation + '_connectome.csv'), 'w') as f:
+      for row in mean_connectome:
+        f.write(' '.join([str(v) for v in row]) + '\n')
   progress.done()
 
 # End of runGroup() function
@@ -937,7 +974,7 @@ def runGroup(output_dir):
 # TODO Add Lausanne FreeSurfer atlas parcellations
 
 analysis_choices = [ 'participant', 'group' ]
-parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'desikan', 'destrieux', 'hcpmmp1', 'perry512' ]
+parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'desikan', 'destrieux', 'hcpmmp1', 'none', 'perry512' ]
 registration_choices = [ 'ants', 'fsl' ]
 
 app.init('Robert E. Smith (robert.smith@florey.edu.au)',
