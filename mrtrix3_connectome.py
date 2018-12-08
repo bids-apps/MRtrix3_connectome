@@ -340,7 +340,7 @@ def runSubject(bids_dir, label, output_prefix):
     dwipreproc_input_header = image.Header(dwipreproc_input)
     have_slice_timing = 'SliceTiming' in dwipreproc_input_header.keyval()
     app.var(have_slice_timing)
-    mb_factor = dwipreproc_input_header.keyval().get('MultibandAccelerationFactor', 1)
+    mb_factor = int(dwipreproc_input_header.keyval().get('MultibandAccelerationFactor', '1'))
     app.var(mb_factor)
     if 'SliceDirection' in dwipreproc_input_header.keyval():
       slice_direction_code = dwipreproc_input_header.keyval()['SliceDirection']
