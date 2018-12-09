@@ -23,10 +23,9 @@ RUN DEBIAN_FRONTEND=noninteractive \
 # NeuroDebian setup
 RUN wget -qO- http://neuro.debian.net/lists/artful.au.full | \
     tee /etc/apt/sources.list.d/neurodebian.sources.list
-# Silences unnecessary warning regarding stdout not being a terminal
-ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
-RUN apt-key adv --recv-keys --keyserver pgp.mit.edu 2649A5A9
-RUN apt-get update
+COPY neurodebian.gpg /neurodebian.gpg
+RUN apt-key add /neurodebian.gpg && \
+    apt-get update
 
 # Additional dependencies for MRtrix3 compilation
 RUN apt-get install -y \
