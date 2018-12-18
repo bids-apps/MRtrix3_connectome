@@ -404,7 +404,12 @@ def runSubject(bids_dir, label, output_prefix):
   # TODO Crop DWIs based on brain mask
   run.command('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
 
-  # Step 6: Estimate response functions for spherical deconvolution
+  # Step 6: Generate an FA image
+  # This is required for group-level analysis
+  app.console('Generating FA image for group-level analysis')
+  run.command('dwi2tensor dwi.mif -mask dwi_mask.mif - | tensor2metric - -fa fa.mif')
+
+  # Step 7: Estimate response functions for spherical deconvolution
   app.console('Estimating tissue response functions for spherical deconvolution')
   run.command('dwi2response dhollander dwi.mif response_wm.txt response_gm.txt response_csf.txt -mask dwi_mask.mif')
 
@@ -412,7 +417,7 @@ def runSubject(bids_dir, label, output_prefix):
   bvalues = [int(round(float(value))) for value in image.mrinfo('dwi.mif', 'shell_bvalues').strip().split()]
   multishell = (len(bvalues) > 2)
 
-  # Step 7: Perform spherical deconvolution
+  # Step 8: Perform spherical deconvolution
   #          Use a dilated mask for spherical deconvolution as a 'safety margin' -
   #          ACT should be responsible for stopping streamlines before they reach the edge of the DWI mask
   app.console('Estimating' + ('' if multishell else ' white matter') + ' Fibre Orientation Distribution' + ('s' if multishell else ''))
@@ -441,7 +446,7 @@ def runSubject(bids_dir, label, output_prefix):
   #   Re-running dwi2fod with re-scaled response functions, then re-running mtnormalise,
   #   shouuld yield near-unity factors in the second run
 
-  # Step 8: Perform brain extraction and bias field correction on the T1 image
+  # Step 9: Perform brain extraction and bias field correction on the T1 image
   #         in its original space (this is necessary for histogram matching
   #         prior to registration)
   app.console('Performing brain extraction and B1 bias field correction of T1 image')
@@ -470,7 +475,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('mrconvert ' + fsl.findImage('T1.anat' + os.sep + 'T1_biascorr_brain_mask') + ' T1_mask.mif -datatype bit' + T1_revert_strides_option)
     file.delTemporary('T1.anat')
 
-  # Step 9: Generate target images for T1->DWI registration
+  # Step 10: Generate target images for T1->DWI registration
   app.console('Generating contrast-matched images for inter-modal registration between DWIs and T1')
   run.command('dwiextract dwi.mif -bzero - | '
               'mrcalc - 0.0 -max - | '
@@ -480,15 +485,14 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('mrcalc 1 T1_biascorr_brain.mif -div T1_mask.mif -mult - | '
               'mrhistmatch nonlinear - dwi_meanbzero.mif T1_pseudobzero.mif -mask_input T1_mask.mif -mask_target dwi_mask.mif')
 
-  # Step 10: Perform T1->DWI registration
-  #         Note that two registrations are performed: Even though we have a symmetric registration,
-  #         generation of the two histogram-matched images means that you will get slightly different
-  #         answers depending on which synthesized image & original image you use
+  # Step 11: Perform T1->DWI registration
+  #          Note that two registrations are performed: Even though we have a symmetric registration,
+  #          generation of the two histogram-matched images means that you will get slightly different
+  #          answers depending on which synthesized image & original image you use
   app.console('Performing registration between DWIs and T1s')
   run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_T1_to_pseudoT1.txt')
   file.delTemporary('T1_biascorr_brain.mif')
   run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_pseudobzero_to_bzero.txt')
-  file.delTemporary('dwi_meanbzero.mif')
   run.command('transformcalc rigid_T1_to_pseudoT1.txt rigid_pseudobzero_to_bzero.txt average rigid_T1_to_dwi.txt')
   file.delTemporary('rigid_T1_to_pseudoT1.txt')
   file.delTemporary('rigid_pseudobzero_to_bzero.txt')
@@ -499,15 +503,13 @@ def runSubject(bids_dir, label, output_prefix):
   run.command('mrtransform T1_mask.mif T1_mask_registered.mif -linear rigid_T1_to_dwi.txt -template T1_registered.mif -interp nearest -datatype bit')
   file.delTemporary('T1_mask.mif')
 
-  # Step 11: Generate 5TT image for ACT
+  # Step 12: Generate 5TT image for ACT
   app.console('Generating five-tissue-type (5TT) image for Anatomically-Constrained Tractography (ACT)')
   run.command('5ttgen fsl T1_registered.mif 5TT.mif -mask T1_mask_registered.mif')
   if app.args.output_verbosity > 1:
     run.command('5tt2vis 5TT.mif vis.mif')
-  if app.args.output_verbosity <= 1:
-    file.delTemporary('T1_mask_registered.mif')
 
-  # Step 12: Generate the grey matter parcellation
+  # Step 13: Generate the grey matter parcellation
   #          The necessary steps here will vary significantly depending on the parcellation scheme selected
 
   if app.args.parcellation in [ 'desikan', 'destrieux', 'hcpmmp1' ]:
@@ -638,12 +640,12 @@ def runSubject(bids_dir, label, output_prefix):
     num_streamlines = 500 * num_nodes * (num_nodes-1)
   if num_streamlines:
 
-    # Step 13: Generate the tractogram
+    # Step 14: Generate the tractogram
     app.console('Performing whole-brain fibre-tracking')
     run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -maxlength 250 -power 0.33 ' \
                 '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
 
-    # Step 14: Use SIFT2 to determine streamline weights
+    # Step 15: Use SIFT2 to determine streamline weights
     app.console('Running the SIFT2 algorithm to assign weights to individual streamlines')
     fd_scale_gm_option = ''
     if not multishell:
@@ -665,7 +667,7 @@ def runSubject(bids_dir, label, output_prefix):
 
 
   if app.args.parcellation != 'none':
-    # Step 15: Generate the connectome
+    # Step 16: Generate the connectome
     #          Also get the mean length for each edge; this is the most likely alternative contrast to be useful
     app.console('Combining whole-brain tractogram with grey matter parcellation to produce the connectome')
     run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
@@ -681,6 +683,13 @@ def runSubject(bids_dir, label, output_prefix):
 
 
   # TODO Eventually will want to move certain elements into .json files rather than text files
+  # Make more BIDS-like generally:
+  # * mu.txt to "_tractogram.json"
+  # * Response functions to JSON files accompanying each ODF
+  #   - Group-level analysis will need to read WM RF from this JSON
+  # * b-values to the DWI .json
+  #   - If DWI is not written to output, need to gnerate this file anyway
+  # *
 
   # Prepare output path for writing
   app.console('Processing for subject \'' + label + '\' completed; writing results to output directory')
@@ -695,11 +704,26 @@ def runSubject(bids_dir, label, output_prefix):
 
   parc_string = '_parc-' + app.args.parcellation
 
+  # Generate a copy of the lookup table file:
+  #   - Use the post-labelconvert file if it's used; otherwise, if the atlas
+  #     itself comes with a lookup table that didn't require conversion, write that;
+  #   - In the group directory rather than the subject directory;
+  #   - If it doesn't already exist.
+  lut_export_file = mrtrix_lut_file if mrtrix_lut_file else parc_lut_file
+  if lut_export_file:
+    lut_export_path = os.path.join(output_prefix, parc_string[1:] + '_lookup' + os.path.splitext(lut_export_file)[1])
+    try:
+      shutil.copy(lut_export_file, lut_export_path)
+    except OSError:
+      pass
+
   # Copy / convert necessary files to output directory
   if app.args.parcellation != 'none':
     run.function(shutil.copy, 'connectome.csv', os.path.join(output_dir, 'connectome', label + parc_string + '_level-participant_connectome.csv'))
   if num_streamlines:
     run.function(shutil.copy, 'mu.txt', os.path.join(output_dir, 'tractogram', label + '_mu.txt'))
+  run.command('mrconvert dwi_meanbzero.mif ' + os.path.join(output_dir, 'dwi', label + '_meanbzero.nii.gz') + ' -strides +1,+2,+3')
+  run.command('mrconvert fa.mif ' + os.path.join(output_dir, 'dwi', label + '_model-tensor_fa.nii.gz') + ' -strides +1,+2,+3')
   run.function(shutil.copy, 'response_wm.txt', os.path.join(output_dir, 'dwi', label + '_tissue-WM_response.txt'))
   with open(os.path.join(output_dir, 'dwi', label + '_bvalues.txt'), 'w') as f:
     f.write(' '.join([str(value) for value in bvalues]))
@@ -762,9 +786,8 @@ def runGroup(output_dir):
   # Pre-calculate paths of all files since many will be used in more than one location
   class subjectPaths(object):
     def __init__(self, label):
-      self.in_dwi = os.path.join(output_dir, label, 'dwi', label + '_dwi.nii.gz')
-      self.in_bvec = os.path.join(output_dir, label, 'dwi', label + '_dwi.bvec')
-      self.in_bval = os.path.join(output_dir, label, 'dwi', label + '_dwi.bval')
+      self.in_bzero = os.path.join(output_dir, label, 'dwi', label + '_meanbzero.nii.gz')
+      self.in_fa = os.path.join(output_dir, label, 'dwi', label + '_model-tensor_fa.nii.gz')
       self.in_rf = os.path.join(output_dir, label, 'dwi', label + '_tissue-WM_response.txt')
       connectome_files = glob.glob(os.path.join(output_dir, label, 'connectome', label + '_parc-*_level-participant_connectome.csv'))
       if not connectome_files:
@@ -781,7 +804,7 @@ def runGroup(output_dir):
       self.parcellation = re.findall('(?<=_parc-)[a-zA-Z0-9]*', os.path.basename(self.in_connectome))[0]
 
       # Permissible for this to not exist
-      self.in_mask = os.path.join(output_dir, label, 'dwi', label + '_dwi_brainmask.nii.gz')
+      self.in_mask = os.path.join(output_dir, label, 'dwi', label + '_brainmask.nii.gz')
 
       with open(self.in_mu, 'r') as f:
         self.mu = float(f.read())
@@ -791,10 +814,10 @@ def runGroup(output_dir):
         for line in f:
           self.RF.append([ float(v) for v in line.split() ])
 
-      self.temp_mask = os.path.join('masks',  label + '.mif')
-      self.temp_fa = os.path.join('images', label + '.mif')
-      self.temp_bzero = os.path.join('bzeros', label + '.mif')
-      self.temp_warp = os.path.join('warps',  label + '.mif')
+      self.temp_mask = os.path.join('masks', label + '.nii.gz')
+      self.link_fa = os.path.join('images', label + '.nii.gz')
+      self.link_bzero = os.path.join('bzeros', label + '.nii.gz')
+      self.temp_warp = os.path.join('warps', label + '.mif')
       self.temp_voxels = os.path.join('voxels', label + '.mif')
       self.median_bzero = 0.0
       self.dwiintensitynorm_factor = 1.0
@@ -818,22 +841,20 @@ def runGroup(output_dir):
   app.gotoTempDir()
 
   # First pass through subject data in group analysis:
-  #   - Grab DWI data (written back from single-subject analysis back into BIDS format)
-  #   - Generate mask and FA images to be used in populate template generation
-  #       (though if output_verbosity > 2 a mask is already provided)
-  #   - Generate mean b=0 image for each subject for later use
+  #   Generate mask and FA image directories to be used in populate template generation.
+  #   If output_verbosity >= 2 then a mask is already provided; if not, then one can be
+  #     quickly calculated from the mean b=0 image, which must be provided
   progress = app.progressBar('Importing and preparing subject data', len(subjects))
   run.function(os.makedirs, 'bzeros')
   run.function(os.makedirs, 'images')
   run.function(os.makedirs, 'masks')
   for s in subjects:
-    grad_import_option = ' -fslgrad ' + s.in_bvec + ' ' + s.in_bval
     if os.path.exists(s.in_mask):
-      run.command('mrconvert ' + s.in_mask + ' ' + s.temp_mask)
+      run.function(os.symlink, s.in_mask, s.temp_mask)
     else:
-      run.command('dwi2mask ' + s.in_dwi + ' ' + s.temp_mask + grad_import_option)
-    run.command('dwi2tensor ' + s.in_dwi + ' - -mask ' + s.temp_mask + grad_import_option + ' | tensor2metric - -fa ' + s.temp_fa)
-    run.command('dwiextract ' + s.in_dwi + grad_import_option + ' - -bzero | mrmath - mean ' + s.temp_bzero + ' -axis 3')
+      run.command('mrcalc ' + s.in_bzero + ' 0.0 -gt ' + s.temp_mask)
+    run.function(os.symlink, s.in_fa, s.link_fa)
+    run.function(os.symlink, s.in_bzero, s.link_bzero)
     progress.increment()
   progress.done()
 
@@ -858,10 +879,10 @@ def runGroup(output_dir):
   sum_median_bzero = 0.0
   sum_RF = []
   for s in subjects:
-    run.command('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.temp_bzero + ' | '
+    run.command('mrtransform template.mif -warp_full ' + s.temp_warp + ' - -from 2 -template ' + s.link_bzero + ' | '
                 'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
-    s.median_bzero = float(image.statistic(s.temp_bzero, 'median', '-mask ' + s.temp_voxels))
-    file.delTemporary(s.temp_bzero)
+    s.median_bzero = float(image.statistic(s.link_bzero, 'median', '-mask ' + s.temp_voxels))
+    file.delTemporary(s.link_bzero)
     file.delTemporary(s.temp_voxels)
     file.delTemporary(s.temp_warp)
     sum_median_bzero += s.median_bzero
@@ -961,7 +982,7 @@ def runGroup(output_dir):
       f.write(' '.join([str(v) for v in row]) + '\n')
   progress.increment()
   if consistent_parcellation:
-    with open(os.path.join(output_dir, 'parc_' + parcellation + '_connectome.csv'), 'w') as f:
+    with open(os.path.join(output_dir, 'parc-' + parcellation + '_connectome.csv'), 'w') as f:
       for row in mean_connectome:
         f.write(' '.join([str(v) for v in row]) + '\n')
   progress.done()
