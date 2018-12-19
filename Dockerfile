@@ -61,7 +61,7 @@ RUN apt-get install -y ants
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
-RUN /fslinstaller.py -d /opt/fsl -V 6.0.0
+RUN /fslinstaller.py -d /opt/fsl -V 6.0.0 -q
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator
