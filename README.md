@@ -73,11 +73,11 @@ Avants, B. B.; Epstein, C. L.; Grossman, M. & Gee, J. C. Symmetric diffeomorphic
 Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280
 Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; Mayberg, H. S. A whole brain fMRI atlas generated via spatially constrained spectral clustering. Human Brain Mapping, 2012, 33(8), 1914-1928
 Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194
-Desikan, R. S.; Ségonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest NeuroImage, 2006, 31, 968-980
-Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature NeuroImage, 2010, 53, 1-15
+Desikan, R. S.; Ségonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest. NeuroImage, 2006, 31, 968-980
+Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature. NeuroImage, 2010, 53, 1-15
 Glasser, M. F.; Coalson, T. S.; Robinson, E. C.; Hacker, C. D.; Harwell, J.; Yacoub, E.; Ugurbil, K.; Andersson, J.; Beckmann, C. F.; Jenkinson, M.; Smith, S. M. & Van Essen, D. C. A multi-modal parcellation of human cerebral cortex. Nature, 2016, 536, 171-178
 Iglesias, J. E.; Liu, C. Y.; Thompson, P. M. & Tu, Z. Robust Brain Extraction Across Datasets and Comparison With Publicly Available Methods. IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634
-Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data NeuroImage, 2014, 103, 411-426
+Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data. NeuroImage, 2014, 103, 411-426
 Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. Gibbs-ringing artifact removal based on local subvoxel-shifts. Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581
 Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. A Bayesian model of shape and appearance for subcortical brain segmentation. NeuroImage, 2011, 56, 907-922
 Perry, A.; Wen, W.; Kochan, N. A.; Thalamuthu, A.; Sachdev, P. S.; Breakspear, M. The independent influences of age and education on functional brain networks and cognition in healthy older adults. Human Brain Mapping, 2017, 38(10), 5094-5114
@@ -85,12 +85,12 @@ Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. The effects of SIFT on the reproducibility and biological accuracy of the structural connectome. NeuroImage, 2015a, 104, 253-265
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dense quantitative assessment of brain white matter connectivity using streamlines tractography. NeuroImage, 2015b, 119, 338-351
-Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. Direct estimation of the fiber orientation density function from diffusion-weighted MRI data using spherical deconvolution. NeuroImage,     2004, 23, 1176-1185
+Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. Direct estimation of the fiber orientation density function from diffusion-weighted MRI data using spherical deconvolution. NeuroImage, 2004, 23, 1176-1185
 Tournier, J.-D.; Calamante, F. & Connelly, A. Improved probabilistic streamlines tractography by 2nd order integration over fibre orientation distributions. Proceedings of the International Society for Magnetic Resonance in Medicine, 2010, 1670
 Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J. N4ITK: Improved N3 Bias Correction. IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320
 Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. Automated Anatomical Labeling of activations in SPM using a Macroscopic Anatomical Parcellation of the MNI MRI single-subject brain. NeuroImage, 15(1), 273–289
-Veraart, J.; Fieremans, E. & Novikov, D.S. Diffusion MRI noise mapping using random matrix theory Magn. Res. Med., 2016, early view, doi:10.1002/mrm.26059
-Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. Neuroimage, 2016, doi: 10.1016/j.neuroimage.2016.05.047
+Veraart, J.; Novikov, D. S.; Christiaens, D.; Ades-aron, B.; Sijbers, J. & Fieremans, E. Denoising of diffusion MRI using random matrix theory. NeuroImage, 2016, 142, 394-406
+Yeh, C.-H.; Smith, R. E.; Liang, X.; Calamante, F. & Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. NeuroImage, 2016, 142, 150-162
 Zalesky, A.; Fornito, A.; Harding, I. H.; Cocchi, L.; Yücel, M.; Pantelis, C. & Bullmore, E. T. Whole-brain anatomical networks: Does the choice of nodes matter? NeuroImage, 2010, 50, 970-983
 Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57
 ```
@@ -104,7 +104,9 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
     mrtrix3_connectome.py bids_dir output_dir analysis_level [ options ]
 
 -  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
+
 -  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
+
 -  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
 
 ## Options
@@ -113,13 +115,13 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **--output_verbosity**<br>The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory
 
-+ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal,aal2,craddock200,craddock400,desikan,destrieux,hcpmmp1,perry512
++ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512
 
-+ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped (also useful for testing)
++ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped
 
 + **--streamlines**<br>The number of streamlines to generate for each subject
 
-+ **--template_reg**<br>The choice of registration software for mapping subject to template space. Options are: ants, fsl
++ **--template_reg software**<br>The choice of registration software for mapping subject to template space. Options are: ants, fsl
 
 #### Options specific to the batch processing of subject data
 
@@ -174,9 +176,9 @@ To run the script in participant level mode (for processing one subject only), u
 ```{bash}
 $ docker run -i --rm \
       -v /Users/yourname/data:/bids_dataset \
-      -v /Users/yourname/outputs:/outputs \
+      -v /Users/yourname/output:/output \
       bids/mrtrix3_connectome \
-      /bids_dataset /outputs participant --participant_label 01 --parcellation desikan
+      /bids_dataset /output participant --participant_label 01 --parcellation desikan
 ```
 
 Following processing of all participants, the script can be run in group analysis mode
