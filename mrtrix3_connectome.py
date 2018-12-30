@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import glob, json, math, os, re, shutil
+import glob, json, math, os, re, shutil, subprocess
 from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
@@ -45,7 +45,7 @@ def runSubject(bids_dir, label, output_prefix):
     else:
       dwibiascorrect_algo = ''
       app.warn('Could not find ANTs program \'N4BiasFieldCorrection\' or FSL program \'fast\'; '
-               'will proceed without performing DWI bias field correction')
+               'will proceed without performing initial DWI bias field correction')
 
   if not app.args.parcellation:
     app.error('For participant-level analysis, desired parcellation must be provided using the ' + option_prefix + 'parcellation option')
@@ -75,12 +75,12 @@ def runSubject(bids_dir, label, output_prefix):
   template_mask_path = ''
   parc_image_path = ''
   parc_lut_file = ''
-  mrtrix_lut_dir = os.path.join(os.path.dirname(os.path.abspath(app.__file__)),
-                                os.pardir,
-                                os.pardir,
-                                'share',
-                                'mrtrix3',
-                                'labelconvert')
+  mrtrix_lut_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(app.__file__)),
+                                                 os.pardir,
+                                                 os.pardir,
+                                                 'share',
+                                                 'mrtrix3',
+                                                 'labelconvert'))
   mrtrix_lut_file = ''
 
   if app.args.parcellation in [ 'desikan', 'destrieux', 'hcpmmp1' ]:
@@ -371,7 +371,11 @@ def runSubject(bids_dir, label, output_prefix):
       eddy_binary = fsl.eddyBinary(False)
       eddy_cuda = False
     app.var(eddy_binary, eddy_cuda)
-    (eddy_stdout, eddy_stderr) = run.command(eddy_binary + ' --help', False)
+    # Using run.command() to query the eddy help page will lead to a warning being
+    #   issued due to a non-zero return code
+    # Therefore use subprocess directly
+    eddy_help_process = subprocess.Popen([ eddy_binary, '--help' ], stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+    (eddy_stdout, eddy_stderr) = eddy_help_process.communicate()
     app.var(eddy_stdout, eddy_stderr)
     eddy_options = []
     for line in eddy_stderr:
@@ -389,7 +393,7 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Step 4: Bias field correction
     if dwibiascorrect_algo:
-      app.console('Performing B1 bias field correction of DWIs')
+      app.console('Performing initial B1 bias field correction of DWIs')
       run.command('dwibiascorrect dwi_preprocessed.mif dwi.mif ' + dwibiascorrect_algo)
       file.delTemporary('dwi_preprocessed.mif')
     else:
@@ -489,7 +493,7 @@ def runSubject(bids_dir, label, output_prefix):
   #          Note that two registrations are performed: Even though we have a symmetric registration,
   #          generation of the two histogram-matched images means that you will get slightly different
   #          answers depending on which synthesized image & original image you use
-  app.console('Performing registration between DWIs and T1s')
+  app.console('Performing registration between DWIs and T1')
   run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_T1_to_pseudoT1.txt')
   file.delTemporary('T1_biascorr_brain.mif')
   run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif -type rigid -mask1 T1_mask.mif -mask2 dwi_mask.mif -rigid rigid_pseudobzero_to_bzero.txt')
@@ -518,11 +522,26 @@ def runSubject(bids_dir, label, output_prefix):
 
     run.command('mrconvert T1_registered.mif T1_registered.nii -strides +1,+2,+3')
 
+    # If running in a container environment, and --debug is used (resulting in the
+    #   scratch directory being a mounted drive), it's possible that attempting to
+    #   construct a softlink may lead to an OSError
+    # As such, run a test to determine whether or not it is possible to construct
+    #   a softlink within the scratch directory; if it is not possible, revert to
+    #   performing deep copies of the relevant FreeSurfer template directories
+    freesurfer_template_link_function = os.symlink
+    try:
+      freesurfer_template_link_function(freesurfer_subjects_dir, 'test_softlink')
+      file.delTemporary('test_softlink')
+      app.debug('Using softlinks to FreeSurfer template directories')
+    except OSError:
+      app.debug('Unable to create softlinks; will perform deep copies of FreeSurfer template directories')
+      freesurfer_template_link_function = shutil.copytree
+
     # Since we're instructing recon-all to use a different subject directory, we need to
     #   construct softlinks to a number of directories provided by FreeSurfer that
     #   recon-all will expect to find in the same directory as the overridden subject path
     for subdir in [ 'fsaverage', 'lh.EC_average', 'rh.EC_average' ]:
-      run.function(os.symlink, os.path.join(freesurfer_subjects_dir, subdir), subdir)
+      run.function(freesurfer_template_link_function, os.path.join(freesurfer_subjects_dir, subdir), subdir)
 
     # Run FreeSurfer pipeline on this subject's T1 image
     run.command('recon-all -sd ' + app.tempDir + ' -subjid freesurfer -i T1_registered.nii')
@@ -572,8 +591,8 @@ def runSubject(bids_dir, label, output_prefix):
       run.command('ANTS 3 -m PR[' + template_image_path + ', T1_registered_histmatch.nii, 1, 2] -o ANTS -r Gauss[2,0] -t SyN[0.5] -i 30x99x11 --use-Histogram-Matching')
       transformed_atlas_path = 'atlas_transformed.nii'
       run.command('WarpImageMultiTransform 3 ' + parc_image_path + ' ' + transformed_atlas_path + ' -R ' + template_image_path + ' -i ANTSAffine.txt ANTSInverseWarp.nii --use-NN')
-      file.delTemporary('ANTSWarp.nii')
-      file.delTemporary('ANTSInverseWarp.nii')
+      file.delTemporary(glob.glob('ANTSWarp.nii*')[0])
+      file.delTemporary(glob.glob('ANTSInverseWarp.nii*')[0])
       file.delTemporary('ANTSAffine.txt')
 
     elif template_registration_software == 'fsl':
@@ -599,7 +618,6 @@ def runSubject(bids_dir, label, output_prefix):
       run.command(fnirt_cmd + ' --config=' + fnirt_config_basename + ' --ref=' + template_image_path + ' --in=T1_registered_histmatch.nii ' \
                   '--aff=T1_to_template.mat --refmask=template_mask_dilated.nii --inmask=T1_mask_registered_dilated.nii ' \
                   '--cout=T1_to_template_warpcoef.nii')
-      file.delTemporary('T1_registered_histmatch.nii')
       file.delTemporary('T1_mask_registered_dilated.nii')
       file.delTemporary('template_mask_dilated.nii')
       file.delTemporary('T1_to_template.mat')
@@ -612,6 +630,8 @@ def runSubject(bids_dir, label, output_prefix):
       run.command(applywarp_cmd + ' --ref=T1_registered.nii --in=' + parc_image_path + ' --warp=' + fnirt_warp_template2subject_path + ' --out=atlas_transformed.nii --interp=nn')
       file.delTemporary(fnirt_warp_template2subject_path)
       transformed_atlas_path = fsl.findImage('atlas_transformed')
+
+    file.delTemporary('T1_registered_histmatch.nii')
 
     if parc_lut_file or mrtrix_lut_file:
       assert parc_lut_file and mrtrix_lut_file
@@ -642,7 +662,8 @@ def runSubject(bids_dir, label, output_prefix):
 
     # Step 14: Generate the tractogram
     app.console('Performing whole-brain fibre-tracking')
-    run.command('tckgen FOD_WM.mif tractogram.tck -act 5TT.mif -backtrack -crop_at_gmwmi -maxlength 250 -power 0.33 ' \
+    tractogram_filepath = 'tractogram.tck'
+    run.command('tckgen FOD_WM.mif ' + tractogram_filepath + ' -act 5TT.mif -backtrack -crop_at_gmwmi -maxlength 250 -power 0.33 ' \
                 '-select ' + str(num_streamlines) + ' -seed_dynamic FOD_WM.mif')
 
     # Step 15: Use SIFT2 to determine streamline weights
@@ -650,7 +671,19 @@ def runSubject(bids_dir, label, output_prefix):
     fd_scale_gm_option = ''
     if not multishell:
       fd_scale_gm_option = ' -fd_scale_gm'
-    run.command('tcksift2 tractogram.tck FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option)
+    # If SIFT2 fails, reduce number of streamlines and try again
+    while num_streamlines:
+      run.command('tcksift2 ' + tractogram_filepath + ' FOD_WM.mif weights.csv -act 5TT.mif -out_mu mu.txt' + fd_scale_gm_option, False)
+      if os.path.isfile('weights.csv'):
+        break
+      app.warn('SIFT2 failed, likely due to running out of RAM; reducing number of streamlines and trying again')
+      num_streamlines = num_streamlines / 2
+      new_tractogram_filepath = 'tractogram_' + str(num_streamlines) + '.tck'
+      run.command('tckedit ' + tractogram_filepath + ' ' + new_tractogram_filepath + ' -number ' + str(num_streamlines))
+      file.delTemporary(tractogram_filepath)
+      tractogram_filepath = new_tractogram_filepath
+    if not num_streamlines:
+      app.error('Unable to run SIFT2 algorithm for any number of streamlines')
 
 
     if app.args.output_verbosity > 2:
@@ -660,23 +693,23 @@ def runSubject(bids_dir, label, output_prefix):
       app.console('Producing Track Density Images (TDIs)')
       with open('mu.txt', 'r') as f:
         mu = float(f.read())
-      run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template FOD_WM.mif -precise - | ' \
+      run.command('tckmap ' + tractogram_filepath + ' -tck_weights_in weights.csv -template FOD_WM.mif -precise - | ' \
                 'mrcalc - ' + str(mu) + ' -mult tdi_native.mif')
       # - Conventional TDI at super-resolution (mostly just because we can)
-      run.command('tckmap tractogram.tck -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([str(value/3.0) for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
+      run.command('tckmap ' + tractogram_filepath + ' -tck_weights_in weights.csv -template vis.mif -vox ' + ','.join([str(value/3.0) for value in image.Header('vis.mif').spacing() ]) + ' -datatype uint16 tdi_highres.mif')
 
 
   if app.args.parcellation != 'none':
     # Step 16: Generate the connectome
     #          Also get the mean length for each edge; this is the most likely alternative contrast to be useful
     app.console('Combining whole-brain tractogram with grey matter parcellation to produce the connectome')
-    run.command('tck2connectome tractogram.tck parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
-    run.command('tck2connectome tractogram.tck parc.mif meanlength.csv -tck_weights_in weights.csv -scale_length -stat_edge mean')
+    run.command('tck2connectome ' + tractogram_filepath + ' parc.mif connectome.csv -tck_weights_in weights.csv -out_assignments assignments.csv')
+    run.command('tck2connectome ' + tractogram_filepath + ' parc.mif meanlength.csv -tck_weights_in weights.csv -scale_length -stat_edge mean')
 
     if app.args.output_verbosity > 2:
       # Produce additional data that can be used for visualisation within mrview's connectome toolbar
       app.console('Generating geometric data for enhanced connectome visualisation')
-      run.command('connectome2tck tractogram.tck assignments.csv exemplars.tck -tck_weights_in weights.csv -exemplars parc.mif -files single')
+      run.command('connectome2tck ' + tractogram_filepath + ' assignments.csv exemplars.tck -tck_weights_in weights.csv -exemplars parc.mif -files single')
       run.command('label2mesh parc.mif nodes.obj')
       run.command('meshfilter nodes.obj smooth nodes_smooth.obj')
       file.delTemporary('nodes.obj')
@@ -738,7 +771,7 @@ def runSubject(bids_dir, label, output_prefix):
     run.command('mrconvert T1_registered.mif ' + os.path.join(output_dir, 'anat', label + '_T1w.nii.gz') + ' -strides +1,+2,+3')
     run.command('mrconvert T1_mask_registered.mif ' + os.path.join(output_dir, 'anat', label + '_brainmask.nii.gz') + ' -datatype uint8 -strides +1,+2,+3')
     run.command('mrconvert 5TT.mif ' + os.path.join(output_dir, 'anat', label + '_5TT.nii.gz') + ' -strides +1,+2,+3,+4')
-    run.command('mrconvert vis.mif ' + os.path.join(output_dir, 'anat', label + '_tissues3D.nii.gz') + ' -strides +1,+2,+3,+4')
+    run.command('mrconvert vis.mif ' + os.path.join(output_dir, 'anat', label + '_tissues3D.nii.gz') + ' -strides +1,+2,+3')
     run.command('mrconvert FOD_WM.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-WM_ODF.nii.gz') + ' -strides +1,+2,+3,+4')
     if multishell:
       run.function(shutil.copy, 'response_gm.txt', os.path.join(output_dir, 'dwi', label + '_tissue-GM_response.txt'))
@@ -746,11 +779,12 @@ def runSubject(bids_dir, label, output_prefix):
       run.command('mrconvert FOD_GM.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-GM_ODF.nii.gz') + ' -strides +1,+2,+3,+4')
       run.command('mrconvert FOD_CSF.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-CSF_ODF.nii.gz') + ' -strides +1,+2,+3,+4')
       run.command('mrconvert tissues.mif ' + os.path.join(output_dir, 'dwi', label + '_tissue-all.nii.gz') + ' -strides +1,+2,+3,+4')
+    if not app.args.preprocessed:
+      run.function(shutil.copytree, 'eddyqc', os.path.join(output_dir, 'dwi', 'eddyqc'))
   if app.args.output_verbosity > 2:
-    run.function(shutil.copytree, 'eddyqc', os.path.join(output_dir, 'dwi'))
     if num_streamlines:
       # Move rather than copying the tractogram just because of its size
-      run.function(shutil.move, 'tractogram.tck', os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
+      run.function(shutil.move, tractogram_filepath, os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
       run.function(shutil.copy, 'weights.csv', os.path.join(output_dir, 'tractogram', label + '_weights.csv'))
       run.command('mrconvert tdi_native.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-native_tdi.nii.gz') + ' -strides +1,+2,+3')
       run.command('mrconvert tdi_highres.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-highres_tdi.nii.gz') + ' -strides +1,+2,+3')
