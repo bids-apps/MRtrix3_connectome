@@ -677,7 +677,7 @@ def runSubject(bids_dir, label, output_prefix):
       if os.path.isfile('weights.csv'):
         break
       app.warn('SIFT2 failed, likely due to running out of RAM; reducing number of streamlines and trying again')
-      num_streamlines = num_streamlines / 2
+      num_streamlines = int(num_streamlines // 2)
       new_tractogram_filepath = 'tractogram_' + str(num_streamlines) + '.tck'
       run.command('tckedit ' + tractogram_filepath + ' ' + new_tractogram_filepath + ' -number ' + str(num_streamlines))
       file.delTemporary(tractogram_filepath)
