@@ -5,6 +5,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 RUN apt-get update && apt-get install -y \
     bc \
     build-essential \
+    dc \
     git \
     libopenblas-dev \
     nano \
