@@ -3,7 +3,9 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Core system capabilities required
 RUN apt-get update && apt-get install -y \
+    bc \
     build-essential \
+    dc \
     git \
     libopenblas-dev \
     nano \
@@ -12,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     perl-modules \
     python \
     tar \
+    tcsh \
     unzip \
     wget
 
@@ -66,6 +69,9 @@ RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.
     tar zx -C /opt
 RUN npm install -gq bids-validator
 
+# apt cleanup to recover as much space as possible
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 # Download additional data for neuroimaging software, e.g. templates / atlases
 RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | \
     tar zx -C /opt
@@ -116,6 +122,8 @@ ENV PATH=$FSLDIR/bin:$PATH
 RUN /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
 ENV FSLMULTIFILEQUIT=TRUE
 ENV FSLOUTPUTTYPE=NIFTI
+# Prevents warning appearing when the CUDA version invariably fails to run within the container environment
+RUN rm -f $FSLDIR/bin/eddy_cuda
 
 # Make ROBEX happy
 ENV PATH=/opt/ROBEX:$PATH
