@@ -565,7 +565,6 @@ def runSubject(bids_dir, label, output_prefix):
       for hemi in [ 'l', 'r' ]:
         run.command('mri_surf2surf --srcsubject fsaverage --trgsubject freesurfer --hemi ' + hemi + 'h --sval-annot ' + os.path.join(freesurfer_subjects_dir, 'fsaverage', 'label', hemi + 'h.HCPMMP1.annot') + ' --tval ' + os.path.join('freesurfer', 'label', hemi + 'h.HCPMMP1.annot'))
       run.command('mri_aparc2aseg --s freesurfer --old-ribbon --annot HCPMMP1 --o ' + parc_image_path)
-      parc_image_path = os.path.join(parc_image_path, 'aparc.HCPMMP1+aseg.mgz')
 
     # Perform the index conversion
     run.command('labelconvert ' + parc_image_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc_init.mif')
