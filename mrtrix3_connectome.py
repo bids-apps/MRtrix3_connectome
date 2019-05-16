@@ -236,11 +236,14 @@ def runSubject(bids_dir, label, output_prefix):
       #   appropriately handle the table once these images are concatenated with the DWIs
       fmap_image_size = image.Header(entry).size()
       fmap_image_num_volumes = 1 if len(fmap_image_size) == 3 else fmap_image_size[3]
-      run.command('mrconvert ' + entry + ' -json_import ' + json_path +
-                  ' -set_property dw_scheme \"' +
-                  '\\n'.join(['0,0,1,0'] * fmap_image_num_volumes) +
-                  '\" ' +
+      fmap_dwscheme_file = 'fmap' + str(fmap_index) + '.b'
+      with open(path.toTemp(fmap_dwscheme_file, False), 'w') as f:
+        for line in range(0, fmap_image_num_volumes):
+          f.write('0,0,1,0\n')
+      run.command('mrconvert ' + entry + ' -json_import ' + json_path + ' ' + \
+                  '-grad ' + path.toTemp(fmap_dwscheme_file, True) + ' ' + \
                   path.toTemp('fmap' + str(fmap_index) + '.mif', True))
+      file.delTemporary(fmap_dwscheme_file)
       fmap_index += 1
 
     fmap_image_list = [ 'fmap' + str(index) + '.mif' for index in range(1, fmap_index) ]
@@ -562,7 +565,6 @@ def runSubject(bids_dir, label, output_prefix):
       for hemi in [ 'l', 'r' ]:
         run.command('mri_surf2surf --srcsubject fsaverage --trgsubject freesurfer --hemi ' + hemi + 'h --sval-annot ' + os.path.join(freesurfer_subjects_dir, 'fsaverage', 'label', hemi + 'h.HCPMMP1.annot') + ' --tval ' + os.path.join('freesurfer', 'label', hemi + 'h.HCPMMP1.annot'))
       run.command('mri_aparc2aseg --s freesurfer --old-ribbon --annot HCPMMP1 --o ' + parc_image_path)
-      parc_image_path = os.path.join(parc_image_path, 'aparc.HCPMMP1+aseg.mgz')
 
     # Perform the index conversion
     run.command('labelconvert ' + parc_image_path + ' ' + parc_lut_file + ' ' + mrtrix_lut_file + ' parc_init.mif')
