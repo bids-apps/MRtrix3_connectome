@@ -195,6 +195,12 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 #### Options that are relevant to participant-level analysis
 
++ **--longitudinal**<br>Indicate that longitudinal data were collected, resulting in second-level session folders
+
++ **--session_label**<br>Specify the session to be processed. This is a string that must match the ses-xxx folder in a longitudinal dataset. Do not include "ses-"
+
++ **--fmriprep**<br>Indicate that fMRIPrep preprocessed T1-weighted images are available and should be used for registration. To use this option, include the following volume mount when calling docker (e.g, if fMIRPrep outputs are stored in derivatives/fmriprep-1.4.1/fmriprep): "-v derivatives/fmriprep-1.4.1/fmriprep:/fmriprep"
+
 + **--output_verbosity**<br>The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory
 
 + **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512
