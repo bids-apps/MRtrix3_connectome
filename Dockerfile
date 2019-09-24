@@ -18,8 +18,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     wget
 
-# ANTs installs tzdata as a dependency; however its installer is interactive
-# Therefore we need to do some shenanigans here to force it though
+
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get install -y tzdata
 
@@ -34,6 +33,7 @@ RUN apt-key add /neurodebian.gpg && \
 RUN apt-get install -y \
     libeigen3-dev \
     libfftw3-dev \
+    libpng-dev \
     libtiff5-dev \
     zlib1g-dev
 
@@ -50,7 +50,6 @@ RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/frees
     --exclude='freesurfer/subjects/fsaverage_sym' \
     --exclude='freesurfer/subjects/fsaverage3' \
     --exclude='freesurfer/subjects/fsaverage4' \
-    --exclude='freesurfer/subjects/fsaverage5' \
     --exclude='freesurfer/subjects/fsaverage6' \
     --exclude='freesurfer/subjects/cvs_avg35' \
     --exclude='freesurfer/subjects/cvs_avg35_inMNI152' \
@@ -64,7 +63,7 @@ RUN apt-get install -y ants
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
-RUN /fslinstaller.py -d /opt/fsl -V 6.0.0 -q
+RUN /fslinstaller.py -d /opt/fsl -V 6.0.1 -q
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator
@@ -92,15 +91,33 @@ RUN wget -q https://github.com/AlistairPerry/CCA/raw/master/parcellations/512inM
 #    rm -f oasis.zip
 RUN wget -qO- http://www.nitrc.org/frs/download.php/5906/ADHD200_parcellations.tar.gz | \
     tar zx -C /opt
-RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot
-RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528819/rh.HCPMMP1.annot" -O /opt/freesurfer/subjects/fsaverage/label/rh.HCPMMP1.annot
+RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" \
+    -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot
+RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528819/rh.HCPMMP1.annot" \
+    -O /opt/freesurfer/subjects/fsaverage/label/rh.HCPMMP1.annot
+RUN wget -q "http://ddl.escience.cn/f/IiyU?func=download&rid=8135438" -O /opt/freesurfer/average/rh.BN_Atlas.gcs
+RUN wget -q "http://ddl.escience.cn/f/IiyP?func=download&rid=8135433" -O /opt/freesurfer/average/lh.BN_Atlas.gcs
+RUN wget -q "http://ddl.escience.cn/f/PC7Q?func=download&rid=9882718" -O /opt/freesurfer/average/BN_Atlas_subcortex.gca
+RUN mkdir /opt/brainnetome && \
+    wget -q "http://ddl.escience.cn/f/PC7O?func=download&rid=9882716" -O /opt/brainnetome/BN_Atlas_246_LUT.txt
+RUN wget -q "http://ddl.escience.cn/f/Bvhg?func=download&rid=6516020" -O /opt/brainnetome/BNA_MPM_thr25_1.25mm.nii.gz
+RUN cp /opt/brainnetome/BN_Atlas_246_LUT.txt /opt/freesurfer/
+RUN wget -qO- "https://github.com/ThomasYeoLab/CBIG/archive/v0.11.1-Wu2017_RegistrationFusion.tar.gz" | \
+    tar zx -C /opt && \
+    cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/fsaverage5/label/*h.Yeo2011_*Networks_N1000.split_components.annot /opt/freesurfer/subjects/fsaverage5/label/ && \
+    cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/project_to_individual/Yeo2011_*networks_Split_Components_LUT.txt /opt/freesurfer/ && \
+    mkdir /opt/Yeo2011 && \
+    cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/MNI152/Yeo2011_*Networks_N1000.split_components.FSL_MNI152_*mm.nii.gz /opt/Yeo2011/ && \
+    cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/MNI152/*Networks_ColorLUT_freeview.txt /opt/Yeo2011/ && \
+    rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
+
 
 # Make ANTS happy
-ENV ANTSPATH=/usr/lib/ants
-ENV PATH=/usr/lib/ants:$PATH
+ENV ANTSPATH /usr/lib/ants
+ENV PATH /usr/lib/ants:$PATH
 
 # Make FreeSurfer happy
-ENV PATH=/opt/freesurfer/bin:/opt/freesurfer/mni/bin:$PATH
+ENV PATH /opt/freesurfer/bin:/opt/freesurfer/mni/bin:$PATH
 ENV OS Linux
 ENV SUBJECTS_DIR /opt/freesurfer/subjects
 ENV FSF_OUTPUT_FORMAT nii.gz
@@ -117,30 +134,34 @@ ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
 
 # Make FSL happy
-ENV FSLDIR=/opt/fsl
-ENV PATH=$FSLDIR/bin:$PATH
+ENV FSLDIR /opt/fsl
+ENV PATH $FSLDIR/bin:$PATH
 RUN /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
-ENV FSLMULTIFILEQUIT=TRUE
-ENV FSLOUTPUTTYPE=NIFTI
+ENV FSLMULTIFILEQUIT TRUE
+ENV FSLOUTPUTTYPE NIFTI
 # Prevents warning appearing when the CUDA version invariably fails to run within the container environment
-RUN rm -f $FSLDIR/bin/eddy_cuda
+RUN rm -f $FSLDIR/bin/eddy_cuda*
 
 # Make ROBEX happy
-ENV PATH=/opt/ROBEX:$PATH
+ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-# Commit checked out is 3.0_RC3 tag with subsequent hotfixes as at 14/12/2018
+# Commit checked out is 3.0_RC3 tag with subsequent hotfixes as at 24/09/2019
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
-    git checkout 2b8e7d0c2cb8c0d821a0461944855275766dc4f1 && \
+    git checkout 81036fcc6dc11222515fc6cc1b2403585560bfcb && \
     python configure -nogui && \
     python build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version
 #RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables for MRtrix3
-ENV PATH=/mrtrix3/bin:$PATH
-ENV PYTHONPATH=/mrtrix3/lib:$PYTHONPATH
+ENV PATH /mrtrix3/bin:$PATH
+ENV PYTHONPATH /mrtrix3/lib:$PYTHONPATH
+
+# Acquire extra MRtrix3 data
+COPY Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
+COPY Yeo2011_17N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
 # Acquire script to be executed
 COPY mrtrix3_connectome.py /mrtrix3_connectome.py

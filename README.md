@@ -127,7 +127,8 @@ work (amend as appropriate depending on options used):
 Structural connectomes were generated principally using tools provided in the *MRtrix3*
 software package (http://mrtrix.org). This included: DWI denoising (Veraart et al.,
 2016), Gibbs ringing removal (Kellner et al., 2016), pre-processing (Andersson et al.,
-2003; Andersson and Sotiropoulos, 2015; Andersson et al., 2016) and bias field correction
+2003; Andersson and Sotiropoulos, 2016; Andersson et al., 2016; (IF NOT DOCKER:
+Andersson et al., 2017); Andersson et al., 2018) and bias field correction
 (Tustison et al., 2010 OR Zhang et al., 2001); inter-modal registration (Bhushan et al.,
 2015); brain extraction (Smith, 2002 OR Iglesias et al., 2011), T1 tissue segmentation
 (Zhang et al., 2001; Smith, 2002; Patenaude et al., 2011; Smith et al., 2012); spherical
@@ -142,8 +143,10 @@ parcellation (((Avants et al., 2008 OR Andersson et al., 2010) AND (Tzourio-Mazo
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
 Andersson, J. L. R.; Jenkinson, M. & Smith, S. Non-linear registration, aka spatial normalisation. FMRIB technical report, 2010, TR07JA2
-Andersson, J. L. & Sotiropoulos, S. N. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage, 2015, 125, 1063-1078
+Andersson, J. L. & Sotiropoulos, S. N. An integrated approach to correction for off-resonance effects and subject movement in diffusion MR imaging. NeuroImage, 2016, 125, 1063-1078
 Andersson, J. L. R. & Graham, M. S. & Zsoldos, E. & Sotiropoulos, S. N. Incorporating outlier detection and replacement into a non-parametric framework for movement and distortion correction of diffusion MR images. NeuroImage, 2016, 141, 556-572
+Andersson, J. L. R.; Graham, M. S.; Drobnjak, I.; Zhang, H.; Filippini, N. & Bastiani, M. Towards a comprehensive framework for movement and distortion correction of diffusion MR images: Within volume movement. NeuroImage, 2017, 152, 450-466
+Andersson, J. L. R.; Graham, M. S.; Drobnjak, I.; Zhang, H. & Campbell, J. Susceptibility-induced distortion that varies due to motion: Correction in diffusion MR without acquiring additional data. NeuroImage, 2018, 171, 277-295
 Avants, B. B.; Epstein, C. L.; Grossman, M. & Gee, J. C. Symmetric diffeomorphic image registration with cross-correlation: Evaluating automated labeling of elderly and neurodegenerative brain. Medical Image Analysis, 2008, 12, 26-41
 Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & Leahy, R. M. Co-registration and distortion correction of diffusion and anatomical images based on inverse contrast normalization. NeuroImage, 2015, 115, 269-280
 Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; Mayberg, H. S. A whole brain fMRI atlas generated via spatially constrained spectral clustering. Human Brain Mapping, 2012, 33(8), 1914-1928
