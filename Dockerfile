@@ -30,7 +30,7 @@ RUN apt-key add /neurodebian.gpg && \
     apt-get update
 
 # Additional dependencies for MRtrix3 compilation
-RUN apt-get install -y \
+RUN apt-get update && apt-get install -y \
     libeigen3-dev \
     libfftw3-dev \
     libpng-dev \
