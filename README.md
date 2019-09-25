@@ -198,7 +198,7 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 #### Options that are relevant to participant-level analysis
 
-+ **--output_verbosity**<br>The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory
++ **--output_verbosity**<br>The verbosity of script output (number from 1 to 4); higher values result in more generated data being included in the output directory (default = 2)
 
 + **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512
 

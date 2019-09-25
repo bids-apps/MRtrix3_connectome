@@ -909,8 +909,10 @@ def runSubject(bids_dir, label, shared, output_prefix):
       run.function(shutil.copytree, 'eddyqc', os.path.join(output_dir, 'dwi', 'eddyqc'))
   if shared.output_verbosity > 2:
     if num_streamlines:
-      # Move rather than copying the tractogram just because of its size
-      run.function(shutil.move, tractogram_filepath, os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
+      # Move rather than copying the tractogram just because of its size;
+      #   unless using output verbosity level 4, in which case we want copies
+      #   both in the appropriate derivatives location and in the scratch directory copy
+      run.function(shutil.copy if shared.output_verbosity == 4 else shutil.move, tractogram_filepath, os.path.join(output_dir, 'tractogram', label + '_tractogram.tck'))
       run.function(shutil.copy, 'weights.csv', os.path.join(output_dir, 'tractogram', label + '_weights.csv'))
       run.command('mrconvert tdi_native.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-native_tdi.nii.gz') + ' -strides +1,+2,+3')
       run.command('mrconvert tdi_highres.mif ' + os.path.join(output_dir, 'tractogram', label + '_variant-highres_tdi.nii.gz') + ' -strides +1,+2,+3')
@@ -926,6 +928,9 @@ def runSubject(bids_dir, label, shared, output_prefix):
     app.console('Deleting temporary directory ' + app.tempDir)
     # Can't use run.function() here; it'll try to write to the log file that resides in the temp directory just deleted
     shutil.rmtree(app.tempDir)
+  elif shared.output_verbosity == 4:
+    app.console('Copying temporary directory to output location')
+    run.function(shutil.copytree, app.tempDir, os.path.join(output_dir, 'scratch'))
   else:
     app.console('Contents of temporary directory kept; location: ' + app.tempDir)
   app.tempDir = ''
@@ -1180,7 +1185,7 @@ batch_options.add_argument(OPTION_PREFIX + 'participant_label', nargs='+', help=
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
 if not IS_CONTAINER:
   participant_options.add_argument(OPTION_PREFIX + 'atlas_path', metavar='path', help='The filesystem path in which to search for an atlas parcellation (may be necessary if not installed in the same location as they are placed within the BIDS App container)')
-participant_options.add_argument(OPTION_PREFIX + 'output_verbosity', type=int, default=2, help='The verbosity of script output (number from 1 to 3); higher values result in more generated data being included in the output directory')
+participant_options.add_argument(OPTION_PREFIX + 'output_verbosity', type=int, default=2, help='The verbosity of script output (number from 1 to 4); higher values result in more generated data being included in the output directory (default = 2)')
 participant_options.add_argument(OPTION_PREFIX + 'parcellation', help='The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: ' + ', '.join(parcellation_choices), choices=parcellation_choices)
 participant_options.add_argument(OPTION_PREFIX + 'preprocessed', action='store_true', help='Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped')
 participant_options.add_argument(OPTION_PREFIX + 'streamlines', type=int, default=0, help='The number of streamlines to generate for each subject (will be determined heuristically if not explicitly set)')
@@ -1246,8 +1251,12 @@ else:
 # Running participant level
 if app.args.analysis_level == 'participant':
 
-  if app.args.output_verbosity < 1 or app.args.output_verbosity > 3:
-    app.error('Valid values for ' + OPTION_PREFIX + 'output_verbosity option are from 1 to 3')
+  if app.args.output_verbosity < 1 or app.args.output_verbosity > 4:
+    app.error('Valid values for ' + OPTION_PREFIX + 'output_verbosity option are from 1 to 4')
+
+  # At output verbosity level 4 we retain all data and move the scratch directory to the output
+  if app.args.output_verbosity ==4:
+    app.cleanup = False
 
   subjects_to_analyze = [ ]
   # Only run a subset of subjects
