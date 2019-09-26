@@ -771,7 +771,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
 
   file.delTemporary('T1_registered.nii')
 
-  if shared.output_verbosity > 2 and shared.parcellation != None:
+  if shared.output_verbosity > 2 and shared.parcellation != 'none':
     if shared.mrtrix_lut_file:
       label2colour_lut_option = ' -lut ' + shared.mrtrix_lut_file
     elif shared.parc_lut_file:
