@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 
-import glob, json, math, os, re, shutil, subprocess
+import glob
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
 from distutils.spawn import find_executable
 from mrtrix3 import app, file, fsl, image, path, run
 
@@ -84,11 +90,11 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         #   warning being issued due to a non-zero return code
         # Therefore use subprocess directly
         eddy_help_process = subprocess.Popen(
-                                [ self.eddy_binary, '--help' ],
-                                stdin=None,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                shell=False)
+            [self.eddy_binary, '--help'],
+            stdin=None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=False)
         eddy_stderr = eddy_help_process.communicate()[1]
         self.eddy_repol = False
         self.eddy_mporder = False
@@ -102,20 +108,20 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
             elif line.startswith('--estimate_move_by_susceptibility'):
                 self.eddy_mbs = True
 
-        self.do_freesurfer = parcellation in [ 'brainnetome246fs',
-                                               'desikan',
-                                               'destrieux',
-                                               'hcpmmp1',
-                                               'yeo7fs',
-                                               'yeo17fs' ]
-        self.do_mni = parcellation in [ 'aal',
-                                        'aal2',
-                                        'brainnetome246mni',
-                                        'craddock200',
-                                        'craddock400',
-                                        'perry512',
-                                        'yeo7mni',
-                                        'yeo17mni' ]
+        self.do_freesurfer = parcellation in ['brainnetome246fs',
+                                              'desikan',
+                                              'destrieux',
+                                              'hcpmmp1',
+                                              'yeo7fs',
+                                              'yeo17fs']
+        self.do_mni = parcellation in ['aal',
+                                       'aal2',
+                                       'brainnetome246mni',
+                                       'craddock200',
+                                       'craddock400',
+                                       'perry512',
+                                       'yeo7mni',
+                                       'yeo17mni']
         if parcellation != 'none':
             assert self.do_freesurfer or self.do_mni
 
@@ -157,14 +163,13 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         self.mrtrix_lut_file = ''
 
         mrtrix_lut_dir = os.path.normpath(
-                             os.path.join(
-                                 os.path.dirname(
-                                     os.path.abspath(app.__file__)),
-                                 os.pardir,
-                                 os.pardir,
-                                 'share',
-                                 'mrtrix3',
-                                 'labelconvert'))
+            os.path.join(
+                os.path.dirname(os.path.abspath(app.__file__)),
+                os.pardir,
+                os.pardir,
+                'share',
+                'mrtrix3',
+                'labelconvert'))
 
         if self.do_freesurfer:
             self.freesurfer_home = os.environ.get('FREESURFER_HOME', None)
@@ -183,10 +188,10 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                 app.error('Could not find FreeSurfer subjects directory '
                           '(expected location: '
                           + self.freesurfer_subjects_dir + ')')
-            for subdir in [ 'fsaverage',
-                            'fsaverage5',
-                            'lh.EC_average',
-                            'rh.EC_average' ]:
+            for subdir in ['fsaverage',
+                           'fsaverage5',
+                           'lh.EC_average',
+                           'rh.EC_average']:
                 if not os.path.isdir(os.path.join(self.freesurfer_subjects_dir,
                                                   subdir)):
                     app.error('Could not find requisite FreeSurfer subject '
@@ -198,7 +203,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
             if not self.reconall_path:
                 app.error('Could not find FreeSurfer script recon-all; '
                           'please verify FreeSurfer installation')
-            if parcellation in [ 'hcpmmp1', 'yeo7fs', 'yeo17fs' ]:
+            if parcellation in ['hcpmmp1', 'yeo7fs', 'yeo17fs']:
                 if parcellation == 'hcpmmp1':
 
                     def hcpmmp_annot_path(hemi):
@@ -207,8 +212,8 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                                             'label',
                                             hemi + 'h.HCPMMP1.annot')
 
-                    self.hcpmmp1_annot_paths = [ hcpmmp_annot_path(hemi)
-                                                 for hemi in [ 'l', 'r' ] ]
+                    self.hcpmmp1_annot_paths = [hcpmmp_annot_path(hemi)
+                                                for hemi in ['l', 'r']]
                     if not all([os.path.isfile(path) \
                                 for path in self.hcpmmp1_annot_paths]):
                         app.error('Could not find necessary annotation labels '
@@ -226,15 +231,15 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                             + ('7' if parcellation == 'yeo7fs' else '17')
                             + 'Networks_N1000.split_components.annot')
 
-                    self.yeo_annot_paths = [ yeo_annot_path(hemi) \
-                                             for hemi in [ 'l', 'r' ] ]
+                    self.yeo_annot_paths = [yeo_annot_path(hemi) \
+                                            for hemi in ['l', 'r']]
                     if not all([os.path.isfile(path) \
                                for path in self.yeo_annot_paths]):
                         app.error('Could not find necessary annotation labels '
                                   'for applying Yeo2011 parcellation '
                                   '(expected location: '
                                   + yeo_annot_path('?') + ')')
-                for cmd in [ 'mri_surf2surf', 'mri_aparc2aseg' ]:
+                for cmd in ['mri_surf2surf', 'mri_aparc2aseg']:
                     if not find_executable(cmd):
                         app.error('Could not find FreeSurfer command '
                                   + cmd + ' '
@@ -250,9 +255,9 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
                 self.brainnetome_cortex_gcs_paths = [
                     brainnetome_gcs_path(hemi)
-                    for hemi in [ 'l', 'r' ] ]
+                    for hemi in ['l', 'r']]
                 if not all([os.path.isfile(path)
-                           for path in self.brainnetome_cortex_gcs_paths]):
+                            for path in self.brainnetome_cortex_gcs_paths]):
                     app.error('Could not find necessary GCS files for '
                               'applying Brainnetome cortical parcellation via '
                               'FreeSurfer (expected location: '
@@ -266,9 +271,9 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                               'Brainnetome sub-cortical parcellation '
                               'via FreeSurfer (expected location: '
                               + self.brainnetome_sgm_gca_path + ')')
-                for cmd in [ 'mri_label2vol',
-                             'mri_ca_label',
-                             'mris_ca_label' ]:
+                for cmd in ['mri_label2vol',
+                            'mri_ca_label',
+                            'mris_ca_label']:
                     if not find_executable(cmd):
                         app.error('Could not find FreeSurfer command '
                                   + cmd + ' '
@@ -291,14 +296,14 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                     line = line.strip()
                     if line == 'case "-parallel":':
                         self.reconall_multithread_options = \
-                            [ '-parallel' ] + self.reconall_multithread_options
+                            ['-parallel'] + self.reconall_multithread_options
                     # If number of threads in this script is not being
                     #   explicitly controlled, allow recon-all to use
                     #   its own default number of threads
                     elif line == 'case "-openmp":' \
                             and app.numThreads is not None:
                         self.reconall_multithread_options.extend(
-                            [ '-openmp', str(app.numThreads) ])
+                            ['-openmp', str(app.numThreads)])
             if self.reconall_multithread_options:
                 self.reconall_multithread_options = \
                     ' ' + ' '.join(self.reconall_multithread_options)
@@ -325,7 +330,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                                                   'hcpmmp1_original.txt')
                 self.mrtrix_lut_file = os.path.join(mrtrix_lut_dir,
                                                     'hcpmmp1_ordered.txt')
-            elif parcellation in [ 'yeo7fs', 'yeo17fs' ]:
+            elif parcellation in ['yeo7fs', 'yeo17fs']:
                 self.parc_lut_file = \
                     os.path.join(self.freesurfer_home,
                                  'Yeo2011_'
@@ -613,8 +618,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
             file.delTemporary(fmap_dwscheme_file)
             fmap_index += 1
 
-        fmap_image_list = [ 'fmap' + str(index) + '.mif'
-                            for index in range(1, fmap_index) ]
+        fmap_image_list = ['fmap' + str(index) + '.mif'
+                           for index in range(1, fmap_index)]
     # If there's no data in fmap/ directory,
     #   need to check to see if there's any phase-encoding
     #   contrast within the input DWI(s)
@@ -625,8 +630,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
                   'and no fmap/ directory, '
                   'so EPI distortion correction cannot be performed')
 
-    dwi_image_list = [ 'dwi' + str(index) + '.mif'
-                       for index in range(1, dwi_index) ]
+    dwi_image_list = ['dwi' + str(index) + '.mif'
+                      for index in range(1, dwi_index)]
 
     # Import anatomical image
     app.console('Importing T1 image into temporary directory')
@@ -674,9 +679,6 @@ def runSubject(bids_dir, label, shared, output_prefix):
 
         # Concatenate any SE EPI images with the DWIs before denoising
         #   (& unringing), then separate them again after the fact
-        # TODO Note however that this may not be possible:
-        #   the fmap/ images may not lie on the same grid as the DWIs.
-        #   When this occurs, cannot apply denoising algorithm to fmap images.
         if fmap_image_list:
             app.console('Concatenating DWI and fmap data for '
                         'combined pre-processing')
@@ -753,8 +755,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                         + mrdegibbs_output + ' '
                         + dwipreproc_input
                         + ' -coord 3 ' + str(fmap_num_volumes)
-                                       + ':'
-                                       + str(cat_num_volumes-1))
+                        + ':' + str(cat_num_volumes-1))
             file.delTemporary(mrdegibbs_output)
             dwipreproc_se_epi_option = ' -se_epi ' \
                                        + dwipreproc_se_epi \
@@ -837,7 +838,6 @@ def runSubject(bids_dir, label, shared, output_prefix):
     #     Also produce a dilated version of the mask for later use
     app.console('Estimating a brain mask for DWIs')
     run.command('dwi2mask dwi.mif dwi_mask.mif')
-    # TODO Crop DWIs based on brain mask
     run.command('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
 
     # Step 6: Generate an FA image
@@ -1014,8 +1014,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
         #   directories provided by FreeSurfer that recon-all will
         #   expect to find in the same directory as the overridden
         #   subject path
-        subdirs = [ 'fsaverage', 'lh.EC_average', 'rh.EC_average' ]
-        if shared.parcellation in [ 'yeo7fs', 'yeo17fs' ]:
+        subdirs = ['fsaverage', 'lh.EC_average', 'rh.EC_average']
+        if shared.parcellation in ['yeo7fs', 'yeo17fs']:
             subdirs.append('fsaverage5')
         for subdir in subdirs:
             run.function(shared.freesurfer_template_link_function,
@@ -1043,14 +1043,14 @@ def runSubject(bids_dir, label, shared, output_prefix):
             #   the subject
             # This requires SUBJECTS_DIR to be set;
             #   commands don't have a corresponding -sd option like recon-all
-            run._env['SUBJECTS_DIR'] = app.tempDir
+            run._env['SUBJECTS_DIR'] = app.tempDir #pylint: disable=protected-access
             if shared.parcellation == 'brainnetome246fs':
-                for index, hemi in enumerate([ 'l', 'r' ]):
+                for index, hemi in enumerate(['l', 'r']):
                     run.command(
                         'mris_ca_label'
                         + ' -l ' + os.path.join('freesurfer',
-                                              'label',
-                                              hemi + 'h.cortex.label')
+                                                'label',
+                                                hemi + 'h.cortex.label')
                         + ' freesurfer ' + hemi + 'h '
                         + os.path.join('freesurfer',
                                        'surf',
@@ -1100,17 +1100,17 @@ def runSubject(bids_dir, label, shared, output_prefix):
                 # - Any overlap between cortex and sub-cortical
                 #   = retain cortex
                 run.command('mrcalc '
-                            + ' '.join([ os.path.join('freesurfer',
-                                                      'mri',
-                                                      hemi + 'h.BN_Atlas.mgz')
-                                         for hemi in [ 'l', 'r' ] ])
+                            + ' '.join([os.path.join('freesurfer',
+                                                     'mri',
+                                                     hemi + 'h.BN_Atlas.mgz')
+                                        for hemi in ['l', 'r']])
                             + ' -mult cortex_overlap.mif'
                             + ' -datatype bit')
                 run.command('mrcalc '
-                            + ' '.join([ os.path.join('freesurfer',
-                                                      'mri',
-                                                      hemi + 'h.BN_Atlas.mgz')
-                                         for hemi in [ 'l', 'r' ] ])
+                            + ' '.join([os.path.join('freesurfer',
+                                                     'mri',
+                                                     hemi + 'h.BN_Atlas.mgz')
+                                        for hemi in ['l', 'r']])
                             + ' -add '
                             + os.path.join('freesurfer',
                                            'mri',
@@ -1118,10 +1118,10 @@ def runSubject(bids_dir, label, shared, output_prefix):
                             + ' -mult sgm_overlap.mif'
                             + ' -datatype bit')
                 run.command('mrcalc '
-                            + ' '.join([ os.path.join('freesurfer',
-                                                      'mri',
-                                                      hemi + 'h.BN_Atlas.mgz')
-                                         for hemi in [ 'l', 'r' ] ])
+                            + ' '.join([os.path.join('freesurfer',
+                                                     'mri',
+                                                     hemi + 'h.BN_Atlas.mgz')
+                                        for hemi in ['l', 'r']])
                             + ' -add 1.0 cortex_overlap.mif -sub -mult '
                             + os.path.join('freesurfer',
                                            'mri',
@@ -1131,20 +1131,10 @@ def runSubject(bids_dir, label, shared, output_prefix):
                 file.delTemporary('cortex_overlap.mif')
                 file.delTemporary('sgm_overlap.mif')
 
-                # TODO:
-                # - Add cerebellar hemispheres in explicitly
-                # - Remove these data from the resulting connectome
-                #   matrix explicitly in Python
-                #
-                # - Use 274 combined image to obtain cerebellar subdivisions?
-                #     Will require executing both FreeSurfer
-                #       and MNI registration
-                #     Will also require generation of a new LUT
-
             elif shared.parcellation == 'hcpmmp1':
                 parc_image_path = os.path.join(parc_image_path,
                                                'aparc.HCPMMP1+aseg.mgz')
-                for index, hemi in enumerate([ 'l', 'r' ]):
+                for index, hemi in enumerate(['l', 'r']):
                     run.command('mri_surf2surf '
                                 '--srcsubject fsaverage '
                                 '--trgsubject freesurfer '
@@ -1160,12 +1150,11 @@ def runSubject(bids_dir, label, shared, output_prefix):
                             '--old-ribbon '
                             '--annot HCPMMP1 '
                             '--o ' + parc_image_path)
-            elif shared.parcellation in [ 'yeo7fs', 'yeo17fs' ]:
+            elif shared.parcellation in ['yeo7fs', 'yeo17fs']:
                 num = '7' if shared.parcellation == 'yeo7fs' else '17'
                 parc_image_path = os.path.join(parc_image_path,
-                                               'aparc.Yeo' + num
-                                                   + '+aseg.mgz')
-                for index, hemi in enumerate([ 'l', 'r' ]):
+                                               'aparc.Yeo' + num + '+aseg.mgz')
+                for index, hemi in enumerate(['l', 'r']):
                     run.command('mri_surf2surf '
                                 '--srcsubject fsaverage5 '
                                 '--trgsubject freesurfer '
@@ -1175,7 +1164,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                                 + os.path.join('freesurfer',
                                                'label',
                                                hemi + 'h.Yeo'
-                                                   + num + '.annot'))
+                                               + num + '.annot'))
                 run.command('mri_aparc2aseg '
                             '--s freesurfer '
                             '--old-ribbon '
@@ -1226,9 +1215,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
             # Use ANTs SyN for registration to template
             # From Klein et al., NeuroImage 2009:
             run.command('ANTS 3 '
-                        '-m PR['
-                            + shared.template_image_path
-                            + ', T1_registered_histmatch.nii, 1, 2] '
+                        '-m PR[' + shared.template_image_path
+                        + ', T1_registered_histmatch.nii, 1, 2] '
                         '-o ANTS '
                         '-r Gauss[2,0] '
                         '-t SyN[0.5] '
@@ -1420,7 +1408,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                         '-tck_weights_in weights.csv '
                         '-template vis.mif '
                         '-vox ' + ','.join([str(value/3.0) for value in
-                                           image.Header('vis.mif').spacing() ])
+                                            image.Header('vis.mif').spacing()])
                         + ' -datatype uint16')
 
 
@@ -1430,11 +1418,9 @@ def runSubject(bids_dir, label, shared, output_prefix):
         #   this is the most likely alternative contrast to be useful
         app.console('Combining whole-brain tractogram with grey matter '
                     'parcellation to produce the connectome')
-        # TODO Does FreeSurfer have comparable gaps between parcels
-        #   to the MNI volumetric parcellations?
         assignment_option = \
             ' -assignment_radial_search 5' \
-            if shared.parcellation in [ 'yeo7mni', 'yeo17mni' ] \
+            if shared.parcellation in ['yeo7mni', 'yeo17mni'] \
             else ''
         run.command('tck2connectome '
                     + tractogram_filepath
@@ -1493,9 +1479,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
     if lut_export_file:
         lut_export_path = \
             os.path.join(output_prefix,
-                         parc_string[1:]
-                             + '_lookup'
-                             + os.path.splitext(lut_export_file)[1])
+                         parc_string[1:] + '_lookup'
+                         + os.path.splitext(lut_export_file)[1])
         try:
             shutil.copy(lut_export_file, lut_export_path)
         except OSError:
@@ -1508,7 +1493,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                      os.path.join(output_dir,
                                   'connectome',
                                   label + parc_string
-                                      + '_level-participant_connectome.csv'))
+                                  + '_level-participant_connectome.csv'))
     if num_streamlines:
         run.function(shutil.copy,
                      'mu.txt',
@@ -1550,13 +1535,14 @@ def runSubject(bids_dir, label, shared, output_prefix):
                     + os.path.join(output_dir,
                                    'dwi',
                                    label + '_dwi.nii.gz')
-                    + ' -export_grad_fsl ' + os.path.join(output_dir,
-                                                          'dwi',
-                                                          label + '_dwi.bvec')
-                                           + ' '
-                                           + os.path.join(output_dir,
-                                                          'dwi',
-                                                          label + '_dwi.bval')
+                    + ' -export_grad_fsl '
+                    + os.path.join(output_dir,
+                                   'dwi',
+                                   label + '_dwi.bvec')
+                    + ' '
+                    + os.path.join(output_dir,
+                                   'dwi',
+                                   label + '_dwi.bval')
                     + ' -strides +1,+2,+3,+4')
         run.command('mrconvert dwi_mask.mif '
                     + os.path.join(output_dir,
@@ -1656,7 +1642,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                          os.path.join(output_dir,
                                       'connectome',
                                       label + parc_string
-                                          + '_assignments.csv'))
+                                      + '_assignments.csv'))
             run.function(shutil.copy,
                          'exemplars.tck',
                          os.path.join(output_dir,
@@ -1705,7 +1691,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
 def runGroup(output_dir):
 
     # Check presence of all required input files before proceeding
-    # Pre-calculate paths of all files since many will be used in more than one location
+    # Pre-calculate paths of all files since many will be used in
+    #   more than one location
     class subjectPaths(object):
         def __init__(self, label):
             self.in_bzero = os.path.join(output_dir,
@@ -1761,7 +1748,7 @@ def runGroup(output_dir):
             self.RF = []
             with open(self.in_rf, 'r') as f:
                 for line in f:
-                    self.RF.append([ float(v) for v in line.split() ])
+                    self.RF.append([float(v) for v in line.split()])
 
             self.temp_mask = os.path.join('masks', label + '.nii.gz')
             self.link_fa = os.path.join('images', label + '.nii.gz')
@@ -1788,9 +1775,9 @@ def runGroup(output_dir):
                 os.path.join(output_dir,
                              label,
                              'connectome',
-                             os.path.basename(self.in_connectome)
-                                 .replace('_level-participant',
-                                          '_level-group'))
+                             os.path.basename(self.in_connectome).replace(
+                                 '_level-participant',
+                                 '_level-group'))
 
             self.label = label
 
@@ -1913,15 +1900,14 @@ def runGroup(output_dir):
 
         s.global_multiplier = s.mu * s.bzero_multiplier * s.RF_multiplier
 
-        connectome = [ ]
+        connectome = []
         with open(s.in_connectome, 'r') as f:
             for line in f:
                 connectome.append([float(v) for v in line.split()])
         with open(s.temp_connectome, 'w') as f:
             for line in connectome:
                 f.write(' '.join(
-                        [str(v*s.global_multiplier) for v in line])
-                        + '\n')
+                    [str(v*s.global_multiplier) for v in line]) + '\n')
         progress.increment()
     progress.done()
 
@@ -2000,27 +1986,25 @@ def runGroup(output_dir):
 
 
 
-# TODO Add Lausanne FreeSurfer atlas parcellations
+analysis_choices = ['participant', 'group']
 
-analysis_choices = [ 'participant', 'group' ]
+parcellation_choices = ['aal',
+                        'aal2',
+                        'brainnetome246fs',
+                        'brainnetome246mni',
+                        'craddock200',
+                        'craddock400',
+                        'desikan',
+                        'destrieux',
+                        'hcpmmp1',
+                        'none',
+                        'perry512',
+                        'yeo7fs',
+                        'yeo7mni',
+                        'yeo17fs',
+                        'yeo17mni']
 
-parcellation_choices = [ 'aal',
-                         'aal2',
-                         'brainnetome246fs',
-                         'brainnetome246mni',
-                         'craddock200',
-                         'craddock400',
-                         'desikan',
-                         'destrieux',
-                         'hcpmmp1',
-                         'none',
-                         'perry512',
-                         'yeo7fs',
-                         'yeo7mni',
-                         'yeo17fs',
-                         'yeo17mni' ]
-
-registration_choices = [ 'ants', 'fsl' ]
+registration_choices = ['ants', 'fsl']
 
 app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'Generate structural connectomes based on diffusion-weighted '
@@ -2030,10 +2014,12 @@ app.init('Robert E. Smith (robert.smith@florey.edu.au)',
 # If running within a container, erase existing standard options, and
 #   fill with only desired options
 if IS_CONTAINER:
+    # pylint: disable=protected-access
     for option in reversed(app.cmdline._actions):
         app.cmdline._handle_conflict_resolve(
-            None, [(option.option_strings[0],option)])
-    # app.cmdline._action_groups[2] is "Standard options" that was created earlier
+            None, [(option.option_strings[0], option)])
+    # app.cmdline._action_groups[2] is "Standard options"
+    #   that was created earlier
     app.cmdline._action_groups[2].add_argument(
         '-d', '--debug',
         dest='debug',
@@ -2064,7 +2050,7 @@ if IS_CONTAINER:
         action='version',
         version=__version__)
 else:
-    app.cmdline._action_groups[2].add_argument(
+    app.cmdline._action_groups[2].add_argument( #pylint: disable=protected-access
         OPTION_PREFIX + 'skip-bids-validator',
         dest='skipbidsvalidator',
         action='store_true',
@@ -2084,11 +2070,11 @@ app.cmdline.add_argument(
     help='Level of the analysis that will be performed. Multiple participant '
          'level analyses can be run independently (in parallel) by the user '
          'using the same output directory without conflict. Options are: '
-         + ', '.join(analysis_choices),
+        + ', '.join(analysis_choices),
     choices=analysis_choices)
 
 batch_options = app.cmdline.add_argument_group(
-                'Options specific to the batch processing of subject data')
+    'Options specific to the batch processing of subject data')
 batch_options.add_argument(
     OPTION_PREFIX + 'participant_label',
     nargs='+',
@@ -2121,7 +2107,7 @@ participant_options.add_argument(
     OPTION_PREFIX + 'parcellation',
     help='The choice of connectome parcellation scheme (compulsory for '
          'participant-level analysis). Options are: '
-         + ', '.join(parcellation_choices),
+        + ', '.join(parcellation_choices),
     choices=parcellation_choices)
 participant_options.add_argument(
     OPTION_PREFIX + 'preprocessed',
@@ -2139,7 +2125,7 @@ participant_options.add_argument(
     metavar='software',
     help='The choice of registration software for mapping subject to '
          'template space. Options are: '
-         + ', '.join(registration_choices),
+        + ', '.join(registration_choices),
     choices=registration_choices)
 
 app.cmdline.addCitation(
@@ -2423,11 +2409,11 @@ if app.args.analysis_level == 'participant':
     if app.args.output_verbosity == 4:
         app.cleanup = False
 
-    subjects_to_analyze = [ ]
+    subjects_to_analyze = []
     # Only run a subset of subjects
     if app.args.participant_label:
-        subjects_to_analyze = [ 'sub-' + sub_index
-                                for sub_index in app.args.participant_label ]
+        subjects_to_analyze = ['sub-' + sub_index
+                               for sub_index in app.args.participant_label]
         for subject_dir in subjects_to_analyze:
             if not os.path.isdir(os.path.join(app.args.bids_dir,
                                               subject_dir)):
@@ -2436,8 +2422,8 @@ if app.args.analysis_level == 'participant':
     # Run all subjects sequentially
     else:
         subject_dirs = glob.glob(os.path.join(app.args.bids_dir, 'sub-*'))
-        subjects_to_analyze = [ 'sub-' + directory.split("-")[-1]
-                                for directory in subject_dirs ]
+        subjects_to_analyze = ['sub-' + directory.split("-")[-1]
+                               for directory in subject_dirs]
         if not subjects_to_analyze:
             app.error('Could not find any subjects in BIDS directory')
 
