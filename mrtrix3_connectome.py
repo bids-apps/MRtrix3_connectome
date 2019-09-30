@@ -93,8 +93,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         self.eddy_repol = False
         self.eddy_mporder = False
         self.eddy_mbs = False
-        for line in eddy_stderr.decode('utf-8', errors='replace') \
-                               .splitlines():
+        for line in eddy_stderr.decode('utf-8', errors='replace').splitlines():
             line = line.lstrip()
             if line.startswith('--repol'):
                 self.eddy_repol = True
@@ -112,10 +111,10 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         self.do_mni = parcellation in [ 'aal',
                                         'aal2',
                                         'brainnetome246mni',
-                                        'craddock200', \
-                                        'craddock400', \
-                                        'perry512', \
-                                        'yeo7mni', \
+                                        'craddock200',
+                                        'craddock400',
+                                        'perry512',
+                                        'yeo7mni',
                                         'yeo17mni' ]
         if parcellation != 'none':
             assert self.do_freesurfer or self.do_mni
@@ -148,7 +147,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                                                   self.fnirt_config_basename)
             if not os.path.isfile(self.fnirt_config_path):
                 app.error('Unable to find configuration file for FNI FNIRT '
-                          '(expected location: ' \
+                          '(expected location: '
                           + self.fnirt_config_path + ')')
 
         self.template_image_path = ''
@@ -587,7 +586,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
             with open(json_path, 'r') as f:
                 json_elements = json.load(f)
             if 'IntendedFor' in json_elements and \
-                    not any(i.endswith(json_elements['IntendedFor']) \
+                    not any(i.endswith(json_elements['IntendedFor'])
                             for i in dwi_image_list):
                 app.console('Image \'' + entry + '\' is not intended '
                             'for use with DWIs; skipping')
@@ -614,7 +613,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
             file.delTemporary(fmap_dwscheme_file)
             fmap_index += 1
 
-        fmap_image_list = [ 'fmap' + str(index) + '.mif' \
+        fmap_image_list = [ 'fmap' + str(index) + '.mif'
                             for index in range(1, fmap_index) ]
     # If there's no data in fmap/ directory,
     #   need to check to see if there's any phase-encoding
@@ -626,7 +625,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                   'and no fmap/ directory, '
                   'so EPI distortion correction cannot be performed')
 
-    dwi_image_list = [ 'dwi' + str(index) + '.mif' \
+    dwi_image_list = [ 'dwi' + str(index) + '.mif'
                        for index in range(1, dwi_index) ]
 
     # Import anatomical image
@@ -637,7 +636,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                                             label + '*_T1w.nii*'))
     if len(t1w_image_list) > 1:
         app.error('More than one T1-weighted image found '
-                  'for subject ' + label + '; ' + \
+                  'for subject ' + label + '; '
                   'script not yet compatible with this')
     elif not t1w_image_list:
         app.error('No T1-weighted image found for subject ' + label)
@@ -1091,7 +1090,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                     + shared.brainnetome_sgm_gca_path
                     + ' '
                     + os.path.join('freesurfer',
-                                   'mri', \
+                                   'mri',
                                    'BN_Atlas_subcortex.mgz'))
                 parc_image_path = os.path.join(parc_image_path,
                                                'aparc.BN_Atlas+aseg.mgz')
@@ -1177,11 +1176,11 @@ def runSubject(bids_dir, label, shared, output_prefix):
                                                'label',
                                                hemi + 'h.Yeo'
                                                    + num + '.annot'))
-                run.command('mri_aparc2aseg ' + \
-                                        '--s freesurfer ' + \
-                                        '--old-ribbon ' + \
-                                        '--annot Yeo' + num + ' ' + \
-                                        '--o ' + parc_image_path)
+                run.command('mri_aparc2aseg '
+                            '--s freesurfer '
+                            '--old-ribbon '
+                            '--annot Yeo' + num + ' '
+                            '--o ' + parc_image_path)
             else:
                 assert False
 
@@ -1384,7 +1383,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                         + fd_scale_gm_option, False)
             if os.path.isfile('weights.csv'):
                 break
-            app.warn('SIFT2 failed, likely due to running out of RAM; ' + \
+            app.warn('SIFT2 failed, likely due to running out of RAM; '
                      'reducing number of streamlines and trying again')
             num_streamlines = int(num_streamlines // 2)
             new_tractogram_filepath = \
@@ -1420,7 +1419,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
             run.command('tckmap ' + tractogram_filepath + ' tdi_highres.mif '
                         '-tck_weights_in weights.csv '
                         '-template vis.mif '
-                        '-vox ' + ','.join([str(value/3.0) for value in \
+                        '-vox ' + ','.join([str(value/3.0) for value in
                                            image.Header('vis.mif').spacing() ])
                         + ' -datatype uint16')
 
@@ -1539,7 +1538,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
         if shared.parcellation != 'none':
             run.command('mrconvert parc.mif '
                         + os.path.join(output_dir,
-                                       'anat', \
+                                       'anat',
                                        label + parc_string + '_indices.nii.gz')
                         + ' -strides +1,+2,+3')
             run.function(shutil.copy,
@@ -1614,7 +1613,7 @@ def runSubject(bids_dir, label, shared, output_prefix):
                         + ' -strides +1,+2,+3,+4')
             run.command('mrconvert tissues.mif '
                         + os.path.join(output_dir,
-                                       'dwi', \
+                                       'dwi',
                                        label + '_tissue-all.nii.gz')
                         + ' -strides +1,+2,+3,+4')
         if not shared.preprocessed:
@@ -1795,7 +1794,7 @@ def runGroup(output_dir):
 
             self.label = label
 
-    subject_list = ['sub-' + sub_dir.split("-")[-1] for sub_dir in \
+    subject_list = ['sub-' + sub_dir.split("-")[-1] for sub_dir in
                     glob.glob(os.path.join(output_dir, 'sub-*'))]
     if not subject_list:
         app.error('No processed subject data found in output '
@@ -1871,7 +1870,7 @@ def runGroup(output_dir):
         file.delTemporary(s.temp_warp)
         sum_median_bzero += s.median_bzero
         if sum_RF:
-            sum_RF = [[a+b for a, b in zip(one, two)] \
+            sum_RF = [[a+b for a, b in zip(one, two)]
                       for one, two in zip(sum_RF, s.RF)]
         else:
             sum_RF = s.RF
@@ -2062,7 +2061,7 @@ if IS_CONTAINER:
         help='Skip BIDS validation')
     app.cmdline._action_groups[2].add_argument(
         '-v', '--version',
-        action='version', \
+        action='version',
         version=__version__)
 else:
     app.cmdline._action_groups[2].add_argument(
@@ -2191,7 +2190,7 @@ app.cmdline.addCitation(
     'If using ' + OPTION_PREFIX + 'parcellation [ aal, aal2, '
     'brainnetome246mni, craddock200, craddock400, perry512, yeo7mni or '
     'yeo17mni ], and not using ' + OPTION_PREFIX + 'template_reg fsl',
-    'Avants, B. B.; Epstein, C. L.; Grossman, M.; Gee, J. C. ' + \
+    'Avants, B. B.; Epstein, C. L.; Grossman, M.; Gee, J. C. '
     'Symmetric diffeomorphic image registration with cross-correlation: '
     'Evaluating automated labeling of elderly and neurodegenerative brain. '
     'Medical Image Analysis, 2008, 12, 26-41',
@@ -2409,8 +2408,8 @@ if app.args.skipbidsvalidator:
 elif find_executable('bids-validator'):
     run.command('bids-validator ' + app.args.bids_dir)
 else:
-    app.warn('BIDS validator script not installed; ' + \
-                     'proceeding without validation of input data')
+    app.warn('BIDS validator script not installed; '
+             'proceeding without validation of input data')
 
 # Running participant level
 if app.args.analysis_level == 'participant':
@@ -2427,7 +2426,7 @@ if app.args.analysis_level == 'participant':
     subjects_to_analyze = [ ]
     # Only run a subset of subjects
     if app.args.participant_label:
-        subjects_to_analyze = [ 'sub-' + sub_index \
+        subjects_to_analyze = [ 'sub-' + sub_index
                                 for sub_index in app.args.participant_label ]
         for subject_dir in subjects_to_analyze:
             if not os.path.isdir(os.path.join(app.args.bids_dir,
@@ -2437,7 +2436,7 @@ if app.args.analysis_level == 'participant':
     # Run all subjects sequentially
     else:
         subject_dirs = glob.glob(os.path.join(app.args.bids_dir, 'sub-*'))
-        subjects_to_analyze = [ 'sub-' + directory.split("-")[-1] \
+        subjects_to_analyze = [ 'sub-' + directory.split("-")[-1]
                                 for directory in subject_dirs ]
         if not subjects_to_analyze:
             app.error('Could not find any subjects in BIDS directory')
