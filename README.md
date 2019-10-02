@@ -136,9 +136,10 @@ deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tra
 (Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al.,
 2012) and dynamic seeding (Smith et al., 2015b); SIFT2 (Smith et al., 2015b); T1
 parcellation (((Avants et al., 2008 OR Andersson et al., 2010) AND (Tzourio-Mazoyer et al.,
-2002 OR Craddock et al., 2012 OR (Zalesky et al., 2010 AND Perry et al., 2017))) OR
-(Dale et al., 1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010 OR Glasser et al.,
-2016))); robust structural connectome construction (Smith et al., 2015a; Yeh et al., 2016).
+2002 OR Yeo et al., 2011 OR Craddock et al., 2012 OR Fan et al., 2016 OR (Zalesky et al.,
+2010 AND Perry et al., 2017))) OR (Dale et al., 1999 AND (Desikan et al., 2006 OR
+Destrieux et al., 2010 OR Glasser et al., 2016))); robust structural connectome construction 
+Smith et al., 2015a; Yeh et al., 2016).
 
 ```
 Andersson, J. L.; Skare, S. & Ashburner, J. How to correct susceptibility distortions in spin-echo echo-planar images: application to diffusion tensor imaging. NeuroImage, 2003, 20, 870-888
@@ -153,6 +154,7 @@ Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; Mayberg, H. S. A w
 Dale, A. M.; Fischl, B. & Sereno, M. I. Cortical Surface-Based Analysis: I. Segmentation and Surface Reconstruction. NeuroImage, 1999, 9, 179-194
 Desikan, R. S.; Ségonne, F.; Fischl, B.; Quinn, B. T.; Dickerson, B. C.; Blacker, D.; Buckner, R. L.; Dale, A. M.; Maguire, R. P.; Hyman, B. T.; Albert, M. S. & Killiany, R. J. An automated labeling system for subdividing the human cerebral cortex on MRI scans into gyral based regions of interest. NeuroImage, 2006, 31, 968-980
 Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. Automatic parcellation of human cortical gyri and sulci using standard anatomical nomenclature. NeuroImage, 2010, 53, 1-15
+Fan, L.; Li, H.; Zhuo, J.; Zhang, Y.; Wang, J.; Chen, L.; Yang, Z.; Chu, C.; Xie, S.; Laird, A.R.; Fox, P.T.; Eickhoff, S.B.; Yu, C.; Jiang, T. The Human Brainnetome Atlas: A New Brain Atlas Based on Connectional Architecture. Cerebral Cortex, 2016, 26 (8), 3508-3526
 Glasser, M. F.; Coalson, T. S.; Robinson, E. C.; Hacker, C. D.; Harwell, J.; Yacoub, E.; Ugurbil, K.; Andersson, J.; Beckmann, C. F.; Jenkinson, M.; Smith, S. M. & Van Essen, D. C. A multi-modal parcellation of human cerebral cortex. Nature, 2016, 536, 171-178
 Iglesias, J. E.; Liu, C. Y.; Thompson, P. M. & Tu, Z. Robust Brain Extraction Across Datasets and Comparison With Publicly Available Methods. IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634
 Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. Multi-tissue constrained spherical deconvolution for improved analysis of multi-shell diffusion MRI data. NeuroImage, 2014, 103, 411-426
@@ -169,6 +171,7 @@ Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J
 Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. Automated Anatomical Labeling of activations in SPM using a Macroscopic Anatomical Parcellation of the MNI MRI single-subject brain. NeuroImage, 15(1), 273–289
 Veraart, J.; Novikov, D. S.; Christiaens, D.; Ades-aron, B.; Sijbers, J. & Fieremans, E. Denoising of diffusion MRI using random matrix theory. NeuroImage, 2016, 142, 394-406
 Yeh, C.-H.; Smith, R. E.; Liang, X.; Calamante, F. & Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. NeuroImage, 2016, 142, 150-162
+Yeo, B.T.; Krienen, F.M.; Sepulcre, J.; Sabuncu, M.R.; Lashkari, D.; Hollinshead, M.; Roffman, J.L.; Smoller, J.W.; Zollei, L.; Polimeni, J.R.; Fischl, B.; Liu, H. & Buckner, R.L. The organization of the human cerebral cortex estimated by intrinsic functional connectivity. J Neurophysiol, 2011, 106(3), 1125-1165
 Zalesky, A.; Fornito, A.; Harding, I. H.; Cocchi, L.; Yücel, M.; Pantelis, C. & Bullmore, E. T. Whole-brain anatomical networks: Does the choice of nodes matter? NeuroImage, 2010, 50, 970-983
 Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57
 ```
@@ -190,9 +193,9 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 -  *bids_dir*: The directory with the input dataset formatted according to the BIDS standard.
 
--  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this folder should be prepopulated with the results of the participant level analysis.
+-  *output_dir*: The directory where the output files should be stored. If you are running group level analysis, this directory should be prepopulated with the results of the participant level analysis.
 
--  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: participant, group
+-  *analysis_level*: Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) by the user using the same output directory without conflict. Options are: participant, group
 
 ### Options
 
@@ -200,17 +203,19 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 + **--output_verbosity**<br>The verbosity of script output (number from 1 to 4); higher values result in more generated data being included in the output directory (default = 2)
 
-+ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512
++ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis). Options are: aal, aal2, brainnetome246fs, brainnetome246mni, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512, yeo7fs, yeo7mni, yeo17fs, yeo17mni
 
-+ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps will be skipped
++ **--preprocessed**<br>Indicate that the subject DWI data have been preprocessed, and hence initial image processing steps should be skipped
 
-+ **--streamlines**<br>The number of streamlines to generate for each subject
++ **--streamlines**<br>The number of streamlines to generate for each subject (will be determined heuristically if not explicitly set)
 
 + **--template_reg software**<br>The choice of registration software for mapping subject to template space. Options are: ants, fsl
 
 #### Options specific to the batch processing of subject data
 
-+ **--participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
++ **--participant_label**<br>The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects in the BIDS directory will be analyzed sequentially. Multiple participants can be specified with a space-separated list.
+
++ **--session_label**<br>The session(s) within each participant that should be analyzed. The label(s) correspond(s) to ses-<session_label> from the BIDS spec (so it does _not_ include "ses-"). If this parameter is not provided, all sessions for those participants in the BIDS directory undergoing processing will be analyzed sequentially. Multiple session IDs can be specified with a space-separated list.
 
 #### Standard options
 
