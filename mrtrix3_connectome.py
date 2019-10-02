@@ -513,11 +513,11 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
 
 
-def runSubject(bids_dir, label, shared, output_prefix):
+def runParticipant(bids_dir, session, shared, output_prefix):
 
-    output_dir = os.path.join(output_prefix, label)
+    output_dir = os.path.join(output_prefix, *session)
     if os.path.exists(output_dir):
-        app.warn('Output directory for subject \'' + label + '\' '
+        app.warn('Output directory for session \'' + '_'.join(session) + '\' '
                  'already exists; contents will be erased when this '
                  'execution completes')
 
@@ -535,10 +535,14 @@ def runSubject(bids_dir, label, shared, output_prefix):
     #   they will need to be stored as separate NIfTI files in the
     #   'dwi/' directory.
     app.console('Importing DWI data into temporary directory')
-    dwi_image_list = glob.glob(os.path.join(bids_dir,
-                                            label,
-                                            'dwi',
-                                            label + '*_dwi.nii*'))
+    dwi_path = os.path.join(os.path.join(bids_dir, *session),
+                            'dwi',
+                            '*_dwi.nii*')
+    dwi_image_list = glob.glob(dwi_path)
+    if not dwi_image_list:
+        app.error('No DWI data found for session \''
+                  + '_'.join(session)
+                  + '\' (search location: ' + dwi_path)
     dwi_index = 1
     for entry in dwi_image_list:
         # os.path.split() falls over with .nii.gz extensions;
@@ -573,18 +577,18 @@ def runSubject(bids_dir, label, shared, output_prefix):
     # Go hunting for reversed phase-encode data
     #   dedicated to field map estimation
     fmap_image_list = []
-    fmap_dir = os.path.join(bids_dir, label, 'fmap')
+    fmap_dir = os.path.join(os.path.join(bids_dir, *session), 'fmap')
     fmap_index = 1
     if os.path.isdir(fmap_dir):
         if shared.preprocessed:
-            app.error('fmap/ directory detected for subject '
-                      '\'' + label + '\' despite use of '
+            app.error('fmap/ directory detected for session '
+                      '\'' + '_'.join(session) + '\' despite use of '
                       + OPTION_PREFIX + 'preprocessed option; '
                       'this directory should not be present if DWIs '
                       'have already been pre-processed')
         app.console('Importing fmap data into temporary directory')
         fmap_image_list = glob.glob(os.path.join(fmap_dir,
-                                                 label + '*_dir-*_epi.nii*'))
+                                                 '*_dir-*_epi.nii*'))
         for entry in fmap_image_list:
             prefix = entry.split(os.extsep)[0]
             json_path = prefix + '.json'
@@ -624,8 +628,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
     #   need to check to see if there's any phase-encoding
     #   contrast within the input DWI(s)
     elif len(dwi_image_list) < 2 and not shared.preprocessed:
-        app.error('Inadequate data for pre-processing of subject '
-                  '\'' + label + '\': '
+        app.error('Inadequate data for pre-processing of session '
+                  '\'' + '_'.join(session) + '\': '
                   'No phase-encoding contrast in input DWIs, '
                   'and no fmap/ directory, '
                   'so EPI distortion correction cannot be performed')
@@ -635,16 +639,15 @@ def runSubject(bids_dir, label, shared, output_prefix):
 
     # Import anatomical image
     app.console('Importing T1 image into temporary directory')
-    t1w_image_list = glob.glob(os.path.join(bids_dir,
-                                            label,
+    t1w_image_list = glob.glob(os.path.join(os.path.join(bids_dir, *session),
                                             'anat',
-                                            label + '*_T1w.nii*'))
+                                            '*_T1w.nii*'))
     if len(t1w_image_list) > 1:
         app.error('More than one T1-weighted image found '
-                  'for subject ' + label + '; '
+                  'for session \'' + '_'.join(session) + '\'; '
                   'script not yet compatible with this')
     elif not t1w_image_list:
-        app.error('No T1-weighted image found for subject ' + label)
+        app.error('No T1-weighted image found for session ' + str(session))
     run.command('mrconvert ' + t1w_image_list[0] + ' '
                 + path.toTemp('T1.mif', True))
 
@@ -1454,8 +1457,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
 
 
     # Prepare output path for writing
-    app.console('Processing for subject \'' + label + '\' completed; '
-                'writing results to output directory')
+    app.console('Processing for session \'' + '_'.join(session)
+                + '\' completed; writing results to output directory')
     if os.path.exists(output_dir):
         run.function(shutil.rmtree, output_dir)
     run.function(os.makedirs, output_dir)
@@ -1485,6 +1488,8 @@ def runSubject(bids_dir, label, shared, output_prefix):
             shutil.copy(lut_export_file, lut_export_path)
         except OSError:
             pass
+
+    label = '_'.join(session)
 
     # Copy / convert necessary files to output directory
     if shared.parcellation != 'none':
@@ -1688,48 +1693,56 @@ def runSubject(bids_dir, label, shared, output_prefix):
 
 
 
+
+
+
+
+
+
+
+
+
+
 def runGroup(output_dir):
 
     # Check presence of all required input files before proceeding
     # Pre-calculate paths of all files since many will be used in
     #   more than one location
-    class subjectPaths(object):
-        def __init__(self, label):
-            self.in_bzero = os.path.join(output_dir,
-                                         label,
+    class sessionPaths(object):
+        def __init__(self, parent_dirs):
+            label = '_'.join(parent_dirs)
+            root = os.path.join(output_dir, *parent_dirs)
+            self.in_bzero = os.path.join(root,
                                          'dwi',
                                          label + '_meanbzero.nii.gz')
-            self.in_fa = os.path.join(output_dir,
-                                      label,
+            self.in_fa = os.path.join(root,
                                       'dwi',
                                       label + '_model-tensor_fa.nii.gz')
-            self.in_rf = os.path.join(output_dir,
-                                      label,
+            self.in_rf = os.path.join(root,
                                       'dwi',
                                       label + '_tissue-WM_response.txt')
             connectome_files = \
                 glob.glob(
-                    os.path.join(output_dir,
-                                 label,
+                    os.path.join(root,
                                  'connectome',
-                                 label + '_parc-*_level-participant'
-                                         '_connectome.csv'))
+                                 label
+                                 + '_parc-*_level-participant_connectome.csv'))
             if not connectome_files:
                 app.error('No participant-level connectome file '
-                          'found for subject \'' + label + '\'')
+                          'found for session \'' + label + '\'')
             elif len(connectome_files) > 1:
                 app.error('Connectomes from multiple parcellations detected '
-                          'for subject \'' + label + '\'; '
+                          'for session \'' + label + '\'; '
                           'this is not yet supported')
             self.in_connectome = connectome_files[0]
-            self.in_mu = os.path.join(output_dir,
-                                      label,
+            self.in_mu = os.path.join(root,
                                       'tractogram',
                                       label + '_mu.txt')
 
             for entry in vars(self).values():
                 if not os.path.exists(entry):
-                    app.error('Unable to find critical subject data '
+                    app.error('Unable to find critical data '
+                              'for session \'' + label + '\''
                               '(expected location: ' + entry + ')')
 
             self.parcellation = \
@@ -1737,8 +1750,7 @@ def runGroup(output_dir):
                            os.path.basename(self.in_connectome))[0]
 
             # Permissible for this to not exist
-            self.in_mask = os.path.join(output_dir,
-                                        label,
+            self.in_mask = os.path.join(root,
                                         'dwi',
                                         label + '_brainmask.nii.gz')
 
@@ -1762,33 +1774,32 @@ def runGroup(output_dir):
             self.temp_connectome = os.path.join('connectomes',
                                                 label + '.csv')
             self.out_scale_intensity = \
-                os.path.join(output_dir,
-                             label,
+                os.path.join(root,
                              'connectome',
                              label + '_factor-intensity_multiplier.txt')
             self.out_scale_RF = \
-                os.path.join(output_dir,
-                             label,
+                os.path.join(root,
                              'connectome',
                              label + '_factor-response_multiplier.txt')
             self.out_connectome = \
-                os.path.join(output_dir,
-                             label,
+                os.path.join(root,
                              'connectome',
-                             os.path.basename(self.in_connectome).replace(
-                                 '_level-participant',
-                                 '_level-group'))
+                             os.path.basename(self.in_connectome)
+                             .replace('_level-participant',
+                                      '_level-group'))
 
             self.label = label
 
-    subject_list = ['sub-' + sub_dir.split("-")[-1] for sub_dir in
-                    glob.glob(os.path.join(output_dir, 'sub-*'))]
-    if not subject_list:
-        app.error('No processed subject data found in output '
-                  'directory for group analysis')
-    subjects = []
-    for label in subject_list:
-        subjects.append(subjectPaths(label))
+
+    session_list = getSessions(output_dir)
+
+    if not session_list:
+        app.error('No processed session data found in output '
+                  'directory \'' + output_dir + '\' for group analysis')
+
+    sessions = []
+    for session in session_list:
+        sessions.append(sessionPaths(session))
 
     app.makeTempDir()
     app.gotoTempDir()
@@ -1799,12 +1810,12 @@ def runGroup(output_dir):
     #   If output_verbosity >= 2 then a mask is already provided;
     #   if not, then one can be quickly calculated from the
     #   mean b=0 image, which must be provided
-    progress = app.progressBar('Importing and preparing subject data',
-                               len(subjects))
+    progress = app.progressBar('Importing and preparing session data',
+                               len(sessions))
     run.function(os.makedirs, 'bzeros')
     run.function(os.makedirs, 'images')
     run.function(os.makedirs, 'masks')
-    for s in subjects:
+    for s in sessions:
         if os.path.exists(s.in_mask):
             run.function(os.symlink, s.in_mask, s.temp_mask)
         else:
@@ -1815,7 +1826,7 @@ def runGroup(output_dir):
     progress.done()
 
     # First group-level calculation: Generate the population FA template
-    app.console('Generating population template for inter-subject '
+    app.console('Generating population template for '
                 'intensity normalisation WM mask derivation')
     run.command('population_template images template.mif '
                 '-mask_dir masks '
@@ -1838,11 +1849,11 @@ def runGroup(output_dir):
     #     - Contribute to the group average response function
     progress = app.progressBar('Generating group-average response function '
                                'and intensity normalisation factors',
-                               len(subjects)+1)
+                               len(sessions)+1)
     run.function(os.makedirs, 'voxels')
     sum_median_bzero = 0.0
     sum_RF = []
-    for s in subjects:
+    for s in sessions:
         run.command('mrtransform template.mif '
                     '-warp_full ' + s.temp_warp + ' '
                     '-from 2 '
@@ -1871,11 +1882,11 @@ def runGroup(output_dir):
     # - Calculate the mean of median b=0 values
     # - Calculate the mean response function, and
     #   extract the l=0 values from it
-    mean_median_bzero = sum_median_bzero / len(subjects)
-    mean_RF = [[v/len(subjects) for v in line] for line in sum_RF]
+    mean_median_bzero = sum_median_bzero / len(sessions)
+    mean_RF = [[v/len(sessions) for v in line] for line in sum_RF]
     mean_RF_lzero = [line[0] for line in mean_RF]
 
-    # Third pass through subject data in group analysis:
+    # Third pass through session data in group analysis:
     # - Scale the connectome strengths:
     #   - Multiply by SIFT proportionality coefficient mu
     #   - Multiply by (mean median b=0) / (subject median b=0)
@@ -1884,9 +1895,9 @@ def runGroup(output_dir):
     # - Write the result to file
     progress = app.progressBar('Applying normalisation scaling to '
                                'subject connectomes',
-                               len(subjects))
+                               len(sessions))
     run.function(os.makedirs, 'connectomes')
-    for s in subjects:
+    for s in sessions:
         RF_lzero = [line[0] for line in s.RF]
         s.RF_multiplier = 1.0
         for (mean, subj) in zip(mean_RF_lzero, RF_lzero):
@@ -1912,26 +1923,16 @@ def runGroup(output_dir):
     progress.done()
 
     # Third group-level calculation: Generate the group mean connectome
-    # For any higher-level analysis (e.g. NBSE, computing connectome
-    #   global measures, etc.), trying to incorporate such analysis into
-    #   this particular pipeline script is likely to overly complicate
-    #   the interface, and not actually provide much in terms of
-    #   convenience / reproducibility guarantees. The primary functionality
-    #   of this group-level analysis is therefore to achieve inter-subject
-    #   connection density normalisation only; users then have the
-    #   flexibility to subsequently analyse the data however they choose
-    #   (ideally based on subject classification data provided with the
-    #   BIDS-compliant dataset).
     # Can only do this if the parcellation is identical across subjects;
     #     this needs to be explicitly checked
-    parcellation = subjects[0].parcellation
+    parcellation = sessions[0].parcellation
     consistent_parcellation = \
-        all(s.parcellation == parcellation for s in subjects)
+        all(s.parcellation == parcellation for s in sessions)
     if consistent_parcellation:
         progress = app.progressBar('Calculating group mean connectome',
-                                   len(subjects)+1)
+                                   len(sessions)+1)
         mean_connectome = []
-        for s in subjects:
+        for s in sessions:
             connectome = []
             with open(s.temp_connectome, 'r') as f:
                 for line in f:
@@ -1944,18 +1945,18 @@ def runGroup(output_dir):
                 mean_connectome = connectome
             progress.increment()
 
-        mean_connectome = [[v/len(subjects) for v in row]
+        mean_connectome = [[v/len(sessions) for v in row]
                            for row in mean_connectome]
         progress.done()
     else:
-        app.warn('Different parcellations across subjects; '
+        app.warn('Different parcellations across sessions; '
                  'cannot calculate a group mean connectome')
 
     # Write results of interest back to the output directory;
     #     both per-subject and group information
     progress = app.progressBar('Writing results to output directory',
-                               len(subjects)+2)
-    for s in subjects:
+                               len(sessions)+2)
+    for s in sessions:
         run.function(shutil.copyfile,
                      s.temp_connectome,
                      s.out_connectome)
@@ -1980,6 +1981,123 @@ def runGroup(output_dir):
     progress.done()
 
 # End of runGroup() function
+
+
+
+
+
+
+
+
+
+
+# Examine the contents of a directory (whether the raw BIDS dataset or a
+#   derivatives directory), and return a list of sessions.
+# This list may optionally be filtered based on the use of batch processing
+#   command-line options; e.g. resticting the participant or session IDs.
+def getSessions(root_dir, **kwargs):
+
+    participant_labels = kwargs.pop('participant_label', None)
+    session_labels = kwargs.pop('session_label', None)
+    if kwargs:
+        raise TypeError(
+            'Unsupported keyword arguments passed to getSession(): '
+            + str(kwargs))
+
+    # Perform a recursive search through the BIDS dataset directory,
+    #   looking for anything that resembles a BIDS session
+    # For any sub-directory that itself contains directories "anat/" and "dwi/",
+    #   store the list of sub-directories required to navigate to that point
+    # This becomes the list of feasible processing targets for either
+    #   participant-level or group-level analysis
+    # From there:
+    #   - "--participant_label" can be used to remove entries from the list
+    #   - Other options can be added to restrict processing targets;
+    #     e.g. "--session_label" to remove based on "ses-*/"
+    all_sessions = []
+    for dir_name, subdir_list, _ in os.walk(root_dir):
+        if 'anat' in subdir_list and 'dwi' in subdir_list:
+            all_sessions.append(os.path.relpath(dir_name, start=root_dir))
+            del subdir_list
+    app.debug(str(all_sessions))
+
+    result = []
+
+    # Need to alert user if they have nominated a particular participant /
+    #   session label, and no such data were found in the input dataset
+    sub_found = {label: False for label in participant_labels} \
+                if participant_labels \
+                else {}
+    ses_found = {label: False for label in session_labels} \
+                if session_labels \
+                else {}
+
+    # Define worker function for applying the --participant_label and
+    #   --session_label restrictions
+    def find_and_flag(ses, prefix, labels, found):
+        for dirname in ses:
+            if dirname.startswith(prefix):
+                present = False
+                for label in labels:
+                    if label == dirname[len(prefix):]:
+                        found[label] = True
+                        present = True
+                        break
+                if not present:
+                    return False
+        return True
+
+    for session in all_sessions:
+        session = os.path.normpath(session).split(os.sep)
+        process = True
+        if participant_labels:
+            if not find_and_flag(session,
+                                 'sub-',
+                                 participant_labels,
+                                 sub_found):
+                process = False
+        if session_labels:
+            if not find_and_flag(session,
+                                 'ses-',
+                                 session_labels,
+                                 ses_found):
+                process = False
+        if process:
+            result.append(session)
+
+    if not result:
+        app.error('No sessions were selected for processing')
+
+    app.console(str(len(all_sessions)) + ' total sessions found '
+                + 'in directory \'' + root_dir + '\'; '
+                + ('all'
+                   if len(result) == len(all_sessions)
+                   else str(len(result)))
+                + ' will be processed')
+    sub_not_found = [key for key, value in sub_found.items() if not value]
+    if sub_not_found:
+        app.warn(str(len(sub_not_found)) + ' nominated participant label'
+                 + ('s were' if len(sub_not_found) > 1 else ' was')
+                 + ' not found in input dataset: '
+                 + ', '.join(sub_not_found))
+    ses_not_found = [key for key, value in ses_found.items() if not value]
+    if ses_not_found:
+        app.warn(str(len(ses_not_found)) + ' nominated session label'
+                 + ('s were' if len(ses_not_found) > 1 else ' was')
+                 + ' not found in input dataset: '
+                 + ', '.join(ses_not_found))
+
+    app.debug(str(result))
+    return result
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2074,7 +2192,7 @@ app.cmdline.add_argument(
     choices=analysis_choices)
 
 batch_options = app.cmdline.add_argument_group(
-    'Options specific to the batch processing of subject data')
+    'Options specific to the batch processing of participant data')
 batch_options.add_argument(
     OPTION_PREFIX + 'participant_label',
     nargs='+',
@@ -2082,8 +2200,17 @@ batch_options.add_argument(
          'label(s) correspond(s) to sub-<participant_label> from the BIDS '
          'spec (so it does _not_ include "sub-"). If this parameter is not '
          'provided, all subjects in the BIDS directory will be analyzed '
-         'sequentially. Multiple participants can be specified with a '
-         'space-separated list.')
+         'sequentially. '
+         'Multiple participants can be specified with a space-separated list.')
+batch_options.add_argument(
+    OPTION_PREFIX + 'session_label',
+    nargs='+',
+    help='The session(s) within each participant that should be analyzed. The '
+         'label(s) correspond(s) to ses-<session_label> from the BIDS '
+         'spec (so it does _not_ include "ses-"). If this parameter is not '
+         'provided, all sessions for those participants in the BIDS directory '
+         'undergoing processing will be analyzed sequentially. '
+         'Multiple session IDs can be specified with a space-separated list.')
 
 participant_options = \
     app.cmdline.add_argument_group(
@@ -2409,23 +2536,10 @@ if app.args.analysis_level == 'participant':
     if app.args.output_verbosity == 4:
         app.cleanup = False
 
-    subjects_to_analyze = []
-    # Only run a subset of subjects
-    if app.args.participant_label:
-        subjects_to_analyze = ['sub-' + sub_index
-                               for sub_index in app.args.participant_label]
-        for subject_dir in subjects_to_analyze:
-            if not os.path.isdir(os.path.join(app.args.bids_dir,
-                                              subject_dir)):
-                app.error('Unable to find directory for subject: '
-                          + subject_dir)
-    # Run all subjects sequentially
-    else:
-        subject_dirs = glob.glob(os.path.join(app.args.bids_dir, 'sub-*'))
-        subjects_to_analyze = ['sub-' + directory.split("-")[-1]
-                               for directory in subject_dirs]
-        if not subjects_to_analyze:
-            app.error('Could not find any subjects in BIDS directory')
+    sessions_to_analyze = getSessions(
+        app.args.bids_dir,
+        participant_label=app.args.participant_label,
+        session_label=app.args.session_label)
 
     participant_shared = \
         ParticipantShared(getattr(app.args, 'atlas_path', None),
@@ -2434,12 +2548,14 @@ if app.args.analysis_level == 'participant':
                           app.args.preprocessed,
                           app.args.streamlines,
                           app.args.template_reg)
-    for subject_label in subjects_to_analyze:
-        app.console('Commencing execution for subject ' + subject_label)
-        runSubject(app.args.bids_dir,
-                   subject_label,
-                   participant_shared,
-                   os.path.abspath(app.args.output_dir))
+
+    for session_to_process in sessions_to_analyze:
+        app.console('Commencing execution for session: \''
+                    + '_'.join(session_to_process) + '\'')
+        runParticipant(app.args.bids_dir,
+                       session_to_process,
+                       participant_shared,
+                       os.path.abspath(app.args.output_dir))
 
 # Running group level
 elif app.args.analysis_level == 'group':
@@ -2447,6 +2563,10 @@ elif app.args.analysis_level == 'group':
     if app.args.participant_label:
         app.error('Cannot use --participant_label option when '
                   'performing group analysis')
+    if app.args.session_label:
+        app.error('Cannot use --session_label option when '
+                  'performing group analysis')
+
     runGroup(os.path.abspath(app.args.output_dir))
 
 app.complete()
