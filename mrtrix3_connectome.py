@@ -1703,7 +1703,7 @@ def runParticipant(bids_dir, session, shared, output_prefix):
 
 
 
-def runGroup(output_dir):
+def runGroup(bids_dir, output_dir):
 
     # Check presence of all required input files before proceeding
     # Pre-calculate paths of all files since many will be used in
@@ -1792,10 +1792,20 @@ def runGroup(output_dir):
 
 
     session_list = getSessions(output_dir)
-
     if not session_list:
         app.error('No processed session data found in output '
                   'directory \'' + output_dir + '\' for group analysis')
+
+    bids_session_list = getSessions(bids_dir)
+    not_processed = [session for session in bids_session_list \
+                     if session not in session_list]
+    if not_processed:
+        app.warn(str(len(not_processed)) + ' session'
+                 + ('s' if len(not_processed) > 1 else '')
+                 + ' present in BIDS directory '
+                 + ('have' if len(not_processed) > 1 else 'has')
+                 + ' not yet undergone participant-level processing: '
+                 + ', '.join('_'.join(session) for session in not_processed))
 
     sessions = []
     for session in session_list:
@@ -2130,7 +2140,7 @@ app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'tools, particularly those provided in MRtrix3')
 
 app.cmdline.setCopyright(
-'''Copyright (c) 2016-2019 The Florey Institute of Neuroscience
+    '''Copyright (c) 2016-2019 The Florey Institute of Neuroscience
 and Mental Health.
 
 This Source Code Form is subject to the terms of the Mozilla Public
@@ -2582,6 +2592,7 @@ elif app.args.analysis_level == 'group':
         app.error('Cannot use --session_label option when '
                   'performing group analysis')
 
-    runGroup(os.path.abspath(app.args.output_dir))
+    runGroup(os.path.abspath(app.args.bids_dir),
+             os.path.abspath(app.args.output_dir))
 
 app.complete()
