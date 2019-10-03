@@ -811,6 +811,15 @@ def runParticipant(bids_dir, session, shared, output_prefix):
             eddy_options.append('--mporder=' + str(mporder))
         if shared.eddy_mbs:
             eddy_options.append('--estimate_move_by_susceptibility')
+
+        shell_asymmetries = \
+            [float(value) for value in
+             run.command('dirstat ' + dwipreproc_input + ' -output asym')[0]
+             .splitlines()]
+        app.var(shell_asymmetries)
+        if any(value > 0.1 for value in shell_asymmetries):
+            eddy_options.append('--slm=linear')
+
         dwipreproc_eddy_option = \
             ' -eddy_options \" ' \
             + ' '.join(eddy_options) + '\"' if eddy_options else ''
@@ -870,7 +879,8 @@ def runParticipant(bids_dir, session, shared, output_prefix):
     # Determine whether we are working with single-shell or multi-shell data
     bvalues = [
         int(round(float(value)))
-        for value in image.mrinfo('dwi_crop.mif', 'shell_bvalues').strip().split()]
+        for value in image.mrinfo('dwi_crop.mif', 'shell_bvalues') \
+                                 .strip().split()]
     multishell = (len(bvalues) > 2)
 
     # Step 8: Perform spherical deconvolution
