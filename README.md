@@ -231,7 +231,8 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 **Author:** Robert E. Smith (robert.smith@florey.edu.au)
 
-**Copyright:** Copyright (c) 2016-2019 The Florey Institute of Neuroscience and Mental Health.
+**Copyright:** Copyright (c) 2016-2019 The Florey Institute of Neuroscience
+and Mental Health.
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
