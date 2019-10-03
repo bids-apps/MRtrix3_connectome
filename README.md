@@ -138,7 +138,7 @@ deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tra
 parcellation (((Avants et al., 2008 OR Andersson et al., 2010) AND (Tzourio-Mazoyer et al.,
 2002 OR Yeo et al., 2011 OR Craddock et al., 2012 OR Fan et al., 2016 OR (Zalesky et al.,
 2010 AND Perry et al., 2017))) OR (Dale et al., 1999 AND (Desikan et al., 2006 OR
-Destrieux et al., 2010 OR Glasser et al., 2016))); robust structural connectome construction 
+Destrieux et al., 2010 OR Glasser et al., 2016))); robust structural connectome construction
 Smith et al., 2015a; Yeh et al., 2016).
 
 ```
@@ -231,16 +231,17 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 **Author:** Robert E. Smith (robert.smith@florey.edu.au)
 
-**Copyright:** Copyright (c) 2008-2018 the MRtrix3 contributors.
+**Copyright:** Copyright (c) 2016-2019 The Florey Institute of Neuroscience and Mental Health.
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
-file, you can obtain one at http://mozilla.org/MPL/2.0/.
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-MRtrix is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty
-of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
-For more details, see http://www.mrtrix.org/.
+Covered Software is provided under this License on an \"as is\"
+basis, without warranty of any kind, either expressed, implied, or
+statutory, including, without limitation, warranties that the
+Covered Software is free of defects, merchantable, fit for a
+particular purpose or non-infringing.
+See the Mozilla Public License v. 2.0 for more details.
 
 ---

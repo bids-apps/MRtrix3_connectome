@@ -2129,6 +2129,19 @@ app.init('Robert E. Smith (robert.smith@florey.edu.au)',
          'and T1-weighted image data using state-of-the-art reconstruction '
          'tools, particularly those provided in MRtrix3')
 
+app.cmdline.setCopyright('''Copyright (c) 2016-2019 The Florey Institute of Neuroscience and Mental Health.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+Covered Software is provided under this License on an \"as is\"
+basis, without warranty of any kind, either expressed, implied, or
+statutory, including, without limitation, warranties that the
+Covered Software is free of defects, merchantable, fit for a
+particular purpose or non-infringing.
+See the Mozilla Public License v. 2.0 for more details.''')
+
 # If running within a container, erase existing standard options, and
 #   fill with only desired options
 if IS_CONTAINER:
