@@ -843,23 +843,34 @@ def runParticipant(bids_dir, session, shared, output_prefix):
     run.command('dwi2mask dwi.mif dwi_mask.mif')
     run.command('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
 
+    # Crop all three DWI images based on the spatial extent of the dilated mask
+    app.console('Cropping DWI data to reduce image sizes')
+    run.command('mrcrop dwi.mif dwi_crop.mif -mask dwi_mask_dilated.mif')
+    file.delTemporary('dwi.mif')
+    run.command('mrcrop dwi_mask.mif dwi_mask_crop.mif '
+                '-mask dwi_mask_dilated.mif')
+    file.delTemporary('dwi_mask.mif')
+    run.command('mrcrop dwi_mask_dilated.mif dwi_mask_dilated_crop.mif '
+                '-mask dwi_mask_dilated.mif')
+    file.delTemporary('dwi_mask_dilated.mif')
+
     # Step 6: Generate an FA image
     # This is required for group-level analysis
     app.console('Generating FA image for group-level analysis')
-    run.command('dwi2tensor dwi.mif -mask dwi_mask.mif - | '
+    run.command('dwi2tensor dwi_crop.mif -mask dwi_mask_crop.mif - | '
                 'tensor2metric - -fa fa.mif')
 
     # Step 7: Estimate response functions for spherical deconvolution
     app.console('Estimating tissue response functions for '
                 'spherical deconvolution')
-    run.command('dwi2response dhollander dwi.mif '
+    run.command('dwi2response dhollander dwi_crop.mif '
                 'response_wm.txt response_gm.txt response_csf.txt '
-                '-mask dwi_mask.mif')
+                '-mask dwi_mask_crop.mif')
 
     # Determine whether we are working with single-shell or multi-shell data
     bvalues = [
         int(round(float(value)))
-        for value in image.mrinfo('dwi.mif', 'shell_bvalues').strip().split()]
+        for value in image.mrinfo('dwi_crop.mif', 'shell_bvalues').strip().split()]
     multishell = (len(bvalues) > 2)
 
     # Step 8: Perform spherical deconvolution
@@ -871,21 +882,21 @@ def runParticipant(bids_dir, session, shared, output_prefix):
                 + ' Fibre Orientation Distribution'
                 + ('s' if multishell else ''))
     if multishell:
-        run.command('dwi2fod msmt_csd dwi.mif '
+        run.command('dwi2fod msmt_csd dwi_crop.mif '
                     'response_wm.txt FOD_WM.mif '
                     'response_gm.txt FOD_GM.mif '
                     'response_csf.txt FOD_CSF.mif '
-                    '-mask dwi_mask_dilated.mif -lmax 10,0,0')
+                    '-mask dwi_mask_dilated_crop.mif -lmax 10,0,0')
         run.command('mrconvert FOD_WM.mif - -coord 3 0 | '
                     'mrcat FOD_CSF.mif FOD_GM.mif - tissues.mif -axis 3')
     else:
         # Still use the msmt_csd algorithm with single-shell data:
         #   Use hard non-negativity constraint
         # Also incorporate the CSF response to provide some fluid attenuation
-        run.command('dwi2fod msmt_csd dwi.mif '
+        run.command('dwi2fod msmt_csd dwi_crop.mif '
                     'response_wm.txt FOD_WM.mif '
                     'response_csf.txt FOD_CSF.mif '
-                    '-mask dwi_mask_dilated.mif -lmax 10,0')
+                    '-mask dwi_mask_dilated_crop.mif -lmax 10,0')
         file.delTemporary('FOD_CSF.mif')
 
     # Step 9: Perform brain extraction and bias field correction
@@ -941,19 +952,20 @@ def runParticipant(bids_dir, session, shared, output_prefix):
     # Step 10: Generate target images for T1->DWI registration
     app.console('Generating contrast-matched images for '
                 'inter-modal registration between DWIs and T1')
-    run.command('dwiextract dwi.mif -bzero - | '
+    run.command('dwiextract dwi_crop.mif -bzero - | '
                 'mrcalc - 0.0 -max - | '
                 'mrmath - mean -axis 3 dwi_meanbzero.mif')
-    run.command('mrcalc 1 dwi_meanbzero.mif -div dwi_mask.mif -mult - | '
+    run.command('mrcalc 1 dwi_meanbzero.mif -div '
+                'dwi_mask_crop.mif -mult - | '
                 'mrhistmatch nonlinear '
                 '- T1_biascorr_brain.mif dwi_pseudoT1.mif '
-                '-mask_input dwi_mask.mif '
+                '-mask_input dwi_mask_crop.mif '
                 '-mask_target T1_mask.mif')
     run.command('mrcalc 1 T1_biascorr_brain.mif -div T1_mask.mif -mult - | '
                 'mrhistmatch nonlinear '
                 '- dwi_meanbzero.mif T1_pseudobzero.mif '
                 '-mask_input T1_mask.mif '
-                '-mask_target dwi_mask.mif')
+                '-mask_target dwi_mask_crop.mif')
 
     # Step 11: Perform T1->DWI registration
     #   Note that two registrations are performed:
@@ -965,13 +977,13 @@ def runParticipant(bids_dir, session, shared, output_prefix):
     run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif '
                 '-type rigid '
                 '-mask1 T1_mask.mif '
-                '-mask2 dwi_mask.mif '
+                '-mask2 dwi_mask_crop.mif '
                 '-rigid rigid_T1_to_pseudoT1.txt')
     file.delTemporary('T1_biascorr_brain.mif')
     run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif '
                 '-type rigid '
                 '-mask1 T1_mask.mif '
-                '-mask2 dwi_mask.mif '
+                '-mask2 dwi_mask_crop.mif '
                 '-rigid rigid_pseudobzero_to_bzero.txt')
     run.command('transformcalc '
                 'rigid_T1_to_pseudoT1.txt rigid_pseudobzero_to_bzero.txt '
@@ -1536,7 +1548,7 @@ def runParticipant(bids_dir, session, shared, output_prefix):
                          os.path.join(output_dir,
                                       'connectome',
                                       label + parc_string + '_meanlength.csv'))
-        run.command('mrconvert dwi.mif '
+        run.command('mrconvert dwi_crop.mif '
                     + os.path.join(output_dir,
                                    'dwi',
                                    label + '_dwi.nii.gz')
@@ -1549,7 +1561,7 @@ def runParticipant(bids_dir, session, shared, output_prefix):
                                    'dwi',
                                    label + '_dwi.bval')
                     + ' -strides +1,+2,+3,+4')
-        run.command('mrconvert dwi_mask.mif '
+        run.command('mrconvert dwi_mask_crop.mif '
                     + os.path.join(output_dir,
                                    'dwi',
                                    label + '_brainmask.nii.gz')
