@@ -624,10 +624,13 @@ def runParticipant(bids_dir, session, shared, output_prefix):
 
         fmap_image_list = ['fmap' + str(index) + '.mif'
                            for index in range(1, fmap_index)]
-    # If there's no data in fmap/ directory,
+
+    # If there's no usable data in fmap/ directory,
     #   need to check to see if there's any phase-encoding
     #   contrast within the input DWI(s)
-    elif len(dwi_image_list) < 2 and not shared.preprocessed:
+    if not shared.preprocessed \
+            and not fmap_image_list \
+            and len(dwi_image_list) < 2:
         app.error('Inadequate data for pre-processing of session '
                   '\'' + '_'.join(session) + '\': '
                   'No phase-encoding contrast in input DWIs, '
