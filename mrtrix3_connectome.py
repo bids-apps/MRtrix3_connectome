@@ -574,6 +574,16 @@ def runParticipant(bids_dir, session, shared, output_prefix):
                     + json_import_option)
         dwi_index += 1
 
+    dwi_image_list = ['dwi' + str(index) + '.mif'
+                      for index in range(1, dwi_index)]
+
+    if len(dwi_image_list) > 1:
+        dwi_first_header = image.Header(dwi_image_list[0])
+        for i in dwi_image_list[1:]:
+            if not image.match(dwi_first_header, i, 3):
+                app.error('DWI series not defined on same image grid; '
+                          'script not yet capable of handling such data')
+
     # Go hunting for reversed phase-encode data
     #   dedicated to field map estimation
     fmap_image_list = []
@@ -625,6 +635,9 @@ def runParticipant(bids_dir, session, shared, output_prefix):
         fmap_image_list = ['fmap' + str(index) + '.mif'
                            for index in range(1, fmap_index)]
 
+    # No need to explicitly check whether fmap/ images are defined
+    #   on a common image grid; these we are happy to resample
+
     # If there's no usable data in fmap/ directory,
     #   need to check to see if there's any phase-encoding
     #   contrast within the input DWI(s)
@@ -636,9 +649,6 @@ def runParticipant(bids_dir, session, shared, output_prefix):
                   'No phase-encoding contrast in input DWIs, '
                   'and no fmap/ directory, '
                   'so EPI distortion correction cannot be performed')
-
-    dwi_image_list = ['dwi' + str(index) + '.mif'
-                      for index in range(1, dwi_index)]
 
     # Import anatomical image
     app.console('Importing T1 image into temporary directory')
@@ -683,93 +693,86 @@ def runParticipant(bids_dir, session, shared, output_prefix):
         #   Gibbs ringing removal if available, distortion correction
         #   & bias field correction) as normal
 
-        # Concatenate any SE EPI images with the DWIs before denoising
-        #   (& unringing), then separate them again after the fact
-        if fmap_image_list:
-            app.console('Concatenating DWI and fmap data for '
-                        'combined pre-processing')
-            dwidenoise_input = 'dwi_fmap_cat.mif'
-            if len(fmap_image_list) > 1:
-                run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
-                            'fmap_cat.mif -axis 3')
-                fmap_header = image.Header('fmap_cat.mif')
-                fmap_num_volumes = fmap_header.size()[3]
-                run.command('mrcat fmap_cat.mif '
-                            + ' '.join(dwi_image_list)
-                            + ' ' + dwidenoise_input + ' -axis 3')
-                file.delTemporary('fmap_cat.mif')
-            else:
-                fmap_header = image.Header(fmap_image_list[0])
-                fmap_num_volumes = 1 if len(fmap_header.size()) < 4 \
-                                     else fmap_header.size()[3]
-                run.command('mrcat ' + fmap_image_list[0] + ' '
-                            + ' '.join(dwi_image_list)
-                            + ' ' + dwidenoise_input + ' -axis 3')
-            for i in fmap_image_list:
-                file.delTemporary(i)
-            for i in dwi_image_list:
-                file.delTemporary(i)
-        else:
-            fmap_num_volumes = 0
-            # Even if no explicit fmap images, may still
-            #   need to concatenate multiple DWI inputs
-            if len(dwi_image_list) > 1:
-                app.console('Concatenating input DWI series')
-                dwidenoise_input = 'dwi_cat.mif'
-                run.command('mrcat '
-                            + ' '.join(dwi_image_list)
-                            + ' ' + dwidenoise_input + ' -axis 3')
-                for i in dwi_image_list:
-                    file.delTemporary(i)
-            else:
-                dwidenoise_input = dwi_image_list[0]
+        # For DWI data, denoise each individually, then concatenate;
+        #  for fmap/ data, just concatenate and run mrdegibbs
 
+        if len(dwi_image_list) == 1:
+            run.function(os.rename, dwi_image_list[0], 'dwi.mif')
+            dwi_image_list[0] = 'dwi.mif'
 
         # Step 1: Denoise
-        app.console('Performing MP-PCA denoising of DWI'
-                    + (' and fmap ' if fmap_num_volumes else ' ')
-                    + 'data')
-        mrdegibbs_input = os.path.splitext(dwidenoise_input)[0] \
-                          + '_denoised.mif'
-        run.command('dwidenoise ' + dwidenoise_input + ' ' + mrdegibbs_input)
-        file.delTemporary(dwidenoise_input)
+        app.console('Denoising DWI data')
+        for i in dwi_image_list:
+            run.command('dwidenoise ' + i + ' '
+                        + os.path.splitext(i)[0] + '_denoised.mif')
+            file.delTemporary(i)
+        dwi_image_list = [os.path.splitext(i)[0] + '_denoised.mif'
+                          for i in dwi_image_list]
 
         # Step 2: Gibbs ringing removal
         app.console('Performing Gibbs ringing removal for DWI'
-                    + (' and fmap ' if fmap_num_volumes else ' ')
+                    + (' and fmap ' if fmap_image_list else ' ')
                     + 'data')
-        mrdegibbs_output = os.path.splitext(mrdegibbs_input)[0] \
-                           + '_degibbs.mif'
-        run.command('mrdegibbs ' + mrdegibbs_input + ' ' + mrdegibbs_output
-                    + ' -nshifts 50')
-        file.delTemporary(mrdegibbs_input)
+        for i in dwi_image_list:
+            run.command('mrdegibbs ' + i + ' '
+                        + os.path.splitext(i)[0] + '_degibbs.mif'
+                        + ' -nshifts 50')
+            file.delTemporary(i)
+        dwi_image_list = [os.path.splitext(i)[0] + '_degibbs.mif'
+                          for i in dwi_image_list]
+        for i in fmap_image_list:
+            run.command('mrdegibbs ' + i + ' '
+                        + os.path.splitext(i)[0] + '_degibbs.mif'
+                        + ' -nshifts 50')
+        fmap_image_list = [os.path.splitext(i)[0] + '_degibbs.mif'
+                           for i in fmap_image_list]
 
-        # If fmap images and DWIs have been concatenated,
-        #   now is the time to split them back apart
-        if fmap_num_volumes:
-            app.console('Separating DWIs and fmap images '
-                        'from concatenated series')
+        # We need to concatenate the DWI and fmap/ data (separately)
+        #   before they can be fed into dwipreproc
+        if len(dwi_image_list) == 1:
+            dwipreproc_input = dwi_image_list[0]
+        else:
+            app.console('Concatenating DWI data')
             dwipreproc_input = 'dwipreproc_in.mif'
-            dwipreproc_se_epi = 'se_epi.mif'
-            run.command('mrconvert '
-                        + mrdegibbs_output + ' '
-                        + dwipreproc_se_epi
-                        + ' -coord 3 0:' + str(fmap_num_volumes-1))
-            cat_num_volumes = image.Header(mrdegibbs_output).size()[3]
-            app.var(cat_num_volumes)
-            run.command('mrconvert '
-                        + mrdegibbs_output + ' '
-                        + dwipreproc_input
-                        + ' -coord 3 ' + str(fmap_num_volumes)
-                        + ':' + str(cat_num_volumes-1))
-            file.delTemporary(mrdegibbs_output)
-            dwipreproc_se_epi_option = ' -se_epi ' \
-                                       + dwipreproc_se_epi \
+            run.command('mrcat ' + ' '.join(dwi_image_list) + ' '
+                        + dwipreproc_input + ' -axis 3')
+            for i in dwi_image_list:
+                file.delTemporary(i)
+
+        if not fmap_image_list:
+            dwipreproc_se_epi = ''
+            dwipreproc_se_epi_option = ''
+        elif len(fmap_image_list) == 1:
+            dwipreproc_se_epi = fmap_image_list[0]
+            dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi \
                                        + ' -align_seepi'
         else:
-            dwipreproc_input = mrdegibbs_output
-            dwipreproc_se_epi = None
-            dwipreproc_se_epi_option = ''
+            # Can we do a straight concatenation?
+            # If not, we need to resample all images onto a common voxel grid;
+            #   the DWI grid makes most sense, since dwipreproc will
+            #   perform that resampling itself otherwise
+            dwipreproc_se_epi = 'dwipreproc_seepi.mif'
+            run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
+                        + dwipreproc_se_epi + ' -axis 3',
+                        False)
+            if os.path.exists(dwipreproc_se_epi):
+                for i in fmap_image_list:
+                    file.delTemporary(i)
+            else:
+                app.console('Unable to concatenate fmap/ data directly; '
+                            'resampling images onto DWI voxel grid')
+                for i in fmap_image_list:
+                    run.command('mrtransform ' + i
+                                + ' -template ' + dwipreproc_input + ' '
+                                + os.path.splitext(i)[0] + '_regrid.mif'
+                                + ' -interp sinc')
+                    file.delTemporary(i)
+                fmap_image_list = [os.path.splitext(i)[0] + '_regrid.mif'
+                                   for i in fmap_image_list]
+                run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
+                            + dwipreproc_se_epi + ' -axis 3')
+            dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi \
+                                       + ' -align_seepi'
 
         # Step 3: Distortion correction
         app.console('Performing various geometric corrections of DWIs')
