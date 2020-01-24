@@ -146,10 +146,10 @@ RUN rm -f $FSLDIR/bin/eddy_cuda*
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-# Commit checked out is 3.0_RC3 tag with subsequent hotfixes as at 24/09/2019
+# Commit checked out is development branch as at 24/01/2020
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
-    git checkout 81036fcc6dc11222515fc6cc1b2403585560bfcb && \
+    git checkout 0ad6a66d75aaf08a135b8d43aed539805ce745dc && \
     python configure -nogui && \
     python build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version
