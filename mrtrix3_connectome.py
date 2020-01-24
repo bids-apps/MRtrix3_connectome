@@ -10,7 +10,7 @@ import subprocess
 from distutils.spawn import find_executable
 import mrtrix3
 from mrtrix3 import CONFIG, MRtrixError
-from mrtrix3 import app, fsl, image, path, run, utils
+from mrtrix3 import app, fsl, image, matrix, path, run, utils
 
 
 IS_CONTAINER = os.path.exists('/version') \
@@ -1878,13 +1878,8 @@ def run_group(bids_dir, output_dir):
                                         'dwi',
                                         label + '_brainmask.nii.gz')
 
-            with open(self.in_mu, 'r') as f:
-                self.mu = float(f.read())
-
-            self.RF = []
-            with open(self.in_rf, 'r') as f:
-                for line in f:
-                    self.RF.append([float(v) for v in line.split()])
+            self.mu = matrix.load_vector(self.in_mu)[0]
+            self.RF = matrix.load_matrix(self.in_rf)
 
             self.temp_mask = os.path.join('masks', label + '.nii.gz')
             self.link_fa = os.path.join('images', label + '.nii.gz')
@@ -2046,14 +2041,10 @@ def run_group(bids_dir, output_dir):
 
         s.global_multiplier = s.mu * s.bzero_multiplier * s.RF_multiplier
 
-        connectome = []
-        with open(s.in_connectome, 'r') as f:
-            for line in f:
-                connectome.append([float(v) for v in line.split()])
-        with open(s.temp_connectome, 'w') as f:
-            for line in connectome:
-                f.write(' '.join(
-                    [str(v*s.global_multiplier) for v in line]) + '\n')
+        connectome = matrix.load_matrix(s.in_connectome)
+        temp_connectome = [[v*s.global_multiplier for v in line]
+                           for line in connectome]
+        matrix.save_matrix(s.temp_connectome, temp_connectome)
         progress.increment()
     progress.done()
 
@@ -2068,10 +2059,7 @@ def run_group(bids_dir, output_dir):
                                    len(sessions)+1)
         mean_connectome = []
         for s in sessions:
-            connectome = []
-            with open(s.temp_connectome, 'r') as f:
-                for line in f:
-                    connectome.append([float(v) for v in line.split()])
+            connectome = matrix.load_matrix(s.temp_connectome)
             if mean_connectome:
                 mean_connectome = [[c1+c2 for c1, c2 in zip(r1, r2)]
                                    for r1, r2 in zip(mean_connectome,
@@ -2095,24 +2083,20 @@ def run_group(bids_dir, output_dir):
         run.function(shutil.copyfile,
                      s.temp_connectome,
                      s.out_connectome)
-        with open(s.out_scale_intensity, 'w') as f:
-            f.write(str(s.bzero_multiplier))
-        with open(s.out_scale_RF, 'w') as f:
-            f.write(str(s.RF_multiplier))
+        matrix.save_vector(s.out_scale_intensity, [s.bzero_multiplier])
+        matrix.save_vector(s.out_scale_RF, s.RF_multiplier)
         progress.increment()
 
-    with open(os.path.join(output_dir,
-                           'tissue-WM_response.txt'),
-              'w') as f:
-        for row in mean_RF:
-            f.write(' '.join([str(v) for v in row]) + '\n')
+    matrix.save_matrix(os.path.join(output_dir,
+                                    'tissue-WM_response.txt'),
+                       mean_RF)
     progress.increment()
     if consistent_parcellation:
-        with open(os.path.join(output_dir,
-                               'parc-' + parcellation + '_connectome.csv'),
-                  'w') as f:
-            for row in mean_connectome:
-                f.write(' '.join([str(v) for v in row]) + '\n')
+        matrix.save_matrix(os.path.join(output_dir,
+                                        'parc-'
+                                        + parcellation
+                                        + '_connectome.csv'),
+                           mean_connectome)
     progress.done()
 
 # End of runGroup() function
