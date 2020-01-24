@@ -89,6 +89,8 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         else:
             self.eddy_binary = fsl.eddy_binary(False)
             self.eddy_cuda = False
+        app.debug('Eddy binary: ' + str(self.eddy_binary))
+        app.debug('CUDA eddy present: ' + str(self.eddy_cuda))
         # Using run.command() to query the eddy help page will lead to a
         #   warning being issued due to a non-zero return code
         # Therefore use subprocess directly
@@ -895,25 +897,14 @@ def run_participant(bids_dir, session, shared, output_prefix):
         mporder = 1 + num_slices/(mb_factor*4)
         app.debug('MPorder: ' + str(mporder))
 
-        # TODO Remove duplication
-        eddy_binary = fsl.eddy_binary(True)
-        if eddy_binary:
-            eddy_cuda = True
-        else:
-            eddy_binary = fsl.eddy_binary(False)
-            eddy_cuda = False
-        app.debug('Eddy binary: ' + str(eddy_binary))
-        app.debug('CUDA eddy present: ' + str(eddy_cuda))
-
-        # TODO Move initial option list calculation to shared
         eddy_options = []
         if shared.eddy_repol:
             eddy_options.append('--repol')
         if shared.eddy_mporder and have_slice_timing:
             eddy_options.append('--mporder=' + str(mporder))
-        # TODO Disable; is only necessary for cohorts with very large motion
-        if shared.eddy_mbs:
-            eddy_options.append('--estimate_move_by_susceptibility')
+        # Disabled: is only necessary for cohorts with very large motion
+        #if shared.eddy_mbs:
+        #    eddy_options.append('--estimate_move_by_susceptibility')
 
         shell_asymmetries = \
             [float(value) for value in
