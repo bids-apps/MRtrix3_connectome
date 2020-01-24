@@ -544,10 +544,52 @@ def runParticipant(bids_dir, session, shared, output_prefix):
                   + '_'.join(session)
                   + '\' (search location: ' + dwi_path)
     dwi_index = 1
+
+    re_is_complex = re.compile(r'_part-(mag|phase)_')
+
     for entry in dwi_image_list:
         # os.path.split() falls over with .nii.gz extensions;
         #   only removes the .gz
         prefix = entry.split(os.extsep)[0]
+        # Is this one image in a magnitude-phase pair?
+        is_complex = re_is_complex.search(os.path.basename(dwi_image_list))
+        if is_complex:
+            if shared.preprocessed:
+                app.error('If input data are pre-processed, '
+                          'should not be stored as complex data')
+            matching_text = is_complex.group(1)
+            complex_part = matching_text.strip('_').split('-')[-1]
+            assert complex_part in ['mag', 'phase']
+            if complex_part == 'mag':
+                # Find corresponding phase image
+                phase_image = entry.replace('_part-mag_', '_part-phase')
+                if phase_image not in dwi_image_list:
+                    app.error('Image '
+                              + entry
+                              + ' does not have corresponding phase image')
+                # Make sure phase image is stored in radians
+                min_phase = image.statistic(phase_image, 'min', '-allvolumes')
+                max_phase = image.statistic(phase_image, 'max', '-allvolumes')
+                if abs(2.0*math.pi - (max_phase - min_phase)) > 0.001:
+                    app.error('Phase image '
+                              + phase_image
+                              + ' is not stored in radian units')
+                # Set prefix for finding sidecar files
+                prefix = prefix.replace('_part-mag_', '_')
+            else:
+                # Make sure we also have the corresponding magnitude image
+                if entry.replace(
+                        '_part-phase_',
+                        '_part-mag_') not in dwi_image_list:
+                    app.error('Image '
+                              + entry
+                              + ' does not have corresponding mag image')
+                # Do nothing for the second image in the pair
+                continue
+        else:
+
+            phase_image = None
+        # Find sidecar files
         if os.path.isfile(prefix + '.bval') \
                 and os.path.isfile(prefix + '.bvec'):
             prefix = prefix + '.'
@@ -567,11 +609,23 @@ def runParticipant(bids_dir, session, shared, output_prefix):
                       '\'' + entry + '\'; '
                       'cannot proceed with DWI preprocessing '
                       'without this information')
-        run.command('mrconvert '
-                    + entry + ' '
-                    + path.toTemp('dwi' + str(dwi_index) + '.mif', True)
-                    + grad_import_option
-                    + json_import_option)
+        # Import the data
+        if phase_image:
+            # FIXME Since script is currently written against 3.0_RC1,
+            #   and that doesn't include dwidenoise processing complex data,
+            #   just import the magnitude image
+            # Once port to 3.0.0 is complete, generate native complex image
+            run.command('mrconvert '
+                        + entry + ' '
+                        + path.toTemp('dwi' + str(dwi_index) + '.mif', True)
+                        + grad_import_option
+                        + json_import_option)
+        else:
+            run.command('mrconvert '
+                        + entry + ' '
+                        + path.toTemp('dwi' + str(dwi_index) + '.mif', True)
+                        + grad_import_option
+                        + json_import_option)
         dwi_index += 1
 
     dwi_image_list = ['dwi' + str(index) + '.mif'
@@ -708,6 +762,17 @@ def runParticipant(bids_dir, session, shared, output_prefix):
             file.delTemporary(i)
         dwi_image_list = [os.path.splitext(i)[0] + '_denoised.mif'
                           for i in dwi_image_list]
+
+        # If data are complex, take the magnitude
+        new_dwi_image_list = []
+        for entry in dwi_image_list:
+            if image.Header(i).datatype().startswith('CFloat'):
+                mag_entry = os.path.splitext(i)[0] + '_mag.mif'
+                run.command('mrcalc ' + i + ' -abs ' + mag_entry)
+                new_dwi_image_list.append(mag_entry)
+            else:
+                new_dwi_image_list.append(entry)
+        dwi_image_list = new_dwi_image_list
 
         # Step 2: Gibbs ringing removal
         app.console('Performing Gibbs ringing removal for DWI'
