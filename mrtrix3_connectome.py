@@ -674,9 +674,12 @@ def run_participant(bids_dir, session, shared, output_prefix):
                       for index in range(1, dwi_index)]
 
     if len(dwi_image_list) > 1:
-        dwi_first_header = image.Header(path.to_scratch(dwi_image_list[0], False))
+        dwi_first_header = image.Header(
+            path.to_scratch(dwi_image_list[0], False))
         for i in dwi_image_list[1:]:
-            if not image.match(dwi_first_header, path.to_scratch(i, False), up_to_dim=3):
+            if not image.match(dwi_first_header,
+                               path.to_scratch(i, False),
+                               up_to_dim=3):
                 raise MRtrixError(
                     'DWI series not defined on same image grid; '
                     'script not yet capable of handling such data')
@@ -1843,7 +1846,6 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
 
 
-# TODO Update all of run_group() with mrtrix3.matrix module
 def run_group(bids_dir, output_dir):
 
     # Check presence of all required input files before proceeding
@@ -1902,7 +1904,8 @@ def run_group(bids_dir, output_dir):
             self.link_fa = os.path.join('images', label + '.nii.gz')
             self.link_bzero = os.path.join('bzeros', label + '.nii.gz')
             # FIXME May change in update prior to 3.0.0
-            self.temp_warp = os.path.join('warps', label.replace('-', '') + '.mif')
+            self.temp_warp = os.path.join('warps',
+                                          label.replace('-', '') + '.mif')
             self.temp_voxels = os.path.join('voxels', label + '.mif')
             self.median_bzero = 0.0
             self.dwiintensitynorm_factor = 1.0
