@@ -63,7 +63,9 @@ RUN apt-get install -y ants
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
-RUN /fslinstaller.py -d /opt/fsl -V 6.0.1 -q
+RUN /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
+RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git -o /opt/eddyqc && \
+    python /opt/eddyqc/setup.py install
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator
@@ -139,17 +141,15 @@ ENV PATH $FSLDIR/bin:$PATH
 RUN /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
 ENV FSLMULTIFILEQUIT TRUE
 ENV FSLOUTPUTTYPE NIFTI
-# Prevents warning appearing when the CUDA version invariably fails to run within the container environment
-RUN rm -f $FSLDIR/bin/eddy_cuda*
 
 # Make ROBEX happy
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-# Commit checked out is development branch as at 24/01/2020
+# Commit checked out is development branch as at 28/01/2020
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
-    git checkout 0ad6a66d75aaf08a135b8d43aed539805ce745dc && \
+    git checkout 9e82fe18bfc43a50b352b7084e004d6d4ad5b1ca && \
     python configure -nogui && \
     python build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version

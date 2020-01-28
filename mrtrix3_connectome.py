@@ -574,7 +574,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
         #   only removes the .gz
         prefix = entry.split(os.extsep)[0]
         # Is this one image in a magnitude-phase pair?
-        is_complex = re_is_complex.search(os.path.basename(dwi_image_list))
+        is_complex = re_is_complex.search(os.path.basename(entry))
         if is_complex:
             if shared.preprocessed:
                 raise MRtrixError('If input data are pre-processed, '
@@ -584,7 +584,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
             assert complex_part in ['mag', 'phase']
             if complex_part == 'mag':
                 # Find corresponding phase image
-                phase_image = entry.replace('_part-mag_', '_part-phase')
+                phase_image = entry.replace('_part-mag_', '_part-phase_')
                 if phase_image not in dwi_image_list:
                     raise MRtrixError(
                         'Image '
@@ -593,10 +593,16 @@ def run_participant(bids_dir, session, shared, output_prefix):
                 # Make sure phase image is stored in radians
                 min_phase = image.statistic(phase_image, 'min', '-allvolumes')
                 max_phase = image.statistic(phase_image, 'max', '-allvolumes')
-                if abs(2.0*math.pi - (max_phase - min_phase)) > 0.001:
+                # TODO Need some more tolerance due to integer discretisation
+                if abs(2.0*math.pi - (max_phase - min_phase)) > 0.01:
                     raise MRtrixError('Phase image '
                                       + phase_image
-                                      + ' is not stored in radian units')
+                                      + ' is not stored in radian units '
+                                      + '(values from '
+                                      + str(min_phase)
+                                      + ' to '
+                                      + str(max_phase)
+                                      + ')')
                 # Set prefix for finding sidecar files
                 prefix = prefix.replace('_part-mag_', '_')
             else:
@@ -639,9 +645,9 @@ def run_participant(bids_dir, session, shared, output_prefix):
             run.command('mrcalc '
                         + entry + ' '
                         + phase_image + ' '
-                        + '-polar '
+                        + '-polar - '
                         + '| '
-                        + 'mrconvert '
+                        + 'mrconvert - '
                         + path.to_scratch('dwi' + str(dwi_index) + '.mif', True)
                         + grad_import_option
                         + json_import_option)
@@ -657,9 +663,9 @@ def run_participant(bids_dir, session, shared, output_prefix):
                       for index in range(1, dwi_index)]
 
     if len(dwi_image_list) > 1:
-        dwi_first_header = image.Header(dwi_image_list[0])
+        dwi_first_header = image.Header(path.to_scratch(dwi_image_list[0], False))
         for i in dwi_image_list[1:]:
-            if not image.match(dwi_first_header, i, up_to_dim=3):
+            if not image.match(dwi_first_header, path.to_scratch(i, False), up_to_dim=3):
                 raise MRtrixError(
                     'DWI series not defined on same image grid; '
                     'script not yet capable of handling such data')
@@ -797,7 +803,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
         new_dwi_image_list = []
         for entry in dwi_image_list:
             if image.Header(i).datatype().startswith('CFloat'):
-                mag_entry = os.path.splitext(i)[0] + '_mag.mif'
+                mag_entry = os.path.splitext(entry)[0] + '_mag.mif'
                 run.command('mrcalc ' + entry + ' -abs ' + mag_entry)
                 app.cleanup(entry)
                 new_dwi_image_list.append(mag_entry)
@@ -873,7 +879,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
         app.console('Performing various geometric corrections of DWIs')
         dwipreproc_input_header = image.Header(dwipreproc_input)
         have_slice_timing = 'SliceTiming' in dwipreproc_input_header.keyval()
-        app.debug('Have slice timing: ' + have_slice_timing)
+        app.debug('Have slice timing: ' + str(have_slice_timing))
         mb_factor = int(dwipreproc_input_header.keyval()
                         .get('MultibandAccelerationFactor', '1'))
         app.debug('Multiband factor: ' + str(mb_factor))
@@ -918,7 +924,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
             ' -eddy_options \" ' \
             + ' '.join(eddy_options) + '\"' if eddy_options else ''
         run.function(os.makedirs, 'eddyqc')
-        run.command('dwipreproc '
+        run.command('dwifslpreproc '
                     + dwipreproc_input
                     + ' dwi_preprocessed.mif '
                     + dwipreproc_se_epi_option
@@ -948,12 +954,12 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
     # Crop all three DWI images based on the spatial extent of the dilated mask
     app.console('Cropping DWI data to reduce image sizes')
-    run.command('mrcrop dwi.mif dwi_crop.mif -mask dwi_mask_dilated.mif')
+    run.command('mrgrid dwi.mif crop dwi_crop.mif -mask dwi_mask_dilated.mif')
     app.cleanup('dwi.mif')
-    run.command('mrcrop dwi_mask.mif dwi_mask_crop.mif '
+    run.command('mrgrid dwi_mask.mif crop dwi_mask_crop.mif '
                 '-mask dwi_mask_dilated.mif')
     app.cleanup('dwi_mask.mif')
-    run.command('mrcrop dwi_mask_dilated.mif dwi_mask_dilated_crop.mif '
+    run.command('mrgrid dwi_mask_dilated.mif crop dwi_mask_dilated_crop.mif '
                 '-mask dwi_mask_dilated.mif')
     app.cleanup('dwi_mask_dilated.mif')
 
@@ -1884,7 +1890,8 @@ def run_group(bids_dir, output_dir):
             self.temp_mask = os.path.join('masks', label + '.nii.gz')
             self.link_fa = os.path.join('images', label + '.nii.gz')
             self.link_bzero = os.path.join('bzeros', label + '.nii.gz')
-            self.temp_warp = os.path.join('warps', label + '.mif')
+            # FIXME May change in update prior to 3.0.0
+            self.temp_warp = os.path.join('warps', label.replace('-', '') + '.mif')
             self.temp_voxels = os.path.join('voxels', label + '.mif')
             self.median_bzero = 0.0
             self.dwiintensitynorm_factor = 1.0
@@ -2044,7 +2051,7 @@ def run_group(bids_dir, output_dir):
         connectome = matrix.load_matrix(s.in_connectome)
         temp_connectome = [[v*s.global_multiplier for v in line]
                            for line in connectome]
-        matrix.save_matrix(s.temp_connectome, temp_connectome)
+        matrix.save_matrix(s.temp_connectome, temp_connectome, format='%15f')
         progress.increment()
     progress.done()
 
@@ -2084,7 +2091,7 @@ def run_group(bids_dir, output_dir):
                      s.temp_connectome,
                      s.out_connectome)
         matrix.save_vector(s.out_scale_intensity, [s.bzero_multiplier])
-        matrix.save_vector(s.out_scale_RF, s.RF_multiplier)
+        matrix.save_vector(s.out_scale_RF, [s.RF_multiplier])
         progress.increment()
 
     matrix.save_matrix(os.path.join(output_dir,
@@ -2651,9 +2658,10 @@ def execute(): #pylint: disable=unused-variable
     #     within the mounted output directory, and therefore temporary
     #     directory contents will not be lost upon container instance
     #     destruction if the script fails at any point.
-    if IS_CONTAINER and app.ARGS.debug and 'ScriptScratchDir' not in CONFIG:
-        CONFIG['ScriptScratchDir'] = os.path.abspath(app.ARGS.output_dir)
-
+    if IS_CONTAINER and app.ARGS.debug:
+        app.DO_CLEANUP = False
+        if 'ScriptScratchDir' not in CONFIG:
+            CONFIG['ScriptScratchDir'] = os.path.abspath(app.ARGS.output_dir)
 
     if utils.is_windows():
         raise MRtrixError(
