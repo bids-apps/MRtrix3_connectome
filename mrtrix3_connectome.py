@@ -51,32 +51,31 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
         if robex_found and N4_found:
             app.console('N4BiasFieldCorrection and ROBEX found; '
-                        'will use for bias field correction '
-                        'and brain extraction')
+                        'will use for T1 bias field correction '
+                        'and brain extraction respectively')
             self.brain_extraction_cmd = 'runROBEX.sh'
         else:
             if robex_found and not N4_found:
                 app.console('N4BiasFieldCorrection not found; '
-                            'will use FSL for bias field correction '
+                            'will use FSL for T1 bias field correction '
                             'and brain extraction')
             elif N4_found and not robex_found:
                 app.console('ROBEX not found; '
-                            'will use FSL for brain extraction')
+                            'will use FSL for T1 brain extraction')
             else:
                 app.console('N4BiasFieldCorrection and ROBEX not found; '
-                            'will use FSL for brain extraction')
+                            'will use FSL for T1 brain extraction')
             self.brain_extraction_cmd = fsl.exe_name('fsl_anat')
 
         self.dwibiascorrect_algo = 'ants'
         if not N4_found:
-            # Can't use fsl.exeName() here, since
-            #   we want to proceed even if it's not found
-            if find_executable('fast') or find_executable('fsl5.0-fast'):
+            try:
+                fsl.find_exe('fast')
                 self.dwibiascorrect_algo = 'fsl'
                 app.console('Could not find ANTs program '
                             '\'N4BiasFieldCorrection\'; using FSL FAST for '
                             'bias field correction')
-            else:
+            except MRtrixError:
                 self.dwibiascorrect_algo = None
                 app.warn('Could not find ANTs program '
                          '\'N4BiasFieldCorrection\' or FSL program \'fast\'; '
@@ -89,18 +88,14 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         else:
             self.eddy_binary = fsl.eddy_binary(False)
             self.eddy_cuda = False
+        if not self.eddy_binary:
+            rause MRtrixError('Could not find FSL program \'eddy\'')
         app.debug('Eddy binary: ' + str(self.eddy_binary))
         app.debug('CUDA eddy present: ' + str(self.eddy_cuda))
-        # Using run.command() to query the eddy help page will lead to a
-        #   warning being issued due to a non-zero return code
-        # Therefore use subprocess directly
-        eddy_help_process = subprocess.Popen(
-            [self.eddy_binary, '--help'],
-            stdin=None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False)
-        eddy_stderr = eddy_help_process.communicate()[1]
+        try:
+            eddy_stderr = run.command([self.eddy_binary, '--help']).stderr
+        except run.MRtrixCmdError as eddy_except:
+            eddy_stderr = eddy_except.stderr
         self.eddy_repol = False
         self.eddy_mporder = False
         self.eddy_mbs = False
