@@ -590,19 +590,27 @@ def run_participant(bids_dir, session, shared, output_prefix):
                         'Image '
                         + entry
                         + ' does not have corresponding phase image')
-                # Make sure phase image is stored in radians
+                # Check if phase image is stored in radians
                 min_phase = image.statistic(phase_image, 'min', '-allvolumes')
                 max_phase = image.statistic(phase_image, 'max', '-allvolumes')
-                # TODO Need some more tolerance due to integer discretisation
                 if abs(2.0*math.pi - (max_phase - min_phase)) > 0.01:
-                    raise MRtrixError('Phase image '
-                                      + phase_image
-                                      + ' is not stored in radian units '
-                                      + '(values from '
-                                      + str(min_phase)
-                                      + ' to '
-                                      + str(max_phase)
-                                      + ')')
+                    app.warn('Phase image '
+                             + phase_image
+                             + ' is not stored in radian units '
+                             + '(values from '
+                             + str(min_phase)
+                             + ' to '
+                             + str(max_phase)
+                             + '); data will be rescaled automatically')
+                    # Are the values stored as integers? If so, assume that
+                    #   _one greater_ than the max phase corresponds to 2pi
+                    if min_phase.is_integer() and max_phase.is_integer():
+                        max_phase += 1
+                    phase_rescale_factor = 2.0 * math.pi / \
+                                           (max_phase - min_phase)
+                else:
+                    phase_rescale_factor = None
+
                 # Set prefix for finding sidecar files
                 prefix = prefix.replace('_part-mag_', '_')
             else:
@@ -645,6 +653,9 @@ def run_participant(bids_dir, session, shared, output_prefix):
             run.command('mrcalc '
                         + entry + ' '
                         + phase_image + ' '
+                        + (str(min_phase) + ' -sub '
+                           + str(phase_rescale_factor) + ' -mult ' \
+                           if phase_rescale_factor else '')
                         + '-polar - '
                         + '| '
                         + 'mrconvert - '
