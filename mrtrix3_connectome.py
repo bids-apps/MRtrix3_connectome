@@ -6,7 +6,6 @@ import math
 import os
 import re
 import shutil
-import subprocess
 from distutils.spawn import find_executable
 import mrtrix3
 from mrtrix3 import CONFIG, MRtrixError
@@ -22,23 +21,24 @@ __version__ = 'BIDS-App \'MRtrix3_connectome\' version {}' \
 OPTION_PREFIX = '--' if IS_CONTAINER else '-'
 
 
-# If running for multiple subjects in a single command invocation,
-#     these initialisation steps need only be performed once
-class ParticipantShared(object): #pylint: disable=useless-object-inheritance
-    def __init__(self, atlas_path, output_verbosity, parcellation,
-                 preprocessed, streamlines, template_reg):
 
-        if not parcellation:
-            raise MRtrixError(
-                'For participant-level analysis, '
-                'desired parcellation must be provided using the '
-                + OPTION_PREFIX + 'parcellation option')
-        self.parcellation = parcellation
 
-        self.output_verbosity = output_verbosity
-        self.preprocessed = preprocessed
-        self.streamlines = streamlines
+# TODO Get splitext() that is robust against .nii.gz
+# Or if .split(os.extsep()) is to be used, separate out the
+#   directory path before doing the split
 
+
+
+# Split participant-level processing
+# Level 1: Pre-processing only;
+#   include CSD at lmax=4 and mtnormalise to scale DWIs
+#   such that CSF at b=0 = intensity of 1000
+# Level 2: Rest of participant level processing
+
+
+
+class Participant1Shared(object): #pylint: disable=useless-object-inheritance
+    def __init__(self):
         fsl_path = os.environ.get('FSLDIR', '')
         if not fsl_path:
             raise MRtrixError(
@@ -48,7 +48,6 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         robex_found = find_executable('ROBEX') \
                       and find_executable('runROBEX.sh')
         N4_found = find_executable('N4BiasFieldCorrection')
-
         if robex_found and N4_found:
             app.console('N4BiasFieldCorrection and ROBEX found; '
                         'will use for T1 bias field correction '
@@ -69,18 +68,10 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
         self.dwibiascorrect_algo = 'ants'
         if not N4_found:
-            try:
-                fsl.find_exe('fast')
-                self.dwibiascorrect_algo = 'fsl'
-                app.console('Could not find ANTs program '
-                            '\'N4BiasFieldCorrection\'; using FSL FAST for '
-                            'bias field correction')
-            except MRtrixError:
-                self.dwibiascorrect_algo = None
-                app.warn('Could not find ANTs program '
-                         '\'N4BiasFieldCorrection\' or FSL program \'fast\'; '
-                         'will proceed without performing initial '
-                         'DWI bias field correction')
+            self.dwibiascorrect_algo = None
+            app.warn('Could not find ANTs program \'N4BiasFieldCorrection\'; '
+                     'will proceed without performing initial b=0 - based '
+                     'DWI bias field correction')
 
         self.eddy_binary = fsl.eddy_binary(True)
         if self.eddy_binary:
@@ -89,17 +80,19 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
             self.eddy_binary = fsl.eddy_binary(False)
             self.eddy_cuda = False
         if not self.eddy_binary:
-            rause MRtrixError('Could not find FSL program \'eddy\'')
+            raise MRtrixError('Could not find FSL program \'eddy\'')
         app.debug('Eddy binary: ' + str(self.eddy_binary))
         app.debug('CUDA eddy present: ' + str(self.eddy_cuda))
+
         try:
-            eddy_stderr = run.command([self.eddy_binary, '--help']).stderr
+            eddy_stderr = run.command([self.eddy_binary, '--help'],
+                                      show=False).stderr
         except run.MRtrixCmdError as eddy_except:
             eddy_stderr = eddy_except.stderr
         self.eddy_repol = False
         self.eddy_mporder = False
         self.eddy_mbs = False
-        for line in eddy_stderr.decode('utf-8', errors='replace').splitlines():
+        for line in eddy_stderr.splitlines():
             line = line.lstrip()
             if line.startswith('--repol'):
                 self.eddy_repol = True
@@ -107,6 +100,51 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                 self.eddy_mporder = True
             elif line.startswith('--estimate_move_by_susceptibility'):
                 self.eddy_mbs = True
+# End of Participant1Shared() class
+
+
+
+
+
+
+
+
+
+
+
+# If running for multiple subjects in a single command invocation,
+#     these initialisation steps need only be performed once
+class Participant2Shared(object): #pylint: disable=useless-object-inheritance
+    def __init__(self, atlas_path, parcellation,
+                 streamlines, template_reg):
+
+        if not parcellation:
+            raise MRtrixError(
+                'For participant2-level analysis, '
+                'desired parcellation must be provided using the '
+                + OPTION_PREFIX + 'parcellation option')
+        self.parcellation = parcellation
+
+        self.streamlines = streamlines
+
+        fsl_path = os.environ.get('FSLDIR', '')
+        if not fsl_path:
+            raise MRtrixError(
+                'Environment variable FSLDIR is not set; '
+                'please run appropriate FSL configuration script')
+
+        robex_found = find_executable('ROBEX') \
+                      and find_executable('runROBEX.sh')
+
+        if robex_found:
+            app.console('ROBEX found; will use for T1 brain extraction '
+                        '(if not already present in output directory)')
+            self.brain_extraction_cmd = 'runROBEX.sh'
+        else:
+            app.console('ROBEX not found; will use FSL for T1 brain '
+                        'extraction (if not already present in '
+                        'output directory)')
+            self.brain_extraction_cmd = fsl.exe_name('fsl_anat')
 
         self.do_freesurfer = parcellation in ['brainnetome246fs',
                                               'desikan',
@@ -523,6 +561,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
             raise MRtrixError(
                 'Could not find MRtrix3 connectome lookup table file '
                 '(expected location: ' + self.mrtrix_lut_file + ')')
+# End of Participant2Shared() class
 
 
 
@@ -530,12 +569,20 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
 
 
-def run_participant(bids_dir, session, shared, output_prefix):
 
-    output_dir = os.path.join(output_prefix, *session)
-    if os.path.exists(output_dir):
-        app.warn('Output directory for session \'' + '_'.join(session) + '\' '
-                 'already exists; contents will be erased when this '
+
+
+
+
+
+
+def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
+
+    session_label = '_'.join(session)
+    output_subdir = os.path.join(output_dir, *session)
+    if os.path.exists(output_subdir):
+        app.warn('Output directory for session "' + session_label + '" '
+                 'already exists; all contents will be erased when this '
                  'execution completes')
 
     app.make_scratch_dir()
@@ -551,20 +598,20 @@ def run_participant(bids_dir, session, shared, output_prefix):
     #   (i.e. not just those used for estimating the inhomogeneity field),
     #   they will need to be stored as separate NIfTI files in the
     #   'dwi/' directory.
-    app.console('Importing DWI data into temporary directory')
-    dwi_path = os.path.join(os.path.join(bids_dir, *session),
-                            'dwi',
-                            '*_dwi.nii*')
-    dwi_image_list = glob.glob(dwi_path)
-    if not dwi_image_list:
+    app.console('Importing DWI data into scratch directory')
+    in_dwi_path = os.path.join(os.path.join(bids_dir, *session),
+                               'dwi',
+                               '*_dwi.nii*')
+    in_dwi_image_list = glob.glob(in_dwi_path)
+    if not in_dwi_image_list:
         raise MRtrixError('No DWI data found for session \''
-                          + '_'.join(session)
-                          + '\' (search location: ' + dwi_path)
+                          + session_label
+                          + '\' (search location: ' + in_dwi_path)
     dwi_index = 1
 
     re_is_complex = re.compile(r'_part-(mag|phase)_')
 
-    for entry in dwi_image_list:
+    for entry in in_dwi_image_list:
         # os.path.split() falls over with .nii.gz extensions;
         #   only removes the .gz
         prefix = entry.split(os.extsep)[0]
@@ -579,30 +626,31 @@ def run_participant(bids_dir, session, shared, output_prefix):
             assert complex_part in ['mag', 'phase']
             if complex_part == 'mag':
                 # Find corresponding phase image
-                phase_image = entry.replace('_part-mag_', '_part-phase_')
-                if phase_image not in dwi_image_list:
+                in_phase_image = entry.replace('_part-mag_', '_part-phase_')
+                if in_phase_image not in in_dwi_image_list:
                     raise MRtrixError(
                         'Image '
                         + entry
                         + ' does not have corresponding phase image')
                 # Check if phase image is stored in radians
-                min_phase = image.statistic(phase_image, 'min', '-allvolumes')
-                max_phase = image.statistic(phase_image, 'max', '-allvolumes')
-                if abs(2.0*math.pi - (max_phase - min_phase)) > 0.01:
+                phase_stats = image.statistics(in_phase_image, allvolumes=True)
+                if abs(2.0*math.pi - (phase_stats.max - phase_stats.min)) \
+                    > 0.01:
                     app.warn('Phase image '
-                             + phase_image
+                             + in_phase_image
                              + ' is not stored in radian units '
                              + '(values from '
-                             + str(min_phase)
+                             + str(phase_stats.min)
                              + ' to '
-                             + str(max_phase)
+                             + str(phase_stats.max)
                              + '); data will be rescaled automatically')
                     # Are the values stored as integers? If so, assume that
                     #   _one greater_ than the max phase corresponds to 2pi
-                    if min_phase.is_integer() and max_phase.is_integer():
-                        max_phase += 1
+                    if phase_stats.min.is_integer() and \
+                        phase_stats.max.is_integer():
+                        phase_stats.max += 1
                     phase_rescale_factor = 2.0 * math.pi / \
-                                           (max_phase - min_phase)
+                                           (phase_stats.max - phase_stats.min)
                 else:
                     phase_rescale_factor = None
 
@@ -611,7 +659,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
             else:
                 # Make sure we also have the corresponding magnitude image
                 if entry.replace('_part-phase_',
-                                 '_part-mag_') not in dwi_image_list:
+                                 '_part-mag_') not in in_dwi_image_list:
                     raise MRtrixError(
                         'Image '
                         + entry
@@ -620,7 +668,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
                 continue
         else:
 
-            phase_image = None
+            in_phase_image = None
         # Find sidecar files
         if os.path.isfile(prefix + '.bval') \
                 and os.path.isfile(prefix + '.bvec'):
@@ -633,10 +681,10 @@ def run_participant(bids_dir, session, shared, output_prefix):
                     'Unable to locate valid diffusion gradient table '
                     'for image \'' + entry + '\'')
         grad_import_option = ' -fslgrad ' + prefix + 'bvec ' + prefix + 'bval'
-        json_path = prefix + 'json'
+        in_json_path = prefix + 'json'
         json_import_option = ''
-        if os.path.isfile(json_path):
-            json_import_option = ' -json_import ' + json_path
+        if os.path.isfile(in_json_path):
+            json_import_option = ' -json_import ' + in_json_path
         elif not shared.preprocessed:
             raise MRtrixError(
                 'No sidecar JSON file found for image '
@@ -644,11 +692,11 @@ def run_participant(bids_dir, session, shared, output_prefix):
                 'cannot proceed with DWI preprocessing '
                 'without this information')
         # Import the data
-        if phase_image:
+        if in_phase_image:
             run.command('mrcalc '
                         + entry + ' '
-                        + phase_image + ' '
-                        + (str(min_phase) + ' -sub '
+                        + in_phase_image + ' '
+                        + (str(phase_stats.min) + ' -sub '
                            + str(phase_rescale_factor) + ' -mult ' \
                            if phase_rescale_factor else '')
                         + '-polar - '
@@ -681,21 +729,14 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
     # Go hunting for reversed phase-encode data
     #   dedicated to field map estimation
-    fmap_image_list = []
+    in_fmap_image_list = []
     fmap_dir = os.path.join(os.path.join(bids_dir, *session), 'fmap')
     fmap_index = 1
     if os.path.isdir(fmap_dir):
-        if shared.preprocessed:
-            raise MRtrixError(
-                'fmap/ directory detected for session '
-                '\'' + '_'.join(session) + '\' despite use of '
-                + OPTION_PREFIX + 'preprocessed option; '
-                'this directory should not be present if DWIs '
-                'have already been pre-processed')
-        app.console('Importing fmap data into temporary directory')
-        fmap_image_list = glob.glob(os.path.join(fmap_dir,
-                                                 '*_dir-*_epi.nii*'))
-        for entry in fmap_image_list:
+        app.console('Importing fmap data into scratch directory')
+        in_fmap_image_list = glob.glob(os.path.join(fmap_dir,
+                                                    '*_dir-*_epi.nii*'))
+        for entry in in_fmap_image_list:
             prefix = entry.split(os.extsep)[0]
             json_path = prefix + '.json'
             with open(json_path, 'r') as f:
@@ -739,23 +780,21 @@ def run_participant(bids_dir, session, shared, output_prefix):
     # If there's no usable data in fmap/ directory,
     #   need to check to see if there's any phase-encoding
     #   contrast within the input DWI(s)
-    if not shared.preprocessed \
-            and not fmap_image_list \
-            and len(dwi_image_list) < 2:
+    if not fmap_image_list and len(dwi_image_list) < 2:
         raise MRtrixError('Inadequate data for pre-processing of session '
-                          '\'' + '_'.join(session) + '\': '
+                          '\"' + session_label + '": '
                           'No phase-encoding contrast in input DWIs, '
                           'and no fmap/ directory, '
                           'so EPI distortion correction cannot be performed')
 
     # Import anatomical image
-    app.console('Importing T1 image into temporary directory')
+    app.console('Importing T1 image into scratch directory')
     t1w_image_list = glob.glob(os.path.join(os.path.join(bids_dir, *session),
                                             'anat',
                                             '*_T1w.nii*'))
     if len(t1w_image_list) > 1:
         raise MRtrixError('More than one T1-weighted image found '
-                          'for session \'' + '_'.join(session) + '\'; '
+                          'for session "' + session_label + '"; '
                           'script not yet compatible with this')
     if not t1w_image_list:
         raise MRtrixError('No T1-weighted image found for session '
@@ -766,264 +805,348 @@ def run_participant(bids_dir, session, shared, output_prefix):
     cwd = os.getcwd()
     app.goto_scratch_dir()
 
-    dwipreproc_se_epi = ''
-    dwipreproc_se_epi_option = ''
+    dwifslpreproc_se_epi = ''
+    dwifslpreproc_se_epi_option = ''
 
-    # For automated testing, down-sampled images are used.
-    #   However, this invalidates the requirements of both MP-PCA
-    #   denoising and Gibbs ringing removal. In addition, eddy can
-    #   still take a long time despite the down-sampling. Therefore,
-    #   provide images that have been pre-processed to the stage
-    #   where it is still only DWI, JSON & bvecs/bvals that
-    #   need to be provided.
-    if shared.preprocessed:
+    # For DWI data, denoise each individually, then concatenate;
+    #  for fmap/ data, just concatenate and run mrdegibbs
 
-        if len(dwi_image_list) > 1:
-            raise MRtrixError('If DWIs have been pre-processed, then '
-                              'only a single DWI file should be present')
-        app.console('Skipping MP-PCA denoising, Gibbs ringing removal, '
-                    'distortion correction and bias field correction '
-                    'due to use of '
-                    + OPTION_PREFIX + 'preprocessed option')
-        run.function(os.rename, dwi_image_list[0], 'dwi.mif')
+    if len(dwi_image_list) == 1:
+        run.function(os.rename, dwi_image_list[0], 'dwi.mif', show=False)
+        dwi_image_list[0] = 'dwi.mif'
 
+    # Step 1: Denoise
+    app.console('Denoising DWI data')
+    for entry in dwi_image_list:
+        run.command('dwidenoise ' + entry + ' '
+                    + os.path.splitext(entry)[0] + '_denoised.mif')
+        app.cleanup(entry)
+    dwi_image_list = [os.path.splitext(entry)[0] + '_denoised.mif'
+                      for entry in dwi_image_list]
+
+    # If data are complex, take the magnitude
+    new_dwi_image_list = []
+    for entry in dwi_image_list:
+        if image.Header(entry).datatype().startswith('CFloat'):
+            mag_entry = os.path.splitext(entry)[0] + '_mag.mif'
+            run.command('mrcalc ' + entry + ' -abs ' + mag_entry)
+            app.cleanup(entry)
+            new_dwi_image_list.append(mag_entry)
+        else:
+            new_dwi_image_list.append(entry)
+    dwi_image_list = new_dwi_image_list
+
+    # Step 2: Gibbs ringing removal
+    app.console('Performing Gibbs ringing removal for DWI'
+                + (' and fmap ' if fmap_image_list else ' ')
+                + 'data')
+    for i in dwi_image_list:
+        run.command('mrdegibbs ' + i + ' '
+                    + os.path.splitext(i)[0] + '_degibbs.mif'
+                    + ' -nshifts 50')
+        app.cleanup(i)
+    dwi_image_list = [os.path.splitext(i)[0] + '_degibbs.mif'
+                      for i in dwi_image_list]
+    for i in fmap_image_list:
+        run.command('mrdegibbs ' + i + ' '
+                    + os.path.splitext(i)[0] + '_degibbs.mif'
+                    + ' -nshifts 50')
+        app.cleanup(i)
+    fmap_image_list = [os.path.splitext(i)[0] + '_degibbs.mif'
+                       for i in fmap_image_list]
+
+    # We need to concatenate the DWI and fmap/ data (separately)
+    #   before they can be fed into dwifslpreproc
+    if len(dwi_image_list) == 1:
+        dwifslpreproc_input = dwi_image_list[0]
     else:
-        # Do initial image pre-processing (denoising,
-        #   Gibbs ringing removal if available, distortion correction
-        #   & bias field correction) as normal
+        app.console('Concatenating DWI data')
+        dwifslpreproc_input = 'dwifslpreproc_in.mif'
+        run.command('mrcat ' + ' '.join(dwi_image_list) + ' '
+                    + dwifslpreproc_input + ' -axis 3')
+        app.cleanup(dwi_image_list)
 
-        # For DWI data, denoise each individually, then concatenate;
-        #  for fmap/ data, just concatenate and run mrdegibbs
+    if not fmap_image_list:
+        dwifslpreproc_se_epi = ''
+        dwifslpreproc_se_epi_option = ''
+    elif len(fmap_image_list) == 1:
+        dwifslpreproc_se_epi = fmap_image_list[0]
+        dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
+                                    + ' -align_seepi'
+    else:
+        # Can we do a straight concatenation?
+        # If not, we need to resample all images onto a common voxel grid;
+        #   the DWI grid makes most sense, since dwifslpreproc will
+        #   perform that resampling itself otherwise
+        dwifslpreproc_se_epi = 'dwifslpreproc_seepi.mif'
+        try:
+            run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
+                        + dwifslpreproc_se_epi + ' -axis 3')
+            app.cleanup(fmap_image_list)
+        except run.MRtrixCmdError:
+            app.console('Unable to concatenate fmap/ data directly; '
+                        'resampling images onto DWI voxel grid')
+            for i in fmap_image_list:
+                run.command('mrtransform ' + i
+                            + ' -template ' + dwifslpreproc_input + ' '
+                            + os.path.splitext(i)[0] + '_regrid.mif'
+                            + ' -interp sinc')
+                app.cleanup(i)
+            fmap_image_list = [os.path.splitext(i)[0] + '_regrid.mif'
+                               for i in fmap_image_list]
+            run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
+                        + dwifslpreproc_se_epi + ' -axis 3')
+            app.cleanup(fmap_image_list)
+        dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
+                                    + ' -align_seepi'
 
-        if len(dwi_image_list) == 1:
-            run.function(os.rename, dwi_image_list[0], 'dwi.mif')
-            dwi_image_list[0] = 'dwi.mif'
-
-        # Step 1: Denoise
-        app.console('Denoising DWI data')
-        for i in dwi_image_list:
-            run.command('dwidenoise ' + i + ' '
-                        + os.path.splitext(i)[0] + '_denoised.mif')
-            app.cleanup(i)
-        dwi_image_list = [os.path.splitext(i)[0] + '_denoised.mif'
-                          for i in dwi_image_list]
-
-        # If data are complex, take the magnitude
-        new_dwi_image_list = []
-        for entry in dwi_image_list:
-            if image.Header(i).datatype().startswith('CFloat'):
-                mag_entry = os.path.splitext(entry)[0] + '_mag.mif'
-                run.command('mrcalc ' + entry + ' -abs ' + mag_entry)
-                app.cleanup(entry)
-                new_dwi_image_list.append(mag_entry)
-            else:
-                new_dwi_image_list.append(entry)
-        dwi_image_list = new_dwi_image_list
-
-        # Step 2: Gibbs ringing removal
-        app.console('Performing Gibbs ringing removal for DWI'
-                    + (' and fmap ' if fmap_image_list else ' ')
-                    + 'data')
-        for i in dwi_image_list:
-            run.command('mrdegibbs ' + i + ' '
-                        + os.path.splitext(i)[0] + '_degibbs.mif'
-                        + ' -nshifts 50')
-            app.cleanup(i)
-        dwi_image_list = [os.path.splitext(i)[0] + '_degibbs.mif'
-                          for i in dwi_image_list]
-        for i in fmap_image_list:
-            run.command('mrdegibbs ' + i + ' '
-                        + os.path.splitext(i)[0] + '_degibbs.mif'
-                        + ' -nshifts 50')
-            app.cleanup(i)
-        fmap_image_list = [os.path.splitext(i)[0] + '_degibbs.mif'
-                           for i in fmap_image_list]
-
-        # We need to concatenate the DWI and fmap/ data (separately)
-        #   before they can be fed into dwipreproc
-        if len(dwi_image_list) == 1:
-            dwipreproc_input = dwi_image_list[0]
+    # Step 3: Distortion correction
+    app.console('Performing various geometric corrections of DWIs')
+    dwifslpreproc_input_header = image.Header(dwifslpreproc_input)
+    have_slice_timing = 'SliceTiming' in dwifslpreproc_input_header.keyval()
+    app.debug('Have slice timing: ' + str(have_slice_timing))
+    mb_factor = int(dwifslpreproc_input_header.keyval()
+                    .get('MultibandAccelerationFactor', '1'))
+    app.debug('Multiband factor: ' + str(mb_factor))
+    if 'SliceDirection' in dwifslpreproc_input_header.keyval():
+        slice_direction_code = \
+            dwifslpreproc_input_header.keyval()['SliceDirection']
+        if 'i' in slice_direction_code:
+            num_slices = dwifslpreproc_input_header.size()[0]
+        elif 'j' in slice_direction_code:
+            num_slices = dwifslpreproc_input_header.size()[1]
+        elif 'k' in slice_direction_code:
+            num_slices = dwifslpreproc_input_header.size()[2]
         else:
-            app.console('Concatenating DWI data')
-            dwipreproc_input = 'dwipreproc_in.mif'
-            run.command('mrcat ' + ' '.join(dwi_image_list) + ' '
-                        + dwipreproc_input + ' -axis 3')
-            app.cleanup(dwi_image_list)
+            num_slices = dwifslpreproc_input_header.size()[2]
+            app.warn('Error reading BIDS field \'SliceDirection\' '
+                     '(value: \'' + slice_direction_code + '\'); '
+                     'assuming third axis')
+    else:
+        num_slices = dwifslpreproc_input_header.size()[2]
+    app.debug('Number of slices: ' + str(num_slices))
+    mporder = 1 + num_slices/(mb_factor*4)
+    app.debug('MPorder: ' + str(mporder))
 
-        if not fmap_image_list:
-            dwipreproc_se_epi = ''
-            dwipreproc_se_epi_option = ''
-        elif len(fmap_image_list) == 1:
-            dwipreproc_se_epi = fmap_image_list[0]
-            dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi \
-                                       + ' -align_seepi'
-        else:
-            # Can we do a straight concatenation?
-            # If not, we need to resample all images onto a common voxel grid;
-            #   the DWI grid makes most sense, since dwipreproc will
-            #   perform that resampling itself otherwise
-            dwipreproc_se_epi = 'dwipreproc_seepi.mif'
-            try:
-                run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
-                            + dwipreproc_se_epi + ' -axis 3')
-                app.cleanup(fmap_image_list)
-            except run.MRtrixCmdError:
-                app.console('Unable to concatenate fmap/ data directly; '
-                            'resampling images onto DWI voxel grid')
-                for i in fmap_image_list:
-                    run.command('mrtransform ' + i
-                                + ' -template ' + dwipreproc_input + ' '
-                                + os.path.splitext(i)[0] + '_regrid.mif'
-                                + ' -interp sinc')
-                    app.cleanup(i)
-                fmap_image_list = [os.path.splitext(i)[0] + '_regrid.mif'
-                                   for i in fmap_image_list]
-                run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
-                            + dwipreproc_se_epi + ' -axis 3')
-                app.cleanup(fmap_image_list)
-            dwipreproc_se_epi_option = ' -se_epi ' + dwipreproc_se_epi \
-                                       + ' -align_seepi'
+    eddy_options = []
+    if shared.eddy_repol:
+        eddy_options.append('--repol')
+    if shared.eddy_mporder and have_slice_timing:
+        eddy_options.append('--mporder=' + str(mporder))
+    # Disabled: is only necessary for cohorts with very large motion,
+    #    and significantly increases execution time
+    #if shared.eddy_mbs:
+    #    eddy_options.append('--estimate_move_by_susceptibility')
 
-        # Step 3: Distortion correction
-        app.console('Performing various geometric corrections of DWIs')
-        dwipreproc_input_header = image.Header(dwipreproc_input)
-        have_slice_timing = 'SliceTiming' in dwipreproc_input_header.keyval()
-        app.debug('Have slice timing: ' + str(have_slice_timing))
-        mb_factor = int(dwipreproc_input_header.keyval()
-                        .get('MultibandAccelerationFactor', '1'))
-        app.debug('Multiband factor: ' + str(mb_factor))
-        if 'SliceDirection' in dwipreproc_input_header.keyval():
-            slice_direction_code = \
-                dwipreproc_input_header.keyval()['SliceDirection']
-            if 'i' in slice_direction_code:
-                num_slices = dwipreproc_input_header.size()[0]
-            elif 'j' in slice_direction_code:
-                num_slices = dwipreproc_input_header.size()[1]
-            elif 'k' in slice_direction_code:
-                num_slices = dwipreproc_input_header.size()[2]
-            else:
-                num_slices = dwipreproc_input_header.size()[2]
-                app.warn('Error reading BIDS field \'SliceDirection\' '
-                         '(value: \'' + slice_direction_code + '\'); '
-                         'assuming third axis')
-        else:
-            num_slices = dwipreproc_input_header.size()[2]
-        app.debug('Number of slices: ' + str(num_slices))
-        mporder = 1 + num_slices/(mb_factor*4)
-        app.debug('MPorder: ' + str(mporder))
+    shell_asymmetries = \
+        [float(value) for value in
+         run.command('dirstat ' + dwifslpreproc_input + ' -output asym',
+                     show=False)[0]
+         .splitlines()]
+    app.debug('Shell asymmetries: ' + str(shell_asymmetries))
+    if any(value > 0.1 for value in shell_asymmetries):
+        app.console('Utilising eddy linear second-level model due to poor '
+                    'distribution of diffusion gradient direction polarities')
+        eddy_options.append('--slm=linear')
 
-        eddy_options = []
-        if shared.eddy_repol:
-            eddy_options.append('--repol')
-        if shared.eddy_mporder and have_slice_timing:
-            eddy_options.append('--mporder=' + str(mporder))
-        # Disabled: is only necessary for cohorts with very large motion
-        #if shared.eddy_mbs:
-        #    eddy_options.append('--estimate_move_by_susceptibility')
+    dwifslpreproc_eddy_option = \
+        ' -eddy_options \" ' \
+        + ' '.join(eddy_options) + '\"' if eddy_options else ''
+    run.function(os.makedirs, 'eddyqc', show=False)
+    dwifslpreproc_output = os.path.splitext(dwifslpreproc_input)[0] \
+                           + '_preproc.mif'
+    run.command('dwifslpreproc '
+                + dwifslpreproc_input
+                + ' '
+                + dwifslpreproc_output
+                + ' '
+                + dwifslpreproc_se_epi_option
+                + dwifslpreproc_eddy_option
+                + ' -rpe_header -eddyqc_text eddyqc/')
+    app.cleanup(dwifslpreproc_input)
+    app.cleanup(dwifslpreproc_se_epi)
 
-        shell_asymmetries = \
-            [float(value) for value in
-             run.command('dirstat ' + dwipreproc_input + ' -output asym')[0]
-             .splitlines()]
-        app.debug('Shell asymmetries: ' + str(shell_asymmetries))
-        if any(value > 0.1 for value in shell_asymmetries):
-            eddy_options.append('--slm=linear')
-
-        dwipreproc_eddy_option = \
-            ' -eddy_options \" ' \
-            + ' '.join(eddy_options) + '\"' if eddy_options else ''
-        run.function(os.makedirs, 'eddyqc')
-        run.command('dwifslpreproc '
-                    + dwipreproc_input
-                    + ' dwi_preprocessed.mif '
-                    + dwipreproc_se_epi_option
-                    + dwipreproc_eddy_option
-                    + ' -rpe_header -eddyqc_text eddyqc/')
-        app.cleanup(dwipreproc_input)
-        app.cleanup(dwipreproc_se_epi)
-
-        # Step 4: Bias field correction
-        if shared.dwibiascorrect_algo:
-            app.console('Performing initial B1 bias field correction of DWIs')
-            run.command('dwibiascorrect '
-                        + shared.dwibiascorrect_algo
-                        + ' dwi_preprocessed.mif dwi.mif')
-            app.cleanup('dwi_preprocessed.mif')
-        else:
-            run.function(shutil.move, 'dwi_preprocessed.mif', 'dwi.mif')
-
-    # No longer branching based on whether or not
-    #   -preprocessed was specified
-
-    # Step 5: Generate a brain mask for DWI
-    #     Also produce a dilated version of the mask for later use
-    app.console('Estimating a brain mask for DWIs')
-    run.command('dwi2mask dwi.mif dwi_mask.mif')
-    run.command('maskfilter dwi_mask.mif dilate dwi_mask_dilated.mif -npass 3')
-
-    # Crop all three DWI images based on the spatial extent of the dilated mask
-    app.console('Cropping DWI data to reduce image sizes')
-    run.command('mrgrid dwi.mif crop dwi_crop.mif -mask dwi_mask_dilated.mif')
-    app.cleanup('dwi.mif')
-    run.command('mrgrid dwi_mask.mif crop dwi_mask_crop.mif '
-                '-mask dwi_mask_dilated.mif')
-    app.cleanup('dwi_mask.mif')
-    run.command('mrgrid dwi_mask_dilated.mif crop dwi_mask_dilated_crop.mif '
-                '-mask dwi_mask_dilated.mif')
-    app.cleanup('dwi_mask_dilated.mif')
-
-    # Step 6: Generate an FA image
-    # This is required for group-level analysis
-    app.console('Generating FA image for group-level analysis')
-    run.command('dwi2tensor dwi_crop.mif -mask dwi_mask_crop.mif - | '
-                'tensor2metric - -fa fa.mif')
-
-    # Step 7: Estimate response functions for spherical deconvolution
-    app.console('Estimating tissue response functions for '
-                'spherical deconvolution')
-    run.command('dwi2response dhollander dwi_crop.mif '
-                'response_wm.txt response_gm.txt response_csf.txt '
-                '-mask dwi_mask_crop.mif')
+    # Step 4: b=0-based bias field correction
+    dwi_image = 'dwi_init.mif'
+    if shared.dwibiascorrect_algo:
+        app.console('Performing initial B1 bias field correction of DWIs')
+        run.command('dwibiascorrect '
+                    + shared.dwibiascorrect_algo
+                    + ' '
+                    + dwifslpreproc_output
+                    + ' '
+                    + dwi_image)
+        app.cleanup(dwifslpreproc_output)
+    else:
+        run.function(shutil.move, dwifslpreproc_output, dwi_image)
 
     # Determine whether we are working with single-shell or multi-shell data
     bvalues = [
         int(round(float(value)))
-        for value in image.mrinfo('dwi_crop.mif', 'shell_bvalues') \
+        for value in image.mrinfo(dwi_image, 'shell_bvalues') \
                                  .strip().split()]
     multishell = (len(bvalues) > 2)
 
-    # Step 8: Perform spherical deconvolution
-    #   Use a dilated mask for spherical deconvolution as a 'safety margin';
-    #   ACT should be responsible for stopping streamlines before they
-    #   reach the edge of the DWI mask
-    app.console('Estimating'
-                + ('' if multishell else ' white matter')
-                + ' Fibre Orientation Distribution'
-                + ('s' if multishell else ''))
-    if multishell:
-        run.command('dwi2fod msmt_csd dwi_crop.mif '
-                    'response_wm.txt FOD_WM.mif '
-                    'response_gm.txt FOD_GM.mif '
-                    'response_csf.txt FOD_CSF.mif '
-                    '-mask dwi_mask_dilated_crop.mif -lmax 10,0,0')
-        run.command('mrconvert FOD_WM.mif - -coord 3 0 | '
-                    'mrcat FOD_CSF.mif FOD_GM.mif - tissues.mif -axis 3')
-    else:
-        # Still use the msmt_csd algorithm with single-shell data:
-        #   Use hard non-negativity constraint
-        # Also incorporate the CSF response to provide some fluid attenuation
-        run.command('dwi2fod msmt_csd dwi_crop.mif '
-                    'response_wm.txt FOD_WM.mif '
-                    'response_csf.txt FOD_CSF.mif '
-                    '-mask dwi_mask_dilated_crop.mif -lmax 10,0')
-        app.cleanup('FOD_CSF.mif')
+    # Step 5: Initial DWI brain mask
+    dwi_mask_image = 'dwi_mask_init.mif'
+    app.console('Performing intial DWI brain masking')
+    run.command('dwi2mask ' + dwi_image + ' ' + dwi_mask_image)
 
-    # Step 9: Perform brain extraction and bias field correction
-    #   on the T1 image in its original space
-    #   (this is necessary for histogram matching prior to registration)
+    # Step 6: Combined RF estimation / CSD / mtnormalise / mask revision
+    # DWI brain masking may be inaccurate due to residual bias field.
+    #   We want to perform:
+    #     - Response function estimation;
+    #     - Multi-tissue CSD (with a lower lmax for speed);
+    #     - Mtnormalise to remove any bias field;
+    #     - Re-calculation of brain mask;
+    #   in an iterative fashion, as all steps may influence the others.
+    class Tissue(object): #pylint: disable=useless-object-inheritance
+        def __init__(self, name, index):
+            self.name = name
+            iter_string = '_iter' + str(index)
+            self.rf = 'response_' + name + iter_string + '.txt'
+            self.fod_init = 'FODinit_' + name + iter_string + '.mif'
+            self.fod_norm = 'FODnorm_' + name + iter_string + '.mif'
+
+    app.console('Commencing iterative DWI bias field correction and '
+                'brain masking')
+    iteration = 0
+    step = 'initialisation'
+    dice_coefficient = 0.0
+    def msg():
+        return 'Iteration {0}; {1} step; previous Dice coefficient {2}' \
+               .format(iteration, step, dice_coefficient)
+    progress = app.ProgressBar(msg)
+    for iteration in range(0, 10):
+        iter_string = '_iter' + str(iteration+1)
+
+        tissues = [Tissue('WM', iteration),
+                   Tissue('GM', iteration),
+                   Tissue('CSF', iteration)]
+
+        step = 'dwi2response'
+        progress.increment()
+        run.command('dwi2response dhollander '
+                    + dwi_image
+                    + ' -mask '
+                    + dwi_mask_image
+                    + ' '
+                    + ' '.join(tissue.rf for tissue in tissues))
+
+
+        # Remove GM if we can't deal with it
+        lmaxes = '4,0,0'
+        if not multishell:
+            app.cleanup(tissues[1].rf)
+            tissues = tissues[::2]
+            lmaxes = '4,0'
+
+        step = 'dwi2fod'
+        progress.increment()
+        run.command('dwi2fod msmt_csd '
+                    + dwi_image
+                    + ' -mask ' + dwi_mask_image
+                    + ' -lmax ' + lmaxes
+                    + ' '
+                    + ' '.join(tissue.rf + ' ' + tissue.fod_init
+                               for tissue in tissues))
+
+        step = 'mtnormalise'
+        progress.increment()
+        field_path = 'field' + iter_string + '.mif'
+        factors_path = 'factors' + iter_string + '.txt'
+        run.command('mtnormalise -mask ' + dwi_mask_image
+                    + ' -check_norm ' + field_path
+                    + ' -check_factors ' + factors_path
+                    + ' '
+                    + ' '.join(tissue.fod_init + ' ' + tissue.fod_norm
+                               for tissue in tissues))
+        app.cleanup([tissue.fod_init for tissue in tissues])
+        app.cleanup([tissue.fod_norm for tissue in tissues])
+
+        # Apply both estimated bias field, and appropiate
+        #   scaling factor, to DWIs
+        step = 'mrcalc_dwi'
+        progress.increment()
+        csf_rf = matrix.load_matrix(tissues[-1].rf)
+        csf_rf_bzero_lzero = csf_rf[0][0]
+        app.cleanup([tissue.rf for tissue in tissues])
+        balance_factors = matrix.load_vector(factors_path)
+        csf_balance_factor = balance_factors[-1]
+        app.cleanup(factors_path)
+        scale_multiplier = (1000.0 * math.sqrt(4.0*math.pi)) / \
+                           (csf_rf_bzero_lzero / csf_balance_factor)
+        new_dwi_image = 'dwi' + iter_string + '.mif'
+        run.command('mrcalc ' + dwi_image + ' '
+                    + field_path + ' -div '
+                    + str(scale_multiplier) + ' -mult '
+                    + new_dwi_image)
+        app.cleanup(field_path)
+        app.cleanup(dwi_image)
+        dwi_image = new_dwi_image
+
+        step = 'dwi2mask'
+        progress.increment()
+        new_dwi_mask_image = 'dwi_mask' + iter_string + '.mif'
+        run.command('dwi2mask ' + dwi_image + ' ' + new_dwi_mask_image)
+
+        # Compare input and output masks
+        step = 'mrcalc_mask'
+        dwi_old_mask_count = image.statistics(dwi_mask_image,
+                                              mask=dwi_mask_image).count
+        dwi_new_mask_count = image.statistics(new_dwi_mask_image,
+                                              mask=new_dwi_mask_image).count
+        app.debug('Old mask: ' + str(dwi_old_mask_count))
+        app.debug('New mask: ' + str(dwi_new_mask_count))
+        dwi_mask_overlap_image = 'dwi_mask_overlap' + iter_string + '.mif'
+        run.command('mrcalc '
+                    + dwi_mask_image
+                    + ' '
+                    + new_dwi_mask_image
+                    + ' -mult '
+                    + dwi_mask_overlap_image)
+        app.cleanup(dwi_mask_image)
+        dwi_mask_image = new_dwi_mask_image
+        mask_overlap_count = image.statistics(dwi_mask_overlap_image,
+                                              mask=dwi_mask_overlap_image).count
+        app.debug('Mask overlap: ' + str(mask_overlap_count))
+        dice_coefficient = 2.0 * mask_overlap_count / \
+                           (dwi_old_mask_count + dwi_new_mask_count)
+        app.debug('Dice coefficient: ' + str(dice_coefficient))
+        if dice_coefficient > (1.0 - 1e-3):
+            progress.done()
+            app.console('Exiting iterative loop due to mask convergence')
+            break
+
+
+    # Step 7: Crop images to reduce storage space
+    #   (but leave some padding on the sides)
+    dwi_cropped_image = 'dwi_crop.mif'
+    dwi_cropped_mask_image = 'mask_crop.mif'
+    run.command('mrgrid ' + dwi_image + ' crop ' + dwi_cropped_image
+                + ' -mask ' + dwi_mask_image + ' -uniform 3')
+    app.cleanup(dwi_image)
+    dwi_image = dwi_cropped_image
+    run.command('mrgrid ' + dwi_mask_image + ' crop ' + dwi_cropped_mask_image
+                + ' -mask ' + dwi_mask_image + ' -uniform 3')
+    app.cleanup(dwi_mask_image)
+    dwi_mask_image = dwi_cropped_mask_image
+
+    # Step 8: Perform bias field correction and brain extraction on T1
+    # - If there is a pre-processed T1 already in the output directory,
+    #   as well as a brain mask, then we can utilise those directly;
+    # - If not, we'll use whatever software has been identified as available
+    #   to generate such
+    # TODO Do above;
+    #   for now, let's just perform the calculations on the raw input T1
+    #   regardless
+    # TODO Functionalise since it may be required
+    #   for both participant1 and participant2 - level analyses
     app.console('Performing brain extraction and B1 bias field '
                 'correction of T1 image')
     T1_header = image.Header('T1.mif')
+    T1_image = 'T1_biascorr.mif'
+    T1_mask_image = 'T1_mask.mif'
     T1_revert_strides_option = ' -strides ' \
                                + ','.join([str(i) \
                                            for i in T1_header.strides()])
@@ -1042,12 +1165,21 @@ def run_participant(bids_dir, session, shared, output_prefix):
         run.command(shared.brain_extraction_cmd
                     + ' T1_biascorr.nii T1_biascorr_brain.nii '
                     + 'T1_biascorr_brain_mask.nii')
-        app.cleanup('T1_biascorr.nii')
-        run.command('mrconvert T1_biascorr_brain.nii T1_biascorr_brain.mif'
-                    + T1_revert_strides_option)
+        # TODO Don't want to preserve the brain-extracted image;
+        #   would prefer to keep the full image with bias field correction,
+        #   and have the mask information separately
+        # TODO Does this have consequences anywhere else?
+        # TODO Suppose case could be made for FSL-based T1 processing,
+        #   where the bias field doesn't extend beyond the brain mask;
+        #   in that case, preserving the whole T1 will likely look odd
         app.cleanup('T1_biascorr_brain.nii')
-        run.command('mrconvert T1_biascorr_brain_mask.nii T1_mask.mif '
-                    '-datatype bit'
+        run.command('mrconvert T1_biascorr.nii '
+                    + T1_image
+                    + T1_revert_strides_option)
+        app.cleanup('T1_biascorr.nii')
+        run.command('mrconvert T1_biascorr_brain_mask.nii '
+                    + T1_mask_image
+                    + ' -datatype bit'
                     + T1_revert_strides_option)
         app.cleanup('T1_biascorr_brain_mask.nii')
     else:
@@ -1056,92 +1188,449 @@ def run_participant(bids_dir, session, shared, output_prefix):
                     + ' -i T1.nii --noseg --nosubcortseg')
         app.cleanup('T1.nii')
         run.command('mrconvert '
-                    + fsl.find_image('T1.anat' + os.sep + 'T1_biascorr_brain')
-                    + ' T1_biascorr_brain.mif'
+                    + fsl.find_image('T1.anat' + os.sep + 'T1_biascorr')
+                    + ' '
+                    + T1_image
                     + T1_revert_strides_option)
         run.command('mrconvert '
                     + fsl.find_image('T1.anat'
                                      + os.sep
                                      + 'T1_biascorr_brain_mask')
-                    + ' T1_mask.mif'
+                    + ' ' + T1_mask_image
                     + ' -datatype bit'
                     + T1_revert_strides_option)
         app.cleanup('T1.anat')
 
-    # Step 10: Generate target images for T1->DWI registration
+    # Step 9: Generate target images for T1->DWI registration
     app.console('Generating contrast-matched images for '
                 'inter-modal registration between DWIs and T1')
-    run.command('dwiextract dwi_crop.mif -bzero - | '
+    run.command('dwiextract ' + dwi_image + ' -bzero - | '
                 'mrcalc - 0.0 -max - | '
                 'mrmath - mean -axis 3 dwi_meanbzero.mif')
     run.command('mrcalc 1 dwi_meanbzero.mif -div '
-                'dwi_mask_crop.mif -mult - | '
-                'mrhistmatch nonlinear '
-                '- T1_biascorr_brain.mif dwi_pseudoT1.mif '
-                '-mask_input dwi_mask_crop.mif '
-                '-mask_target T1_mask.mif')
-    run.command('mrcalc 1 T1_biascorr_brain.mif -div T1_mask.mif -mult - | '
-                'mrhistmatch nonlinear '
-                '- dwi_meanbzero.mif T1_pseudobzero.mif '
-                '-mask_input T1_mask.mif '
-                '-mask_target dwi_mask_crop.mif')
+                + dwi_mask_image
+                + ' -mult - | '
+                + 'mrhistmatch nonlinear - '
+                + T1_image
+                + ' dwi_pseudoT1.mif '
+                + '-mask_input '
+                + dwi_mask_image
+                + ' -mask_target '
+                + T1_mask_image)
+    run.command('mrcalc 1 '
+                + T1_image
+                + ' -div '
+                + T1_mask_image
+                + ' -mult - | '
+                + 'mrhistmatch nonlinear'
+                + ' - dwi_meanbzero.mif T1_pseudobzero.mif'
+                + ' -mask_input ' + T1_mask_image
+                + ' -mask_target ' + dwi_mask_image)
 
-    # Step 11: Perform T1->DWI registration
+    # Step 10: Perform DWI->T1 registration
     #   Note that two registrations are performed:
     #   Even though we have a symmetric registration, generation of the
     #   two histogram-matched images means that you will get slightly
     #   different answers depending on which synthesized image &
     #   original image you use
     app.console('Performing registration between DWIs and T1')
-    run.command('mrregister T1_biascorr_brain.mif dwi_pseudoT1.mif '
-                '-type rigid '
-                '-mask1 T1_mask.mif '
-                '-mask2 dwi_mask_crop.mif '
-                '-rigid rigid_T1_to_pseudoT1.txt')
-    app.cleanup('T1_biascorr_brain.mif')
-    run.command('mrregister T1_pseudobzero.mif dwi_meanbzero.mif '
-                '-type rigid '
-                '-mask1 T1_mask.mif '
-                '-mask2 dwi_mask_crop.mif '
-                '-rigid rigid_pseudobzero_to_bzero.txt')
-    run.command('transformcalc '
-                'rigid_T1_to_pseudoT1.txt rigid_pseudobzero_to_bzero.txt '
-                'average rigid_T1_to_dwi.txt')
-    app.cleanup('rigid_T1_to_pseudoT1.txt')
-    app.cleanup('rigid_pseudobzero_to_bzero.txt')
-    run.command('mrtransform T1.mif T1_registered.mif '
-                '-linear rigid_T1_to_dwi.txt')
-    app.cleanup('T1.mif')
-    # Note: Since we're using a mask from fsl_anat (which crops the FoV),
-    #   but using it as input to 5ttgen fsl (which is receiving the raw T1),
-    #   we need to resample in order to have the same dimensions
-    #   between these two
-    run.command('mrtransform T1_mask.mif T1_mask_registered.mif '
-                '-linear rigid_T1_to_dwi.txt '
-                '-template T1_registered.mif '
-                '-interp nearest '
-                '-datatype bit')
-    app.cleanup('T1_mask.mif')
+    transform_pT1_T1 = 'rigid_pseudoT1_to_T1.txt'
+    transform_b0_pb0 = 'rigid_bzero_to_pseudobzero.txt'
+    run.command('mrregister dwi_pseudoT1.mif '
+                + T1_image
+                + ' -type rigid'
+                + ' -mask1 ' + dwi_mask_image
+                + ' -mask2 ' + T1_mask_image
+                + ' -rigid ' + transform_pT1_T1)
+    run.command('mrregister dwi_meanbzero.mif T1_pseudobzero.mif'
+                + ' -type rigid '
+                + ' -mask1 ' + dwi_mask_image
+                + ' -mask2 ' + T1_mask_image
+                + ' -rigid ' + transform_b0_pb0)
+    app.cleanup('dwi_meanbzero.mif')
 
-    # Step 12: Generate 5TT image for ACT
+    # Step 11: Perform DWI->T1 transformation
+    # In this scenario, we're going to transform the DWI data to the T1
+    #   rather than the other way around, since the T1 is more likely to
+    #   be used as a common reference across multiple analysis pipelines,
+    #   and we're transforming DWIs rather than FODs
+    transform_average = 'rigid_dwi_to_T1.txt'
+    run.command('transformcalc '
+                + transform_pT1_T1
+                + ' '
+                + transform_b0_pb0
+                + ' average '
+                + transform_average)
+    app.cleanup(transform_pT1_T1)
+    app.cleanup(transform_b0_pb0)
+    transformed_dwi_image = os.path.splitext(dwi_image)[0] \
+                            + '_transform.mif'
+    transformed_dwi_mask_image = os.path.splitext(dwi_mask_image)[0] \
+                                 + '_transform.mif'
+    run.command('mrtransform '
+                + dwi_image
+                + ' '
+                + transformed_dwi_image
+                + ' -linear '
+                + transform_average)
+    app.cleanup(dwi_image)
+    dwi_image = transformed_dwi_image
+    run.command('mrtransform '
+                + dwi_mask_image
+                + ' '
+                + transformed_dwi_mask_image
+                + ' -linear '
+                + transform_average)
+    app.cleanup(dwi_mask_image)
+    app.cleanup(transform_average)
+    dwi_mask_image = transformed_dwi_mask_image
+
+
+
+    # Processing completed; export
+    app.console('Processing completed for session "'
+                + session_label
+                + '"; writing results to output directory')
+    if os.path.exists(output_subdir):
+        run.function(shutil.rmtree, output_subdir)
+    run.function(os.makedirs, output_subdir)
+    run.function(os.makedirs, os.path.join(output_subdir, 'anat'))
+    run.function(os.makedirs, os.path.join(output_subdir, 'dwi'))
+    run.command('mrconvert '
+                + dwi_image
+                + ' '
+                + os.path.join(output_subdir,
+                               'dwi',
+                               session_label + '_desc-preproc_dwi.nii.gz')
+                + ' -export_grad_fsl '
+                + os.path.join(output_subdir,
+                               'dwi',
+                               session_label + '_desc-preproc_dwi.bvec')
+                + ' '
+                + os.path.join(output_subdir,
+                               'dwi',
+                               session_label + '_desc-preproc_dwi.bval')
+                + ' -strides +1,+2,+3,+4')
+    run.command('mrconvert '
+                + dwi_mask_image
+                + ' '
+                + os.path.join(output_subdir,
+                               'dwi',
+                               session_label + '_brainmask.nii.gz')
+                + ' -datatype uint8'
+                + ' -strides +1,+2,+3')
+    # Even if EddyQC software is not installed, a directory is still
+    #   generated containing some eddy outputs
+    run.function(shutil.copytree,
+                 'eddyqc',
+                 os.path.join(output_subdir,
+                              'dwi',
+                              'eddyqc'))
+
+    # TODO To properly conform to BIDS, need a JSON with
+    # "SkullStripped": False
+    run.command('mrconvert '
+                + T1_image
+                + ' '
+                + os.path.join(output_subdir,
+                               'anat',
+                               session_label + '_desc-preproc_T1w.nii.gz')
+                + ' -strides +1,+2,+3')
+    run.command('mrconvert '
+                + T1_mask_image
+                + ' '
+                + os.path.join(output_subdir,
+                               'anat',
+                               session_label + '_brainmask.nii.gz')
+                + ' -datatype uint8'
+                + ' -strides +1,+2,+3')
+
+    # Manually wipe and zero the scratch directory
+    #   (since we might be processing more than one subject)
+    os.chdir(cwd)
+    if app.DO_CLEANUP:
+        app.console('Deleting scratch directory ' + app.SCRATCH_DIR)
+        # Can't use run.function() here;
+        #   it'll try to write to the log file that resides
+        #   in the scratch directory just deleted
+        app.cleanup(app.SCRATCH_DIR)
+    elif output_verbosity == 4:
+        app.console('Copying scratch directory to output location')
+        run.function(shutil.copytree,
+                     app.SCRATCH_DIR,
+                     os.path.join(output_subdir, 'scratch_participant1'))
+    else:
+        app.console('Contents of scratch directory kept; '
+                    'location: ' + app.SCRATCH_DIR)
+    app.SCRATCH_DIR = ''
+
+# End of run_paticipant1() function
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
+
+    session_label = '_'.join(session)
+    output_subdir = os.path.join(output_dir, *session)
+    if not os.path.exists(output_subdir):
+        raise MRtrixError('No output directory found for session "'
+                          + session_label + '"')
+    if os.path.exists(os.path.join(output_subdir, 'fmap')):
+        raise MRtrixError('Output directory for session "'
+                          + session_label
+                          + '" contains an fmap/ directory;'
+                          + ' should not exist if data are preprocessed')
+    for subdir in ['connectome', 'tractogram']:
+        if os.path.exists(os.path.join(output_subdir, subdir)):
+            app.warn('Output sub-directory "'
+                     + os.path.join(output_subdir, subdir)
+                     + '" already exists; contents will be '
+                     + 'erased upon completion of processing')
+
+    # TODO Check paths of individual output files
+
+    in_dwi_path = os.path.join(output_subdir,
+                               'dwi',
+                               '*_dwi.nii*')
+    in_dwi_image_list = glob.glob(in_dwi_path)
+    if len(in_dwi_image_list) > 1:
+        raise MRtrixError('To run participant1-level analysis, '
+                          + 'output directory should contain only one '
+                          + 'DWI image file; session "'
+                          + session_label
+                          + '" contains '
+                          + str(len(in_dwi_image_list)))
+    in_dwi_path = in_dwi_image_list[0]
+    if not '_desc-preproc_' in in_dwi_path:
+        raise MRtrixError('Input DWI image '
+                          + in_dwi_path
+                          + ' not flagged as pre-processed data')
+    in_dwi_path_prefix = in_dwi_path.split(os.extsep)[0]
+    # Don't look for bvec / bval in a lower directory in this case
+    in_bvec_path = in_dwi_path_prefix + '.bvec'
+    in_bval_path = in_dwi_path_prefix + '.bval'
+    if not os.path.isfile(in_bvec_path) \
+        or not os.path.isfile(in_bval_path):
+        raise MRtrixError('Did not find bvec / bval pair '
+                          + 'corresponding to image '
+                          + in_dwi_path
+                          + ' (expected locations: "'
+                          + in_bvec_path
+                          + '" "'
+                          + in_bval_path
+                          + '")')
+    # JSON isn't compulsory in this case
+    in_dwi_json_path = in_dwi_path_prefix + 'json'
+    in_dwi_json_import_option = ' -json_import ' + in_dwi_json_path \
+                                if os.path.isfile(in_dwi_json_path) \
+                                else ''
+    # Is there a mask present?
+    in_dwi_mask_path = os.path.join(output_subdir,
+                                    'dwi',
+                                    '*_brainmask.nii*')
+    in_dwi_mask_image_list = glob.glob(in_dwi_mask_path)
+    if len(in_dwi_mask_image_list) > 1:
+        raise MRtrixError('More than one DWI mask found for session "'
+                          + session_label
+                          + '"')
+    in_dwi_mask_path = in_dwi_mask_image_list[0] \
+                       if in_dwi_mask_image_list \
+                       else None
+
+    # Import pre-procesesd T1 image from output directory if it exists;
+    #   if not, find image in BIDS directory and perform expected processing
+    # TODO For now, assuming it's there in the output directory;
+    #   implement checking BIDS directory
+    in_t1w_image_list = glob.glob(os.path.join(output_subdir,
+                                               'anat',
+                                               '*_T1w.nii*'))
+    if len(in_t1w_image_list) > 1:
+        raise MRtrixError('More than one T1-weighted image found '
+                          'for session "' + session_label + '"; '
+                          'script not yet compatible with this')
+    if in_t1w_image_list:
+        in_t1w_is_preprocessed = True
+        in_t1w_path = in_t1w_image_list[0]
+        # Also check for premasked data
+        in_t1w_mask_image_list = glob.glob(os.path.join(output_subdir,
+                                                        'anat',
+                                                        '*_brainmask.nii*'))
+        if len(in_t1w_mask_image_list) > 1:
+            raise MRtrixError('More than one brain mask image found '
+                              'for session "' + session_label + '"')
+        in_t1w_mask_path = in_t1w_mask_image_list[0] \
+                           if in_t1w_mask_image_list \
+                           else None
+    else:
+        in_t1w_is_preprocessed = False
+        in_t1w_mask_path = None
+        raise MRtrixError('Script not yet supporting non-preprocessed T1s')
+
+    # Import pre-processed data into scratch directory
+    app.make_scratch_dir()
+    app.console('Importing pre-processed data into scratch directory')
+
+    run.command('mrconvert '
+                + in_dwi_path
+                + ' '
+                + path.to_scratch('dwi.mif')
+                + ' -fslgrad ' + in_bvec_path + ' ' + in_bval_path
+                + in_dwi_json_import_option
+                + ' -strides 0,0,0,1')
+
+    if in_dwi_mask_path:
+        run.command('mrconvert '
+                    + in_dwi_mask_path
+                    + ' '
+                    + path.to_scratch('dwi_mask.mif')
+                    + ' -datatype bit')
+
+    run.command('mrconvert '
+                + in_t1w_path
+                + ' '
+                + path.to_scratch('T1.mif'))
+
+    if in_t1w_mask_path:
+        run.command('mrconvert '
+                    + in_t1w_mask_path
+                    + ' '
+                    + path.to_scratch('T1_mask.mif')
+                    + ' -datatype bit')
+
+    cwd = os.getcwd()
+    app.goto_scratch_dir()
+
+    # Before we can begin: Are there any data we require
+    #   that were not imported from the output directory?
+    if not in_dwi_mask_path:
+        app.console('Generating DWI brain mask '
+                    '(was not already present in output directory)')
+        run.command('dwi2mask dwi.mif dwi_mask.mif')
+
+    if not in_t1w_mask_path:
+        app.console('Performing T1 brain extraction '
+                    '(no such mask was present in output directory)')
+        # Unlike participant1-level processing, where a strong
+        #   bias field could theoretically influece brain extraction,
+        #   here we know that the T1 has been pre-processed, and therefore
+        #   there's no need for an iterative solution
+        # TODO Update once script is capable of accessing un-processed
+        #   T1 from the input BIDS directory
+        T1_header = image.Header('T1.mif')
+        T1_revert_strides_option = ' -strides ' \
+                                   + ','.join([str(i) \
+                                               for i in T1_header.strides()])
+        if shared.brain_extraction_cmd == 'runROBEX.sh':
+            run.command('mrconvert T1.mif T1.nii -strides +1,+2,+3')
+            run.command(shared.brain_extraction_cmd
+                        + ' T1.nii T1_brain.nii T1_mask.nii')
+            app.cleanup('T1.nii')
+            app.cleanup('T1_brain.nii')
+            run.command('mrconvert T1_mask.nii T1_mask.mif'
+                        ' -datatype bit'
+                        + T1_revert_strides_option)
+            app.cleanup('T1_mask.nii')
+        else:
+            run.command('mrconvert T1.mif T1.nii -strides -1,+2,+3')
+            run.command(shared.brain_extraction_cmd
+                        + ' -i T1.nii --noseg --nosubcortseg')
+            app.cleanup('T1.nii')
+            run.command('mrconvert '
+                        + fsl.find_image('T1.anat'
+                                         + os.sep
+                                         + 'T1_biascorr_brain_mask')
+                        + ' T1_mask.mif'
+                        + ' -datatype bit'
+                        + T1_revert_strides_option)
+            app.cleanup('T1.anat')
+
+
+    # Step 1: Estimate response functions for spherical deconvolution
+    app.console('Estimating tissue response functions for '
+                'spherical deconvolution')
+    run.command('dwi2response dhollander dwi.mif '
+                'response_wm.txt response_gm.txt response_csf.txt '
+                '-mask dwi_mask.mif')
+
+    # Determine whether we are working with single-shell or multi-shell data
+    bvalues = [
+        int(round(float(value)))
+        for value in image.mrinfo('dwi.mif', 'shell_bvalues') \
+                                 .strip().split()]
+    multishell = (len(bvalues) > 2)
+
+    # Step 2: Perform spherical deconvolution
+    #   Don't even use a processing mask:
+    #     ACT should be responsible for stopping streamlines before they
+    #     reach the edge of the DWI mask
+    #   Also means that any subsequent manual use of the FOD
+    #     images can't possibly be detrimentally affected by
+    #     bad masking
+
+    app.console('Estimating'
+                + ('' if multishell else ' white matter')
+                + ' Fibre Orientation Distribution image'
+                + ('s' if multishell else ''))
+    # TODO Update to use similar code to participant1?
+    if multishell:
+        run.command('dwi2fod msmt_csd dwi.mif '
+                    'response_wm.txt FOD_WM.mif '
+                    'response_gm.txt FOD_GM.mif '
+                    'response_csf.txt FOD_CSF.mif '
+                    '-lmax 10,0,0')
+        run.command('mrconvert FOD_WM.mif - -coord 3 0 | '
+                    'mrcat FOD_CSF.mif FOD_GM.mif - tissues.mif -axis 3')
+    else:
+        # Still use the msmt_csd algorithm with single-shell data:
+        #   Use hard non-negativity constraint
+        # Also incorporate the CSF response to provide some fluid attenuation
+        run.command('dwi2fod msmt_csd dwi.mif '
+                    'response_wm.txt FOD_WM.mif '
+                    'response_csf.txt FOD_CSF.mif '
+                    '-lmax 10,0')
+        app.cleanup('FOD_CSF.mif')
+
+    # Step 3: Generate 5TT image for ACT
+    # Use T1 brain mask generated from elsewhere:
+    #   don't particularly trust the raw "bet" call inside
+    #   5ttgen fsl
     app.console('Generating five-tissue-type (5TT) image for '
                 'Anatomically-Constrained Tractography (ACT)')
-    run.command('5ttgen fsl T1_registered.mif 5TT.mif '
-                '-mask T1_mask_registered.mif')
-    if shared.output_verbosity > 1:
+    run.command('5ttgen fsl T1.mif 5TT.mif '
+                '-mask T1_mask.mif')
+    if output_verbosity > 1:
         run.command('5tt2vis 5TT.mif vis.mif')
 
-    # Step 13: Generate the grey matter parcellation
+    # Step 4: Generate the grey matter parcellation
     #   The necessary steps here will vary significantly depending on
     #   the parcellation scheme selected
-
     if shared.do_freesurfer:
-
         app.console('Getting grey matter parcellation in '
                     'subject space using FreeSurfer')
 
-        run.command('mrconvert T1_registered.mif T1_registered.nii '
-                    '-strides +1,+2,+3')
+        # T1.nii may already exist if brain extraction was performed
+        #   within this function rather than being imported
+        # But we need to ensure that the strides are as we want them
+        run.command('mrconvert T1.mif T1.nii '
+                    '-strides +1,+2,+3',
+                    force=(not app.DO_CLEANUP))
 
         # Since we're instructing recon-all to use a different subject
         #   directory, we need to construct softlinks to a number of
@@ -1158,7 +1647,8 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
         # Run FreeSurfer pipeline on this subject's T1 image
         run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
-                    '-i T1_registered.nii')
+                    '-i T1.nii')
+        app.cleanup('T1.nii')
         run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
                     '-all' + shared.reconall_multithread_options)
 
@@ -1323,7 +1813,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
                         + shared.mrtrix_lut_file
                         + ' parc_init.mif')
             # Fix the sub-cortical grey matter parcellations using FSL FIRST
-            run.command('labelsgmfix parc_init.mif T1_registered.mif '
+            run.command('labelsgmfix parc_init.mif T1.mif '
                         + shared.mrtrix_lut_file + ' parc.mif')
             app.cleanup('parc_init.mif')
         else:
@@ -1335,19 +1825,18 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
 
     elif shared.do_mni:
-
         app.console('Registering to MNI template and transforming grey '
                     'matter parcellation back to subject space')
 
         # Use non-dilated brain masks for performing
         #   histogram matching & linear registration
         run.command('mrhistmatch linear '
-                    + 'T1_registered.mif '
+                    + 'T1.mif '
                     + shared.template_image_path
-                    + ' -mask_input T1_mask_registered.mif'
+                    + ' -mask_input T1_mask.mif'
                     + ' -mask_target ' + shared.template_mask_path
                     + ' - | '
-                    + 'mrconvert - T1_registered_histmatch.nii '
+                    + 'mrconvert - T1_histmatch.nii '
                     + '-strides -1,+2,+3')
 
         assert shared.template_registration_software
@@ -1357,7 +1846,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
             # From Klein et al., NeuroImage 2009:
             run.command('ANTS 3 '
                         '-m PR[' + shared.template_image_path
-                        + ', T1_registered_histmatch.nii, 1, 2] '
+                        + ', T1_histmatch.nii, 1, 2] '
                         '-o ANTS '
                         '-r Gauss[2,0] '
                         '-t SyN[0.5] '
@@ -1367,7 +1856,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
             run.command('WarpImageMultiTransform 3 '
                         + shared.parc_image_path + ' '
                         + transformed_atlas_path
-                        + ' -R T1_registered_histmatch.nii'
+                        + ' -R T1_histmatch.nii'
                         + ' -i ANTSAffine.txt ANTSInverseWarp.nii'
                         + ' --use-NN')
             app.cleanup(glob.glob('ANTSWarp.nii*')[0])
@@ -1377,9 +1866,9 @@ def run_participant(bids_dir, session, shared, output_prefix):
         elif shared.template_registration_software == 'fsl':
 
             # Subject T1, brain masked; for flirt -in
-            run.command('mrcalc T1_registered_histmatch.nii '
-                        'T1_mask_registered.mif -mult '
-                        'T1_registered_histmatch_masked.nii')
+            run.command('mrcalc T1_histmatch.nii '
+                        'T1_mask.mif -mult '
+                        'T1_histmatch_masked.nii')
             # Template T1, brain masked; for flirt -ref
             run.command('mrcalc '
                         + shared.template_image_path + ' '
@@ -1388,22 +1877,23 @@ def run_participant(bids_dir, session, shared, output_prefix):
             # Now have data required to run flirt
             run.command(shared.flirt_cmd + ' '
                         '-ref template_masked.nii '
-                        '-in T1_registered_histmatch_masked.nii '
+                        '-in T1_histmatch_masked.nii '
                         '-omat T1_to_template.mat '
                         '-dof 12 '
                         '-cost leastsq')
-            app.cleanup('T1_registered_histmatch_masked.nii')
+            app.cleanup('T1_histmatch_masked.nii')
             app.cleanup('template_masked.nii')
 
             # Use dilated brain masks for non-linear registration to
             #   mitigate mask edge effects
             # Subject T1, unmasked; for fnirt --in
-            run.command('mrconvert T1_registered.mif T1_registered.nii '
-                        '-strides -1,+2,+3')
+            run.command('mrconvert T1.mif T1.nii '
+                        '-strides -1,+2,+3',
+                        force=(not app.DO_CLEANUP))
             # Subject brain mask, dilated; for fnirt --inmask
-            run.command('maskfilter T1_mask_registered.mif dilate - '
+            run.command('maskfilter T1_mask.mif dilate - '
                         '-npass 3 | '
-                        'mrconvert - T1_mask_registered_dilated.nii '
+                        'mrconvert - T1_mask_dilated.nii '
                         '-strides -1,+2,+3')
             # Template brain mask, dilated; for fnirt --refmask
             run.command('maskfilter ' + shared.template_mask_path + ' dilate '
@@ -1413,12 +1903,12 @@ def run_participant(bids_dir, session, shared, output_prefix):
             run.command(shared.fnirt_cmd + ' '
                         '--config=' + shared.fnirt_config_basename + ' '
                         '--ref=' + shared.template_image_path + ' '
-                        '--in=T1_registered_histmatch.nii '
+                        '--in=T1_histmatch.nii '
                         '--aff=T1_to_template.mat '
                         '--refmask=template_mask_dilated.nii '
-                        '--inmask=T1_mask_registered_dilated.nii '
+                        '--inmask=T1_mask_dilated.nii '
                         '--cout=T1_to_template_warpcoef.nii')
-            app.cleanup('T1_mask_registered_dilated.nii')
+            app.cleanup('T1_mask_dilated.nii')
             app.cleanup('template_mask_dilated.nii')
             app.cleanup('T1_to_template.mat')
             fnirt_warp_subject2template_path = \
@@ -1427,14 +1917,14 @@ def run_participant(bids_dir, session, shared, output_prefix):
             # Use result of registration to transform atlas
             #   parcellation to subject space
             run.command(shared.invwarp_cmd + ' '
-                        '--ref=T1_registered.nii '
+                        '--ref=T1.nii '
                         '--warp=' + fnirt_warp_subject2template_path + ' '
                         '--out=template_to_T1_warpcoef.nii')
             app.cleanup(fnirt_warp_subject2template_path)
             fnirt_warp_template2subject_path = \
                 fsl.find_image('template_to_T1_warpcoef')
             run.command(shared.applywarp_cmd + ' '
-                        '--ref=T1_registered.nii '
+                        '--ref=T1.nii '
                         '--in=' + shared.parc_image_path + ' '
                         '--warp=' + fnirt_warp_template2subject_path + ' '
                         '--out=atlas_transformed.nii '
@@ -1442,7 +1932,8 @@ def run_participant(bids_dir, session, shared, output_prefix):
             app.cleanup(fnirt_warp_template2subject_path)
             transformed_atlas_path = fsl.find_image('atlas_transformed')
 
-        app.cleanup('T1_registered_histmatch.nii')
+        app.cleanup('T1.nii')
+        app.cleanup('T1_histmatch.nii')
 
         if shared.parc_lut_file and shared.mrtrix_lut_file:
             run.command('labelconvert '
@@ -1454,12 +1945,11 @@ def run_participant(bids_dir, session, shared, output_prefix):
             # Not all parcellations need to go through the labelconvert step;
             #   they may already be numbered incrementally from 1
             run.command('mrconvert ' + transformed_atlas_path + ' parc.mif '
-                        '-strides T1_registered.mif')
+                        '-strides T1.mif')
         app.cleanup(transformed_atlas_path)
 
-    app.cleanup('T1_registered.nii')
 
-    if shared.output_verbosity > 2 and shared.parcellation != 'none':
+    if output_verbosity > 2 and shared.parcellation != 'none':
         if shared.mrtrix_lut_file:
             label2colour_lut_option = ' -lut ' + shared.mrtrix_lut_file
         elif shared.parc_lut_file:
@@ -1482,11 +1972,11 @@ def run_participant(bids_dir, session, shared, output_prefix):
         #   number of streamlines based on the number of nodes
         #   in the parcellation:
         #   mean edge weight of 1,000 streamlines
-        num_nodes = int(image.statistic('parc.mif', 'max'))
+        num_nodes = int(image.statistics('parc.mif').max)
         num_streamlines = 500 * num_nodes * (num_nodes-1)
     if num_streamlines:
 
-        # Step 14: Generate the tractogram
+        # Step 5: Generate the tractogram
         app.console('Performing whole-brain fibre-tracking')
         tractogram_filepath = 'tractogram.tck'
         run.command('tckgen FOD_WM.mif ' + tractogram_filepath + ' '
@@ -1496,7 +1986,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
                     '-select ' + str(num_streamlines) + ' '
                     '-seed_dynamic FOD_WM.mif')
 
-        # Step 15: Use SIFT2 to determine streamline weights
+        # Step 6: Use SIFT2 to determine streamline weights
         app.console('Running the SIFT2 algorithm to assign '
                     'weights to individual streamlines')
         fd_scale_gm_option = ''
@@ -1529,7 +2019,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
                               'any number of streamlines')
 
 
-        if shared.output_verbosity > 2:
+        if output_verbosity > 2:
             # Generate TDIs:
             # - A TDI at DWI native resolution, with SIFT mu scaling,
             #   and precise mapping
@@ -1555,7 +2045,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
 
     if shared.parcellation != 'none':
-        # Step 16: Generate the connectome
+        # Step 7: Generate the connectome
         #   Also get the mean length for each edge;
         #   this is the most likely alternative contrast to be useful
         app.console('Combining whole-brain tractogram with grey matter '
@@ -1578,7 +2068,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
                     + '-stat_edge mean'
                     + assignment_option)
 
-        if shared.output_verbosity > 2:
+        if output_verbosity > 2:
             # Produce additional data that can be used for
             #   visualisation within mrview's connectome toolbar
             app.console('Generating geometric data for '
@@ -1596,16 +2086,13 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
 
     # Prepare output path for writing
-    app.console('Processing for session \'' + '_'.join(session)
-                + '\' completed; writing results to output directory')
-    if os.path.exists(output_dir):
-        run.function(shutil.rmtree, output_dir)
-    run.function(os.makedirs, output_dir)
-    run.function(os.makedirs, os.path.join(output_dir, 'connectome'))
-    run.function(os.makedirs, os.path.join(output_dir, 'dwi'))
-    run.function(os.makedirs, os.path.join(output_dir, 'tractogram'))
-    if shared.output_verbosity > 1:
-        run.function(os.makedirs, os.path.join(output_dir, 'anat'))
+    app.console('Processing for session "' + session_label
+                + '" completed; writing results to output directory')
+    for subdir in ['connectome', 'tractogram']:
+        full_subdir_path = os.path.join(output_subdir, subdir)
+        if os.path.exists(full_subdir_path):
+            run.function(shutil.rmtree, full_subdir_path)
+        run.function(os.makedirs, full_subdir_path)
 
     parc_string = '_parc-' + shared.parcellation
 
@@ -1620,7 +2107,7 @@ def run_participant(bids_dir, session, shared, output_prefix):
                       else shared.parc_lut_file
     if lut_export_file:
         lut_export_path = \
-            os.path.join(output_prefix,
+            os.path.join(output_dir,
                          parc_string[1:] + '_lookup'
                          + os.path.splitext(lut_export_file)[1])
         try:
@@ -1628,182 +2115,180 @@ def run_participant(bids_dir, session, shared, output_prefix):
         except OSError:
             pass
 
-    label = '_'.join(session)
-
     # Copy / convert necessary files to output directory
     if shared.parcellation != 'none':
         run.function(shutil.copy,
                      'connectome.csv',
-                     os.path.join(output_dir,
+                     os.path.join(output_subdir,
                                   'connectome',
-                                  label + parc_string
+                                  session_label
+                                  + parc_string
                                   + '_level-participant_connectome.csv'))
     if num_streamlines:
         run.function(shutil.copy,
                      'mu.txt',
-                     os.path.join(output_dir,
+                     os.path.join(output_subdir,
                                   'tractogram',
-                                  label + '_mu.txt'))
-    run.command('mrconvert dwi_meanbzero.mif '
-                + os.path.join(output_dir,
-                               'dwi',
-                               label + '_meanbzero.nii.gz')
-                + ' -strides +1,+2,+3')
-    run.command('mrconvert fa.mif '
-                + os.path.join(output_dir,
-                               'dwi',
-                               label + '_model-tensor_fa.nii.gz')
-                + ' -strides +1,+2,+3')
+                                  session_label
+                                  + '_mu.txt'))
     run.function(shutil.copy,
                  'response_wm.txt',
-                 os.path.join(output_dir,
+                 os.path.join(output_subdir,
                               'dwi',
-                              label + '_tissue-WM_response.txt'))
-    with open(os.path.join(output_dir,
+                              session_label
+                              + '_tissue-WM_response.txt'))
+    # TODO Don't write this to the output directory;
+    #   rely on mrinfo -shell_bvalues being run on pre-processed DWI data
+    with open(os.path.join(output_subdir,
                            'dwi',
-                           label + '_bvalues.txt'), 'w') as f:
+                           session_label + '_bvalues.txt'), 'w') as f:
         f.write(' '.join([str(value) for value in bvalues]))
-    if shared.output_verbosity > 1:
+    if not in_dwi_mask_path:
+        run.command('mrconvert dwi_mask.mif '
+                    + os.path.join(output_subdir,
+                                   'dwi',
+                                   session_label
+                                   + '_brainmask.nii.gz')
+                    + ' -datatype uint8'
+                    + ' -strides +1,+2,+3')
+    if not in_t1w_mask_path:
+        run.command('mrconvert T1_mask.mif '
+                    + os.path.join(output_subdir,
+                                   'anat',
+                                   session_label
+                                   + '_brainmask.nii.gz')
+                    + ' -datatype uint8'
+                    + ' -strides +1,+2,+3')
+
+    if output_verbosity > 1:
         if shared.parcellation != 'none':
             run.command('mrconvert parc.mif '
-                        + os.path.join(output_dir,
+                        + os.path.join(output_subdir,
                                        'anat',
-                                       label + parc_string + '_indices.nii.gz')
+                                       session_label
+                                       + parc_string
+                                       + '_indices.nii.gz')
                         + ' -strides +1,+2,+3')
             run.function(shutil.copy,
                          'meanlength.csv',
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'connectome',
-                                      label + parc_string + '_meanlength.csv'))
-        run.command('mrconvert dwi_crop.mif '
-                    + os.path.join(output_dir,
-                                   'dwi',
-                                   label + '_dwi.nii.gz')
-                    + ' -export_grad_fsl '
-                    + os.path.join(output_dir,
-                                   'dwi',
-                                   label + '_dwi.bvec')
-                    + ' '
-                    + os.path.join(output_dir,
-                                   'dwi',
-                                   label + '_dwi.bval')
-                    + ' -strides +1,+2,+3,+4')
-        run.command('mrconvert dwi_mask_crop.mif '
-                    + os.path.join(output_dir,
-                                   'dwi',
-                                   label + '_brainmask.nii.gz')
-                    + ' -datatype uint8'
-                    + ' -strides +1,+2,+3')
-        run.command('mrconvert T1_registered.mif '
-                    + os.path.join(output_dir,
-                                   'anat',
-                                   label + '_T1w.nii.gz')
-                    + ' -strides +1,+2,+3')
-        run.command('mrconvert T1_mask_registered.mif '
-                    + os.path.join(output_dir,
-                                   'anat',
-                                   label + '_brainmask.nii.gz')
-                    + ' -datatype uint8'
-                    + ' -strides +1,+2,+3')
+                                      session_label
+                                      + parc_string
+                                      + '_meanlength.csv'))
         run.command('mrconvert 5TT.mif '
-                    + os.path.join(output_dir,
+                    + os.path.join(output_subdir,
                                    'anat',
-                                   label + '_5TT.nii.gz')
+                                   session_label
+                                   + '_5TT.nii.gz')
                     + ' -strides +1,+2,+3,+4')
         run.command('mrconvert vis.mif '
-                    + os.path.join(output_dir,
+                    + os.path.join(output_subdir,
                                    'anat',
-                                   label + '_tissues3D.nii.gz')
+                                   session_label
+                                   + '_tissues3D.nii.gz')
                     + ' -strides +1,+2,+3')
         run.command('mrconvert FOD_WM.mif '
-                    + os.path.join(output_dir,
+                    + os.path.join(output_subdir,
                                    'dwi',
-                                   label + '_tissue-WM_ODF.nii.gz')
+                                   session_label
+                                   + '_tissue-WM_ODF.nii.gz')
                     + ' -strides +1,+2,+3,+4')
         if multishell:
             run.function(shutil.copy,
                          'response_gm.txt',
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'dwi',
-                                      label + '_tissue-GM_response.txt'))
+                                      session_label
+                                      + '_tissue-GM_response.txt'))
             run.function(shutil.copy,
                          'response_csf.txt',
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'dwi',
-                                      label + '_tissue-CSF_response.txt'))
+                                      session_label
+                                      + '_tissue-CSF_response.txt'))
             run.command('mrconvert FOD_GM.mif '
-                        + os.path.join(output_dir,
+                        + os.path.join(output_subdir,
                                        'dwi',
-                                       label + '_tissue-GM_ODF.nii.gz')
+                                       session_label
+                                       + '_tissue-GM_ODF.nii.gz')
                         + ' -strides +1,+2,+3,+4')
             run.command('mrconvert FOD_CSF.mif '
-                        + os.path.join(output_dir,
+                        + os.path.join(output_subdir,
                                        'dwi',
-                                       label + '_tissue-CSF_ODF.nii.gz')
+                                       session_label
+                                       + '_tissue-CSF_ODF.nii.gz')
                         + ' -strides +1,+2,+3,+4')
             run.command('mrconvert tissues.mif '
-                        + os.path.join(output_dir,
+                        + os.path.join(output_subdir,
                                        'dwi',
-                                       label + '_tissue-all.nii.gz')
+                                       session_label
+                                       + '_tissue-all.nii.gz')
                         + ' -strides +1,+2,+3,+4')
-        if not shared.preprocessed:
-            run.function(shutil.copytree,
-                         'eddyqc',
-                         os.path.join(output_dir,
-                                      'dwi',
-                                      'eddyqc'))
-    if shared.output_verbosity > 2:
+
+    if output_verbosity > 2:
         if num_streamlines:
             # Move rather than copying the tractogram just because of its size;
             #   unless using output verbosity level 4, in which case
             #   we want copies both in the appropriate derivatives location
             #   and in the scratch directory copy
             run.function(shutil.copy \
-                             if shared.output_verbosity == 4 \
+                             if output_verbosity == 4 \
                              else shutil.move,
                          tractogram_filepath,
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'tractogram',
-                                      label + '_tractogram.tck'))
+                                      session_label
+                                      + '_tractogram.tck'))
             run.function(shutil.copy,
                          'weights.csv',
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'tractogram',
-                                      label + '_weights.csv'))
+                                      session_label
+                                      + '_weights.csv'))
             run.command('mrconvert tdi_native.mif '
-                        + os.path.join(output_dir,
+                        + os.path.join(output_subdir,
                                        'tractogram',
-                                       label + '_variant-native_tdi.nii.gz')
+                                       session_label
+                                       + '_variant-native_tdi.nii.gz')
                         + ' -strides +1,+2,+3')
             run.command('mrconvert tdi_highres.mif '
-                        + os.path.join(output_dir,
+                        + os.path.join(output_subdir,
                                        'tractogram',
-                                       label + '_variant-highres_tdi.nii.gz')
+                                       session_label
+                                       + '_variant-highres_tdi.nii.gz')
                         + ' -strides +1,+2,+3')
         if shared.parcellation != 'none':
             run.function(shutil.copy,
                          'assignments.csv',
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'connectome',
-                                      label + parc_string
+                                      session_label
+                                      + parc_string
                                       + '_assignments.csv'))
             run.function(shutil.copy,
                          'exemplars.tck',
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'connectome',
-                                      label + parc_string + '_exemplars.tck'))
+                                      session_label
+                                      + parc_string
+                                      + '_exemplars.tck'))
             run.function(shutil.copy,
                          'nodes_smooth.obj',
-                         os.path.join(output_dir,
+                         os.path.join(output_subdir,
                                       'anat',
-                                      label + parc_string + '.obj'))
+                                      session_label
+                                      + parc_string
+                                      + '.obj'))
             run.command('mrconvert parcRGB.mif '
-                        + os.path.join(output_dir,
+                        + os.path.join(output_subdir,
                                        'anat',
-                                       label + parc_string +'_colour.nii.gz')
+                                       session_label
+                                       + parc_string
+                                       +'_colour.nii.gz')
                         + ' -strides +1,+2,+3')
 
-    # Manually wipe and zero the temp directory
+    # Manually wipe and zero the scratch directory
     #   (since we might be processing more than one subject)
     os.chdir(cwd)
     if app.DO_CLEANUP:
@@ -1812,17 +2297,17 @@ def run_participant(bids_dir, session, shared, output_prefix):
         #   it'll try to write to the log file that resides
         #   in the scratch directory just deleted
         app.cleanup(app.SCRATCH_DIR)
-    elif shared.output_verbosity == 4:
-        app.console('Copying temporary directory to output location')
+    elif output_verbosity == 4:
+        app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_dir, 'scratch'))
+                     os.path.join(output_subdir, 'scratch_participant2'))
     else:
-        app.console('Contents of temporary directory kept; '
+        app.console('Contents of scratch directory kept; '
                     'location: ' + app.SCRATCH_DIR)
     app.SCRATCH_DIR = ''
 
-# End of runSubject() function
+# End of run_participant2() function
 
 
 
@@ -1838,50 +2323,86 @@ def run_participant(bids_dir, session, shared, output_prefix):
 
 
 
+GROUP_BRAINMASKS_DIR = 'brainmasks'
+GROUP_BZEROS_DIR = 'bzeros'
+GROUP_CONNECTOMES_DIR = 'connectomes'
+GROUP_FA_DIR = 'fa'
+GROUP_WMVOXELS_DIR = 'wmvoxels'
+GROUP_WARPS_DIR = 'warps'
 
+# TODO Use responsemean to generate the group mean WM response function,
+#   rather than doing a direct coefficient averaging in the code
+GROUP_RESPONSES_DIR = 'responses'
 
+def run_group(bids_dir, output_verbosity, output_dir):
 
-def run_group(bids_dir, output_dir):
+    # Participant-level analysis no longer generates FA and mean b=0 images
+    # These really should not be that expensive to compute in series,
+    #   and will keep the output directory cleaner
 
     # Check presence of all required input files before proceeding
     # Pre-calculate paths of all files since many will be used in
     #   more than one location
     class SessionPaths(object):
-        def __init__(self, parent_dirs):
-            label = '_'.join(parent_dirs)
-            root = os.path.join(output_dir, *parent_dirs)
-            self.in_bzero = os.path.join(root,
-                                         'dwi',
-                                         label + '_meanbzero.nii.gz')
-            self.in_fa = os.path.join(root,
-                                      'dwi',
-                                      label + '_model-tensor_fa.nii.gz')
+        def __init__(self, session):
+            session_label = '_'.join(session)
+            root = os.path.join(output_dir, *session)
+            # Get input DWI path here rather than in function
+            root_dir = os.path.join(output_dir, *session)
+            in_dwi_image_list = glob.glob(os.path.join(root_dir,
+                                                       'dwi',
+                                                       '*_dwi.nii*'))
+            if not in_dwi_image_list:
+                raise MRtrixError('No DWI data found for session "'
+                                  + session_label
+                                  + '" output')
+            if len(in_dwi_image_list) > 1:
+                raise MRtrixError('More than one DWI mage found in session "'
+                                  + session_label
+                                  + '" output')
+            self.in_dwi = in_dwi_image_list[0]
+            if not '_desc-preproc_' in self.in_dwi:
+                raise MRtrixError('DWI image in output directory for session "'
+                                  + session_label
+                                  + '" not flagged as pre-processed')
+            in_dwi_prefix = self.in_dwi.split(os.extsep)[0]
+            self.in_bvec = in_dwi_prefix + '.bvec'
+            self.in_bval = in_dwi_prefix + '.bval'
+
             self.in_rf = os.path.join(root,
                                       'dwi',
-                                      label + '_tissue-WM_response.txt')
+                                      session_label
+                                      + '_tissue-WM_response.txt')
             connectome_files = \
                 glob.glob(
                     os.path.join(root,
                                  'connectome',
-                                 label
-                                 + '_parc-*_level-participant_connectome.csv'))
+                                 session_label
+                                 + '_parc-*'
+                                 + '_level-participant'
+                                 + '_connectome.csv'))
             if not connectome_files:
                 raise MRtrixError('No participant-level connectome file '
-                                  'found for session \'' + label + '\'')
+                                  'found for session "'
+                                  + session_label
+                                  + '"')
             if len(connectome_files) > 1:
                 raise MRtrixError('Connectomes from multiple parcellations '
-                                  'detected for session \'' + label + '\'; '
-                                  'this is not yet supported')
+                                  'detected for session "'
+                                  + session_label
+                                  + '"; this is not yet supported')
             self.in_connectome = connectome_files[0]
             self.in_mu = os.path.join(root,
                                       'tractogram',
-                                      label + '_mu.txt')
+                                      session_label + '_mu.txt')
 
             for entry in vars(self).values():
                 if not os.path.exists(entry):
                     raise MRtrixError('Unable to find critical data '
-                                      'for session \'' + label + '\''
+                                      'for session "' + session_label + '"'
                                       '(expected location: ' + entry + ')')
+
+            self.grad_import_option = ' -fslgrad ' + self.in_bvec + ' ' + self.in_bval
 
             self.parcellation = \
                 re.findall('(?<=_parc-)[a-zA-Z0-9]*',
@@ -1890,32 +2411,41 @@ def run_group(bids_dir, output_dir):
             # Permissible for this to not exist
             self.in_mask = os.path.join(root,
                                         'dwi',
-                                        label + '_brainmask.nii.gz')
+                                        session_label + '_brainmask.nii.gz')
 
             self.mu = matrix.load_vector(self.in_mu)[0]
             self.RF = matrix.load_matrix(self.in_rf)
 
-            self.temp_mask = os.path.join('masks', label + '.nii.gz')
-            self.link_fa = os.path.join('images', label + '.nii.gz')
-            self.link_bzero = os.path.join('bzeros', label + '.nii.gz')
-            # FIXME May change in update prior to 3.0.0
-            self.temp_warp = os.path.join('warps',
-                                          label.replace('-', '') + '.mif')
-            self.temp_voxels = os.path.join('voxels', label + '.mif')
+            self.temp_mask = os.path.join(GROUP_BRAINMASKS_DIR,
+                                          session_label + '.mif')
+            self.temp_fa = os.path.join(GROUP_FA_DIR,
+                                        session_label + '.mif')
+            self.temp_bzero = os.path.join(GROUP_BZEROS_DIR,
+                                           session_label + '.mif')
+            self.temp_warp = os.path.join(GROUP_WARPS_DIR,
+                                          session_label + '.mif')
+            self.temp_voxels = os.path.join(GROUP_WMVOXELS_DIR,
+                                            session_label + '.mif')
+            self.temp_rf = os.path.join(GROUP_RESPONSES_DIR,
+                                        session_label + '.txt')
             self.median_bzero = 0.0
             self.dwiintensitynorm_factor = 1.0
             self.RF_multiplier = 1.0
             self.global_multiplier = 1.0
-            self.temp_connectome = os.path.join('connectomes',
-                                                label + '.csv')
+            self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
+                                                session_label + '.csv')
             self.out_scale_intensity = \
                 os.path.join(root,
                              'connectome',
-                             label + '_factor-intensity_multiplier.txt')
+                             session_label
+                             + '_factor-intensity'
+                             + '_multiplier.txt')
             self.out_scale_RF = \
                 os.path.join(root,
                              'connectome',
-                             label + '_factor-response_multiplier.txt')
+                             session_label
+                             + '_factor-response'
+                             + '_multiplier.txt')
             self.out_connectome = \
                 os.path.join(root,
                              'connectome',
@@ -1923,8 +2453,9 @@ def run_group(bids_dir, output_dir):
                              .replace('_level-participant',
                                       '_level-group'))
 
-            self.label = label
+            self.session_label = session_label
 
+    # TODO Check output paths before commencing
 
     session_list = get_sessions(output_dir)
     if not session_list:
@@ -1958,33 +2489,77 @@ def run_group(bids_dir, output_dir):
     #   mean b=0 image, which must be provided
     progress = app.ProgressBar('Importing and preparing session data',
                                len(sessions))
-    run.function(os.makedirs, 'bzeros')
-    run.function(os.makedirs, 'images')
-    run.function(os.makedirs, 'masks')
+    run.function(os.makedirs, GROUP_BRAINMASKS_DIR)
+    run.function(os.makedirs, GROUP_BZEROS_DIR)
+    run.function(os.makedirs, GROUP_FA_DIR)
+    run.function(os.makedirs, GROUP_RESPONSES_DIR)
     for s in sessions:
+        # We need three images for each session:
+        # - Brain mask: Convert if present, otherwise generate from DWI
+        # - Mean b=0 image (for scaling): Generate from DWI
+        # - FA image (for registration): Generate from DWI
         if os.path.exists(s.in_mask):
-            run.function(os.symlink, s.in_mask, s.temp_mask)
+            run.command('mrconvert '
+                        + s.in_mask
+                        + ' '
+                        + s.temp_mask
+                        + ' -datatype bit')
         else:
-            run.command('mrcalc ' + s.in_bzero + ' 0.0 -gt ' + s.temp_mask)
-        run.function(os.symlink, s.in_fa, s.link_fa)
-        run.function(os.symlink, s.in_bzero, s.link_bzero)
+            run.command('dwi2mask '
+                        + s.in_dwi
+                        + s.grad_import_option
+                        + ' '
+                        + s.temp_mask)
+        run.command('dwiextract '
+                    + s.in_dwi
+                    + s.grad_import_option
+                    + ' -bzero - |'
+                    + ' mrmath - mean -axis 3 '
+                    + s.temp_bzero)
+        run.command('dwi2tensor '
+                    + s.in_dwi
+                    + s.grad_import_option
+                    + ' -mask '
+                    + s.temp_mask
+                    + ' - |'
+                    + ' tensor2metric - -fa '
+                    + s.temp_fa
+                    + ' -mask '
+                    + s.temp_mask)
+        run.function(shutil.copy,
+                     s.in_rf,
+                     s.temp_rf)
         progress.increment()
     progress.done()
 
-    # First group-level calculation: Generate the population FA template
+    # First group-level calculation:
+    # Generate the population FA template
     app.console('Generating population template for '
                 'intensity normalisation WM mask derivation')
-    run.command('population_template images template.mif '
-                '-mask_dir masks '
-                '-warp_dir warps '
-                '-type rigid_affine_nonlinear '
-                '-rigid_scale 0.25,0.5,0.8,1.0 '
-                '-affine_scale 0.7,0.8,1.0,1.0 '
-                '-nl_scale 0.5,0.75,1.0,1.0,1.0 '
-                '-nl_niter 5,5,5,5,5 '
-                '-linear_no_pause')
-    app.cleanup('images')
-    app.cleanup('masks')
+    run.command('population_template '
+                + GROUP_FA_DIR
+                + ' template.mif'
+                + ' -mask_dir '
+                + GROUP_BRAINMASKS_DIR
+                + ' -warp_dir '
+                + GROUP_WARPS_DIR
+                + ' -type rigid_affine_nonlinear'
+                + ' -rigid_scale 0.25,0.5,0.8,1.0'
+                + ' -affine_scale 0.7,0.8,1.0,1.0'
+                + ' -nl_scale 0.5,0.75,1.0,1.0,1.0'
+                + ' -nl_niter 5,5,5,5,5'
+                + ' -linear_no_pause')
+    app.cleanup(GROUP_FA_DIR)
+    app.cleanup(GROUP_BRAINMASKS_DIR)
+
+    # Generate the group average response function
+    app.console('Calculating group-average WM response function')
+    run.command(['responsemean',
+                 [s.temp_rf for s in sessions],
+                 'response.txt'])
+    app.cleanup(GROUP_RESPONSES_DIR)
+    mean_RF = matrix.load_matrix('response.txt')
+    mean_RF_lzero = [line[0] for line in mean_RF]
 
     # Second pass through subject data in group analysis:
     #     - Warp template FA image back to subject space &
@@ -1996,41 +2571,32 @@ def run_group(bids_dir, output_dir):
     progress = app.ProgressBar('Generating group-average response function '
                                'and intensity normalisation factors',
                                len(sessions)+1)
-    run.function(os.makedirs, 'voxels')
+    run.function(os.makedirs, GROUP_WMVOXELS_DIR)
     sum_median_bzero = 0.0
     sum_RF = []
     for s in sessions:
         run.command('mrtransform template.mif '
                     '-warp_full ' + s.temp_warp + ' '
                     '-from 2 '
-                    '-template ' + s.link_bzero + ' '
+                    '-template ' + s.temp_bzero + ' '
                     '- | '
                     'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
-        s.median_bzero = float(image.statistic(s.link_bzero,
-                                               'median',
-                                               '-mask ' + s.temp_voxels))
-        app.cleanup(s.link_bzero)
+        s.median_bzero = image.statistics(s.temp_bzero,
+                                          mask=s.temp_voxels).median
+        app.cleanup(s.temp_bzero)
         app.cleanup(s.temp_voxels)
         app.cleanup(s.temp_warp)
         sum_median_bzero += s.median_bzero
-        if sum_RF:
-            sum_RF = [[a+b for a, b in zip(one, two)]
-                      for one, two in zip(sum_RF, s.RF)]
-        else:
-            sum_RF = s.RF
         progress.increment()
-    app.cleanup('bzeros')
-    app.cleanup('voxels')
-    app.cleanup('warps')
+    app.cleanup(GROUP_BZEROS_DIR)
+    app.cleanup(GROUP_WMVOXELS_DIR)
+    app.cleanup(GROUP_WARPS_DIR)
+    app.cleanup('template.mif')
     progress.done()
 
     # Second group-level calculation:
     # - Calculate the mean of median b=0 values
-    # - Calculate the mean response function, and
-    #   extract the l=0 values from it
     mean_median_bzero = sum_median_bzero / len(sessions)
-    mean_RF = [[v/len(sessions) for v in line] for line in sum_RF]
-    mean_RF_lzero = [line[0] for line in mean_RF]
 
     # Third pass through session data in group analysis:
     # - Scale the connectome strengths:
@@ -2042,7 +2608,7 @@ def run_group(bids_dir, output_dir):
     progress = app.ProgressBar('Applying normalisation scaling to '
                                'subject connectomes',
                                len(sessions))
-    run.function(os.makedirs, 'connectomes')
+    run.function(os.makedirs, GROUP_CONNECTOMES_DIR)
     for s in sessions:
         RF_lzero = [line[0] for line in s.RF]
         s.RF_multiplier = 1.0
@@ -2060,7 +2626,7 @@ def run_group(bids_dir, output_dir):
         connectome = matrix.load_matrix(s.in_connectome)
         temp_connectome = [[v*s.global_multiplier for v in line]
                            for line in connectome]
-        matrix.save_matrix(s.temp_connectome, temp_connectome, format='%15f')
+        matrix.save_matrix(s.temp_connectome, temp_connectome)
         progress.increment()
     progress.done()
 
@@ -2102,6 +2668,7 @@ def run_group(bids_dir, output_dir):
         matrix.save_vector(s.out_scale_intensity, [s.bzero_multiplier])
         matrix.save_vector(s.out_scale_RF, [s.RF_multiplier])
         progress.increment()
+    app.cleanup(GROUP_CONNECTOMES_DIR)
 
     matrix.save_matrix(os.path.join(output_dir,
                                     'tissue-WM_response.txt'),
@@ -2114,6 +2681,16 @@ def run_group(bids_dir, output_dir):
                                         + '_connectome.csv'),
                            mean_connectome)
     progress.done()
+
+    # For group-level analysis, function is only executed once, so
+    #   no need to bypass the default scratch cleanup
+    # Only exception is if we want to capture the whole scratch directory
+    #   in the output path
+    if output_verbosity == 4:
+        app.console('Copying scratch directory to output location')
+        run.function(shutil.copytree,
+                     app.SCRATCH_DIR,
+                     os.path.join(output_dir, 'scratch_group'))
 
 # End of runGroup() function
 
@@ -2239,7 +2816,7 @@ def get_sessions(root_dir, **kwargs):
 
 
 
-ANALYSIS_CHOICES = ['participant', 'group']
+ANALYSIS_CHOICES = ['participant1', 'participant2', 'group']
 
 PARCELLATION_CHOICES = ['aal',
                         'aal2',
@@ -2328,88 +2905,140 @@ See the Mozilla Public License v. 2.0 for more details.''')
             action='store_true',
             help='Skip BIDS validation')
 
+    cmdline.add_description(
+        'While participant1-level analysis only requires data within the '
+        'BIDS directory, participant2-level analysis requires that the '
+        'output directory be pre-populated with the results from '
+        'participant1-level processing; similarly, group-level analysis '
+        'requires that the output directory be pre-populated with the '
+        'results from participant2-level analysis.')
+    cmdline.add_description(
+        'The operations performed by each of the three levels of analysis '
+        'are as follows:')
+    cmdline.add_description(
+        '"participant1": '
+        'DWI: Denoising; Gibbs ringing removal; motion, '
+        'eddy current and EPI distortion correction and outlier detection & '
+        'replacement; brain masking, bias field correction and intensity '
+        'normalisation; rigid-body registration & transformation to '
+        'T1-weighted image. '
+        'T1-weighted image: bias field correction; brain masking.')
+    cmdline.add_description(
+        '"participant2": '
+        'DWI: Response function estimation; FOD estimation. '
+        'T1-weighted image (if ' + OPTION_PREFIX + 'parcellation '
+        'is not none): '
+        'Tissue segmentation; grey matter parcellation. '
+        'Combined (if ' + OPTION_PREFIX + 'parcellation is not none, '
+        'or ' + OPTION_PREFIX + 'streamlines is provided): '
+        'Whole-brain streamlines tractography; SIFT2; '
+        'connectome construction.')
+    cmdline.add_description(
+        '"group": '
+        'Generation of FA-based population template; '
+        'warping of template-based white matter mask to subject spaces; '
+        'calculation of group mean white matter response function; '
+        'scaling of connectomes based on white matter b=0 intensity, '
+        'response function used during participant2-level analysis, and '
+        'SIFT model proportioinality coefficient; '
+        'generation of group mean connectome.')
+    cmdline.add_description(
+        'The label(s) provided to the '
+        + OPTION_PREFIX + 'participant_label and '
+        + OPTION_PREFIX + 'session_label options '
+        + 'correspond(s) to sub-<participant_label> and '
+        + 'ses-<session_label> from the BIDS spec (so they do _not_ '
+        + 'include "sub-" or "ses-"). Multiple participants / sessions '
+        + 'can be specified with a space-separated list.')
+    cmdline.add_description(
+        'For both participant-level analyses, if no specific participants '
+        'or sessions are nominated by the user (or the user explicitly '
+        'specifies multiple participants / sessions), the script will '
+        'process each of these in series. It is additionally possible for '
+        'the user to invoke multiple instances of this script in order to '
+        'process multiple subjects at once in parallel, ensuring that '
+        'no single participant / session is being processed in parallel, '
+        'and that participant1-level output data are written fully before '
+        'commencing participant2-level analysis.')
+    cmdline.add_description(
+        'The ' + OPTION_PREFIX + 'output_verbosity option principally '
+        'affects the participant2-level analysis, modulating how many '
+        'derivative files are written to the output directory. Permitted '
+        'values are from 1 to 4: 1 writes only those files requisite for '
+        'group-level analysis; 2 additionally writes files typically '
+        'useful for post-hoc analysis (the default); 3 additionally '
+        'generates files for enhanced connectome visualisation and copies '
+        'the entire whole-brain tractogram; 4 additionally generates a '
+        'full copy of the script scratch directory (with all intermediate '
+        'files retained) to the output directory (and this applies to '
+        'all analysis levels)')
+    if not IS_CONTAINER:
+        cmdline.add_description(
+            'If running participant2-level analysis using the script as a '
+            'standalone tool rather than inside the provided container, '
+            'data pertaining to atlas parcellations can no longer be '
+            'guaranteed to be stored at a specific location on the '
+            'filesystem. In this case, the user will most likely need to '
+            'manually specify the location where the corresponding '
+            'parcellation is stored using the -atlas_path option.')
+
     cmdline.add_argument(
         'bids_dir',
         help='The directory with the input dataset formatted '
              'according to the BIDS standard.')
     cmdline.add_argument(
         'output_dir',
-        help='The directory where the output files should be stored. '
-             'If you are running group level analysis, this directory '
-             'should be prepopulated with the results of the '
-             'participant level analysis.')
+        help='The directory where the output files should be stored.')
     cmdline.add_argument(
         'analysis_level',
-        help='Level of the analysis that will be performed. '
-             'Multiple participant level analyses can be run '
-             'independently (in parallel) by the user using the same '
-             'output directory without conflict. '
-             'Options are: ' + ', '.join(ANALYSIS_CHOICES),
+        help='Level of analysis that will be performed; '
+             'options are: ' + ', '.join(ANALYSIS_CHOICES) + '.',
         choices=ANALYSIS_CHOICES)
+
+    cmdline.add_argument(
+        OPTION_PREFIX + 'output_verbosity',
+        type=int,
+        default=2,
+        help='The verbosity of script output (number from 1 to 4).')
 
     batch_options = cmdline.add_argument_group(
         'Options specific to the batch processing of participant data')
     batch_options.add_argument(
         OPTION_PREFIX + 'participant_label',
         nargs='+',
-        help='The label(s) of the participant(s) that should be analyzed. '
-             'The label(s) correspond(s) to sub-<participant_label> from the '
-             'BIDS spec (so it does _not_ include "sub-"). If this parameter '
-             'is not provided, all subjects in the BIDS directory will be '
-             'analyzed sequentially. Multiple participants can be specified '
-             'with a space-separated list.')
+        help='The label(s) of the participant(s) that should be analyzed.')
     batch_options.add_argument(
         OPTION_PREFIX + 'session_label',
         nargs='+',
-        help='The session(s) within each participant that should be analyzed. '
-             'The label(s) correspond(s) to ses-<session_label> from the BIDS '
-             'spec (so it does _not_ include "ses-"). If this parameter is '
-             'not provided, all sessions for those participants in the BIDS '
-             'directory undergoing processing will be analyzed sequentially. '
-             'Multiple session IDs can be specified with a space-separated '
-             'list.')
+        help='The session(s) within each participant that should be analyzed.')
 
     participant_options = \
         cmdline.add_argument_group(
-            'Options that are relevant to participant-level analysis')
+            'Options that are relevant to participant2-level analysis')
     if not IS_CONTAINER:
         participant_options.add_argument(
             OPTION_PREFIX + 'atlas_path',
             metavar='path',
-            help='The filesystem path in which to search for an atlas '
-                 'parcellation (necessary if not installed in the same '
-                 'location as they are placed within the MRtrix3_connectome '
-                 'BIDS App container)')
-    participant_options.add_argument(
-        OPTION_PREFIX + 'output_verbosity',
-        type=int,
-        default=2,
-        help='The verbosity of script output (number from 1 to 4); '
-             'higher values result in more generated data being included in '
-             'the output directory (default = 2)')
+            help='The filesystem path in which to search for atlas '
+                 'parcellation files.')
     participant_options.add_argument(
         OPTION_PREFIX + 'parcellation',
         help='The choice of connectome parcellation scheme '
-             '(compulsory for participant-level analysis). '
-             'Options are: ' + ', '.join(PARCELLATION_CHOICES),
+             '(compulsory for participant2-level analysis); '
+             'options are: ' + ', '.join(PARCELLATION_CHOICES) + '.',
         choices=PARCELLATION_CHOICES)
-    participant_options.add_argument(
-        OPTION_PREFIX + 'preprocessed',
-        action='store_true',
-        help='Indicate that the subject DWI data have been preprocessed, '
-             'and hence initial image processing steps should be skipped')
     participant_options.add_argument(
         OPTION_PREFIX + 'streamlines',
         type=int,
         default=0,
         help='The number of streamlines to generate for each subject '
-             '(will be determined heuristically if not explicitly set)')
+             '(will be determined heuristically if not explicitly set).')
     participant_options.add_argument(
         OPTION_PREFIX + 'template_reg',
         metavar='software',
         help='The choice of registration software for mapping subject to '
-             'template space. '
-             'Options are: ' + ', '.join(REGISTRATION_CHOICES),
+             'template space; '
+             'options are: ' + ', '.join(REGISTRATION_CHOICES) + '.',
         choices=REGISTRATION_CHOICES)
 
     cmdline.add_citation(
@@ -2417,20 +3046,21 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'How to correct susceptibility distortions in spin-echo echo-planar '
         'images: application to diffusion tensor imaging. '
         'NeuroImage, 2003, 20, 870-888',
-        condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+        condition='If performing participant1-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Jenkinson, M. & Smith, S. '
         'Non-linear registration, aka spatial normalisation. '
         'FMRIB technical report, 2010, TR07JA2',
-        condition='If using ' + OPTION_PREFIX + 'template_reg fsl',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'template_reg fsl',
         is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. & Sotiropoulos, S. N. '
         'An integrated approach to correction for off-resonance effects and '
         'subject movement in diffusion MR imaging. '
         'NeuroImage, 2015, 125, 1063-1078',
-        condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+        condition='If performing participant1-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Graham, M. S.; Zsoldos, E. '
@@ -2439,7 +3069,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'non-parametric framework for movement and distortion correction of '
         'diffusion MR images. '
         'NeuroImage, 2016, 141, 556-572',
-        condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+        condition='If performing participant1-level analysis',
         is_external=True)
     if not IS_CONTAINER:
         cmdline.add_citation(
@@ -2448,7 +3078,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
             'Towards a comprehensive framework for movement and distortion '
             'correction of diffusion MR images: Within volume movement. '
             'NeuroImage, 2017, 152, 450-466',
-            condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+            condition='If performing participant1-level analysis',
             is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Graham,, M. S.; Drobnjak, I.; Zhang, H. & '
@@ -2456,16 +3086,18 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Susceptibility-induced distortion that varies due to motion: '
         'Correction in diffusion MR without acquiring additional data. '
         'NeuroImage, 2018, 171, 277-295',
-        condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+        condition='If performing participant1-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Avants, B. B.; Epstein, C. L.; Grossman, M.; Gee, J. C. '
         'Symmetric diffeomorphic image registration with cross-correlation: '
         'Evaluating automated labeling of elderly and neurodegenerative brain. '
         'Medical Image Analysis, 2008, 12, 26-41',
-        condition='If using ' + OPTION_PREFIX + 'parcellation [ aal, aal2, '
-        'brainnetome246mni, craddock200, craddock400, perry512, yeo7mni or '
-        'yeo17mni ], and not using ' + OPTION_PREFIX + 'template_reg fsl',
+        condition='If performing participant2-level analysis, '
+        + 'using ' + OPTION_PREFIX + 'parcellation [ aal, aal2, '
+        + 'brainnetome246mni, craddock200, craddock400, perry512, '
+        + 'yeo7mni or yeo17mni ], '
+        + 'and not using ' + OPTION_PREFIX + 'template_reg fsl',
         is_external=True)
     cmdline.add_citation(
         'Bhushan, C.; Haldar, J. P.; Choi, S.; Joshi, A. A.; Shattuck, D. W. & '
@@ -2473,6 +3105,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Co-registration and distortion correction of diffusion and anatomical '
         'images based on inverse contrast normalization. '
         'NeuroImage, 2015, 115, 269-280',
+        condition='If performing participant1-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; '
@@ -2480,16 +3113,19 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'A whole brain fMRI atlas generated via spatially constrained '
         'spectral clustering. '
         'Human Brain Mapping, 2012, 33(8), 1914-1928',
-        condition='If using ' + OPTION_PREFIX + 'parcellation '
-        '[ craddock200 or craddock400 ]',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation '
+        + '[ craddock200 or craddock400 ]',
         is_external=True)
     cmdline.add_citation(
         'Dale, A. M.; Fischl, B. & Sereno, M. I. '
         'Cortical Surface-Based Analysis: '
         'I. Segmentation and Surface Reconstruction. '
         'NeuroImage, 1999, 9, 179-194',
-        condition='If using ' + OPTION_PREFIX + 'parcellation '
-        '[ brainnetome246fs, desikan, destrieux, hcpmmp1, yeo7fs or yeo17fs ]',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation '
+        + '[ brainnetome246fs, desikan, destrieux, hcpmmp1, '
+        + 'yeo7fs or yeo17fs ]',
         is_external=True)
     cmdline.add_citation(
         'Desikan, R. S.; Segonne, F.; Fischl, B.; Quinn, B. T.; '
@@ -2498,14 +3134,16 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'An automated labeling system for subdividing the human cerebral '
         'cortex on MRI scans into gyral based regions of interest. '
         'NeuroImage, 2006, 31, 968-980',
-        condition='If using ' + OPTION_PREFIX + 'parcellation desikan',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation desikan',
         is_external=True)
     cmdline.add_citation(
         'Destrieux, C.; Fischl, B.; Dale, A. & Halgren, E. '
         'Automatic parcellation of human cortical gyri and sulci using '
         'standard anatomical nomenclature. '
         'NeuroImage, 2010, 53, 1-15',
-        condition='If using ' + OPTION_PREFIX + 'parcellation destrieux',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation destrieux',
         is_external=True)
     cmdline.add_citation(
         'Fan, L.; Li, H.; Zhuo, J.; Zhang, Y.; Wang, J.; Chen, L.; Yang, Z.; '
@@ -2514,8 +3152,9 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The Human Brainnetome Atlas: '
         'A New Brain Atlas Based on Connectional Architecture. '
         'Cerebral Cortex, 2016, 26 (8), 3508-3526',
-        condition='If using ' + OPTION_PREFIX + 'parcellation '
-        '[ brainnetome246fs brainnetome246mni ]',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation '
+        + '[ brainnetome246fs brainnetome246mni ]',
         is_external=True)
     cmdline.add_citation(
         'Glasser, M. F.; Coalson, T. S.; Robinson, E. C.; Hacker, C. D.; '
@@ -2523,36 +3162,38 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Jenkinson, M.; Smith, S. M. & Van Essen, D. C. '
         'A multi-modal parcellation of human cerebral cortex. '
         'Nature, 2016, 536, 171-178',
-        condition='If using ' + OPTION_PREFIX + 'parcellation hcpmmp1',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation hcpmmp1',
         is_external=True)
     cmdline.add_citation(
         'Iglesias, J. E.; Liu, C. Y.; Thompson, P. M. & Tu, Z. '
         'Robust Brain Extraction Across Datasets and '
         'Comparison With Publicly Available Methods. '
         'IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634',
-        condition=(None
-                   if IS_CONTAINER
-                   else 'If using ROBEX for brain extraction'),
+        condition='If performing either participant-level analysis and '
+        'ROBEX is used for T1 brain extraction',
         is_external=True)
     cmdline.add_citation(
         'Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. '
         'Multi-tissue constrained spherical deconvolution for improved '
         'analysis of multi-shell diffusion MRI data. '
         'NeuroImage, 2014, 103, 411-426',
+        condition='If performing either participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. '
         'Gibbs-ringing artifact removal based on local subvoxel-shifts. '
         'Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581',
-        condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+        condition='If performing participant1-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. '
         'A Bayesian model of shape and appearance for '
         'subcortical brain segmentation. '
         'NeuroImage, 2011, 56, 907-922',
-        condition='If not using ' + OPTION_PREFIX + 'parcellation '
-        '[ brainnetome246fs or brainnetome246mni ]',
+        condition='If performing participant2-level analysis and '
+        + 'not using ' + OPTION_PREFIX + 'parcellation '
+        + '[ brainnetome246fs or brainnetome246mni ]',
         is_external=True)
     cmdline.add_citation(
         'Perry, A.; Wen, W.; Kochan, N. A.; Thalamuthu, A.; Sachdev, P. S.; '
@@ -2560,14 +3201,16 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The independent influences of age and education on functional brain '
         'networks and cognition in healthy older adults. '
         'Human Brain Mapping, 2017, 38(10), 5094-5114',
-        condition='If using ' + OPTION_PREFIX + 'parcellation perry512',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation perry512',
         is_external=True)
     if not IS_CONTAINER:
         cmdline.add_citation(
             'Smith, S. M. '
             'Fast robust automated brain extraction. '
             'Human Brain Mapping, 2002, 17, 143-155',
-            condition='If not using ROBEX for brain extraction',
+            condition='If performing either participant-level analysis and '
+            'FSL is used for T1 brain extraction',
             is_external=True)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
@@ -2575,24 +3218,28 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Improved diffusion MRI streamlines tractography through '
         'effective use of anatomical information. '
         'NeuroImage, 2012, 62, 1924-1938',
+        condition='If performing participant2-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'The effects of SIFT on the reproducibility and biological '
         'accuracy of the structural connectome. '
         'NeuroImage, 2015a, 104, 253-265',
+        condition='If performing participant2-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'SIFT2: Enabling dense quantitative assessment of brain white matter '
         'connectivity using streamlines tractography. '
         'NeuroImage, 2015b, 119, 338-351',
+        condition='If performing participant2-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. '
         'Direct estimation of the fiber orientation density function from '
         'diffusion-weighted MRI data using spherical deconvolution. '
         'NeuroImage, 2004, 23, 1176-1185',
+        condition='If performing either participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F. & Connelly, A. '
@@ -2600,13 +3247,16 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'integration over fibre orientation distributions. '
         'Proceedings of the International Society for Magnetic '
         'Resonance in Medicine, 2010, 1670',
+        condition='If performing participant2-level analysis and '
+        + OPTION_PREFIX + 'streamlines 0 is not set',
         is_external=False)
     cmdline.add_citation(
         'Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; '
         'Yushkevich, P. & Gee, J. '
         'N4ITK: Improved N3 Bias Correction. '
         'IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320',
-        condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+        condition='If performing either participant-level analysis, and'
+        'N4 is used for either DWI or T1 bias field correction',
         is_external=True)
     cmdline.add_citation(
         'Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; '
@@ -2615,20 +3265,23 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Macroscopic Anatomical Parcellation of the MNI MRI '
         'single-subject brain. '
         'NeuroImage, 15(1), 273-289',
-        condition='If using ' + OPTION_PREFIX + 'parcellation [ aal or aal2 ]',
+        condition='If performing participant2-level analysis and '
+        'using ' + OPTION_PREFIX + 'parcellation [ aal or aal2 ]',
         is_external=True)
     cmdline.add_citation(
         'Veraart, J.; Novikov, D. S.; Christiaens, D.; Ades-aron, B.; '
         'Sijbers, J. & Fieremans, E. '
         'Denoising of diffusion MRI using random matrix theory. '
         'NeuroImage, 2016, 142, 394-406',
-        condition='If ' + OPTION_PREFIX + 'preprocessed is not used',
+        condition='If performing participant1-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. '
         'Correction for diffusion MRI fibre tracking biases: '
         'The consequences for structural connectomic metrics. '
         'Neuroimage, 2016, 142, 150-162',
+        condition='If utilising connectome outputs from '
+        'participant2-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Yeo, B.T.; Krienen, F.M.; Sepulcre, J.; Sabuncu, M.R.; Lashkari, D.; '
@@ -2637,21 +3290,24 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The organization of the human cerebral cortex estimated by '
         'intrinsic functional connectivity. '
         'J Neurophysiol, 2011, 106(3), 1125-1165',
-        condition='If using ' + OPTION_PREFIX + 'parcellation '
-        '[ yeo7fs, yeo7mni, yeo17fs or yeo17mni ]',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation '
+        + '[ yeo7fs, yeo7mni, yeo17fs or yeo17mni ]',
         is_external=False)
     cmdline.add_citation(
         'Zalesky, A.; Fornito, A.; Harding, I. H.; Cocchi, L.; Yucel, M.; '
         'Pantelis, C. & Bullmore, E. T. '
         'Whole-brain anatomical networks: Does the choice of nodes matter? '
         'NeuroImage, 2010, 50, 970-983',
-        condition='If using ' + OPTION_PREFIX + 'parcellation perry512',
+        condition='If performing participant2-level analysis and '
+        + 'using ' + OPTION_PREFIX + 'parcellation perry512',
         is_external=True)
     cmdline.add_citation(
         'Zhang, Y.; Brady, M. & Smith, S. '
         'Segmentation of brain MR images through a hidden Markov random '
         'field model and the expectation-maximization algorithm. '
         'IEEE Transactions on Medical Imaging, 2001, 20, 45-57',
+        condition='If performing participant2-level analysis',
         is_external=True)
 
 
@@ -2684,51 +3340,67 @@ def execute(): #pylint: disable=unused-variable
         app.warn('BIDS validator script not installed; '
                  'proceeding without validation of input data')
 
-    # Running participant level
-    if app.ARGS.analysis_level == 'participant':
+    if app.ARGS.output_verbosity < 1 or app.ARGS.output_verbosity > 4:
+        raise MRtrixError('Valid values for '
+                          + OPTION_PREFIX + 'output_verbosity '
+                          + 'option are from 1 to 4')
 
-        if app.ARGS.output_verbosity < 1 or app.ARGS.output_verbosity > 4:
-            raise MRtrixError('Valid values for '
-                              + OPTION_PREFIX + 'output_verbosity '
-                              + 'option are from 1 to 4')
+    # At output verbosity level 4 we retain all data and move the
+    #   scratch directory to the output
+    if app.ARGS.output_verbosity == 4:
+        app.DO_CLEANUP = False
 
-        # At output verbosity level 4 we retain all data and move the
-        #   scratch directory to the output
-        if app.ARGS.output_verbosity == 4:
-            app.DO_CLEANUP = False
-
+    if app.ARGS.analysis_level in ['participant1', 'participant2']:
         sessions_to_analyze = get_sessions(
             app.ARGS.bids_dir,
             participant_label=app.ARGS.participant_label,
             session_label=app.ARGS.session_label)
 
-        participant_shared = \
-            ParticipantShared(getattr(app.ARGS, 'atlas_path', None),
-                              app.ARGS.output_verbosity,
-                              app.ARGS.parcellation,
-                              app.ARGS.preprocessed,
-                              app.ARGS.streamlines,
-                              app.ARGS.template_reg)
+    if app.ARGS.analysis_level == 'participant1':
+
+        participant1_shared = Participant1Shared()
 
         for session_to_process in sessions_to_analyze:
             app.console('Commencing execution for session: \''
                         + '_'.join(session_to_process) + '\'')
-            run_participant(app.ARGS.bids_dir,
-                            session_to_process,
-                            participant_shared,
-                            os.path.abspath(app.ARGS.output_dir))
+            run_participant1(app.ARGS.bids_dir,
+                             session_to_process,
+                             participant1_shared,
+                             app.ARGS.output_verbosity,
+                             os.path.abspath(app.ARGS.output_dir))
+
+    # Running participant2 - level
+    if app.ARGS.analysis_level == 'participant2':
+
+        participant2_shared = \
+            Participant2Shared(getattr(app.ARGS, 'atlas_path', None),
+                               app.ARGS.parcellation,
+                               app.ARGS.streamlines,
+                               app.ARGS.template_reg)
+
+        for session_to_process in sessions_to_analyze:
+            app.console('Commencing execution for session: \''
+                        + '_'.join(session_to_process) + '\'')
+            run_participant2(app.ARGS.bids_dir,
+                             session_to_process,
+                             participant2_shared,
+                             app.ARGS.output_verbosity,
+                             os.path.abspath(app.ARGS.output_dir))
 
     # Running group level
     elif app.ARGS.analysis_level == 'group':
 
         if app.ARGS.participant_label:
-            raise MRtrixError('Cannot use --participant_label option '
-                              'when performing group analysis')
+            raise MRtrixError('Cannot use '
+                              + OPTION_PREFIX + 'participant_label option '
+                              + 'when performing group analysis')
         if app.ARGS.session_label:
-            raise MRtrixError('Cannot use --session_label option '
-                              'when performing group analysis')
+            raise MRtrixError('Cannot use '
+                              + OPTION_PREFIX + 'session_label option '
+                              + 'when performing group analysis')
 
         run_group(os.path.abspath(app.ARGS.bids_dir),
+                  app.ARGS.output_verbosity,
                   os.path.abspath(app.ARGS.output_dir))
 
 

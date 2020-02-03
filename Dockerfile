@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     perl-modules \
-    python \
+    python3 \
+    python3-setuptools \
     tar \
     tcsh \
     unzip \
@@ -64,8 +65,8 @@ RUN apt-get install -y ants
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
 RUN /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
-RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git -o /opt/eddyqc && \
-    python /opt/eddyqc/setup.py install
+RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && \
+    cd /opt/eddyqc && python3 setup.py install
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator
@@ -146,10 +147,10 @@ ENV FSLOUTPUTTYPE NIFTI
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-# Commit checked out is development branch as at 28/01/2020
+# Commit checked out is development branch as at 30/01/2020
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
-    git checkout 9e82fe18bfc43a50b352b7084e004d6d4ad5b1ca && \
+    git checkout f7397a1fe7054824cfcf7b50c4fe55fc8f8ad628 && \
     python configure -nogui && \
     python build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version
