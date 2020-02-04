@@ -607,7 +607,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         raise MRtrixError('No DWI data found for session \''
                           + session_label
                           + '\' (search location: ' + in_dwi_path)
-    dwi_index = 1
+    dwi_index = 0
 
     re_is_complex = re.compile(r'_part-(mag|phase)_')
 
@@ -692,6 +692,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                 'cannot proceed with DWI preprocessing '
                 'without this information')
         # Import the data
+        dwi_index += 1
         if in_phase_image:
             run.command('mrcalc '
                         + entry + ' '
@@ -711,7 +712,6 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                         + path.to_scratch('dwi' + str(dwi_index) + '.mif', True)
                         + grad_import_option
                         + json_import_option)
-        dwi_index += 1
 
     dwi_image_list = ['dwi' + str(index) + '.mif'
                       for index in range(1, dwi_index)]
@@ -731,7 +731,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     #   dedicated to field map estimation
     in_fmap_image_list = []
     fmap_dir = os.path.join(os.path.join(bids_dir, *session), 'fmap')
-    fmap_index = 1
+    fmap_index = 0
+    fmap_image_list = None
     if os.path.isdir(fmap_dir):
         app.console('Importing fmap data into scratch directory')
         in_fmap_image_list = glob.glob(os.path.join(fmap_dir,
@@ -754,6 +755,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
             #   therefore we need to add it manually ourselves so that
             #   mrcat / mrconvert can appropriately handle the table once
             #   these images are concatenated with the DWIs
+            fmap_index += 1
             fmap_image_size = image.Header(entry).size()
             fmap_image_num_volumes = \
                 1 if len(fmap_image_size) == 3 else fmap_image_size[3]
@@ -769,7 +771,6 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                         + ' -grad ' + path.to_scratch(fmap_dwscheme_file,
                                                       True))
             app.cleanup(fmap_dwscheme_file)
-            fmap_index += 1
 
         fmap_image_list = ['fmap' + str(index) + '.mif'
                            for index in range(1, fmap_index)]
