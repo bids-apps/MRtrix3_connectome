@@ -714,7 +714,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                         + json_import_option)
 
     dwi_image_list = ['dwi' + str(index) + '.mif'
-                      for index in range(1, dwi_index)]
+                      for index in range(1, dwi_index+1)]
 
     if len(dwi_image_list) > 1:
         dwi_first_header = image.Header(
@@ -773,7 +773,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
             app.cleanup(fmap_dwscheme_file)
 
         fmap_image_list = ['fmap' + str(index) + '.mif'
-                           for index in range(1, fmap_index)]
+                           for index in range(1, fmap_index+1)]
 
     # No need to explicitly check whether fmap/ images are defined
     #   on a common image grid; these we are happy to resample
