@@ -732,7 +732,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     in_fmap_image_list = []
     fmap_dir = os.path.join(os.path.join(bids_dir, *session), 'fmap')
     fmap_index = 0
-    fmap_image_list = None
+    fmap_image_list = []
     if os.path.isdir(fmap_dir):
         app.console('Importing fmap data into scratch directory')
         in_fmap_image_list = glob.glob(os.path.join(fmap_dir,
