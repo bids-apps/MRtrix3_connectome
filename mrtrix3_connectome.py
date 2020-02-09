@@ -1125,11 +1125,11 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     dwi_cropped_image = 'dwi_crop.mif'
     dwi_cropped_mask_image = 'mask_crop.mif'
     run.command('mrgrid ' + dwi_image + ' crop ' + dwi_cropped_image
-                + ' -mask ' + dwi_mask_image + ' -uniform 3')
+                + ' -mask ' + dwi_mask_image + ' -uniform -3')
     app.cleanup(dwi_image)
     dwi_image = dwi_cropped_image
     run.command('mrgrid ' + dwi_mask_image + ' crop ' + dwi_cropped_mask_image
-                + ' -mask ' + dwi_mask_image + ' -uniform 3')
+                + ' -mask ' + dwi_mask_image + ' -uniform -3')
     app.cleanup(dwi_mask_image)
     dwi_mask_image = dwi_cropped_mask_image
 
