@@ -1056,7 +1056,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         progress.increment()
         field_path = 'field' + iter_string + '.mif'
         factors_path = 'factors' + iter_string + '.txt'
-        run.command('mtnormalise -mask ' + dwi_mask_image
+        run.command('maskfilter ' + dwi_mask_image + ' erode - |'
+                    + ' mtnormalise -mask -'
                     + ' -check_norm ' + field_path
                     + ' -check_factors ' + factors_path
                     + ' '
