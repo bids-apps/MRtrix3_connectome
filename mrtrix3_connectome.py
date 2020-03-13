@@ -954,8 +954,10 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         ' -eddy_options \" ' \
         + ' '.join(eddy_options) + '\"' if eddy_options else ''
     run.function(os.makedirs, 'eddyqc', show=False)
-    dwifslpreproc_output = os.path.splitext(dwifslpreproc_input)[0] \
-                           + '_preproc.mif'
+    dwifslpreproc_output = 'dwifslpreproc_out.mif' \
+                           if dwifslpreproc_input == 'dwifslpreproc_in.mif' \
+                           else (os.path.splitext(dwifslpreproc_input)[0]
+                                 + '_preproc.mif')
     run.command('dwifslpreproc '
                 + dwifslpreproc_input
                 + ' '
