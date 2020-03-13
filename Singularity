@@ -12,8 +12,8 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     version /version
     # TODO Erase
     ROBEXv12.linux64.tar.gz /ROBEX.tar.gz
-    Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
-    Yeo2011_17N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
+    Yeo2011_7N_split.txt /tmp/labelconvert/Yeo2011_7N_split.txt
+    Yeo2011_17N_split.txt /tmp/labelconvert/Yeo2011_17N_split.txt
 
 %environment
 
@@ -107,6 +107,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # MRtrix3 setup
     git clone https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && git checkout ac5f54d0dfb3b8edd386362ff213f1941900c64f && python configure -nogui && python build -persistent -nopaginate && git describe --tags > /mrtrix3_version
+    mv /tmp/labelconvert/* /mrtrix3/share/mrtrix3/labelconvert && rm -rf /tmp/labelconvert
 
 # MRtrix3_connectome script
     chmod 775 /mrtrix3_connectome.py
