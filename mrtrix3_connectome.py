@@ -2894,7 +2894,12 @@ See the Mozilla Public License v. 2.0 for more details.''')
                  'multi-threaded applications '
                  '(0 disables multi-threading)')
         cmdline._action_groups[2].add_argument(
-            '-s', '--skip-bids-validator',
+            '-scratch', '--scratch',
+            dest='scratch',
+            action='store_true',
+            help='Set location for script scratch directory')
+        cmdline._action_groups[2].add_argument(
+            '-skip', '--skip-bids-validator',
             dest='skipbidsvalidator',
             action='store_true',
             help='Skip BIDS validation')
@@ -3329,7 +3334,7 @@ def execute(): #pylint: disable=unused-variable
     #     destruction if the script fails at any point.
     if IS_CONTAINER and app.ARGS.debug:
         app.DO_CLEANUP = False
-        if 'ScriptScratchDir' not in CONFIG:
+        if 'ScriptScratchDir' not in CONFIG and not app.ARGS.scratch:
             CONFIG['ScriptScratchDir'] = os.path.abspath(app.ARGS.output_dir)
 
     if utils.is_windows():
