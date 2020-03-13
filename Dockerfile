@@ -147,10 +147,10 @@ ENV FSLOUTPUTTYPE NIFTI
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-# Commit checked out is development branch as at 30/01/2020
+# Commit checked out is development branch as at 13/03/2020
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
-    git checkout f7397a1fe7054824cfcf7b50c4fe55fc8f8ad628 && \
+    git checkout ac5f54d0dfb3b8edd386362ff213f1941900c64f && \
     python configure -nogui && \
     python build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version
