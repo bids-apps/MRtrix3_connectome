@@ -2896,7 +2896,6 @@ See the Mozilla Public License v. 2.0 for more details.''')
         cmdline._action_groups[2].add_argument(
             '-scratch', '--scratch',
             dest='scratch',
-            action='store_true',
             help='Set location for script scratch directory')
         cmdline._action_groups[2].add_argument(
             '-skip', '--skip-bids-validator',
