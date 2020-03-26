@@ -64,9 +64,9 @@ RUN apt-get install -y ants
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
-RUN /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
+RUN python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
 RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && \
-    cd /opt/eddyqc && git checkout v1.0.2 && ./setup.py install
+    cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator
@@ -151,8 +151,8 @@ ENV PATH /opt/ROBEX:$PATH
 RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
     git checkout ac5f54d0dfb3b8edd386362ff213f1941900c64f && \
-    python configure -nogui && \
-    python build -persistent -nopaginate && \
+    python3 configure -nogui && \
+    python3 build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version
 #RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 

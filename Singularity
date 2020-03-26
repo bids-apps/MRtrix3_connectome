@@ -1,7 +1,7 @@
 Bootstrap: debootstrap
 MirrorURL: http://us.archive.ubuntu.com/ubuntu/
 OSVersion: bionic
-Include: apt bc build-essential dc file git gnupg libfftw3-dev libpng-dev libtiff5-dev nano python python-numpy tar tzdata unzip wget zlib1g-dev
+Include: apt bc build-essential dc file git gnupg libfftw3-dev libpng-dev libtiff5-dev nano python python-numpy python3 python3-setuptools tar tzdata unzip wget zlib1g-dev
 
 %labels
 MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
@@ -74,9 +74,9 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     apt install -y ants
     wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
     chmod 775 fslinstaller.py
-    /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
+    python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
-    git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && ./setup.py install
+    git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install
     # TODO Revert
     #wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     tar -xf ROBEX.tar.gz -C /opt
@@ -107,7 +107,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-    git clone https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && git checkout ac5f54d0dfb3b8edd386362ff213f1941900c64f && python configure -nogui && python build -persistent -nopaginate && git describe --tags > /mrtrix3_version
+    git clone https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && git checkout ac5f54d0dfb3b8edd386362ff213f1941900c64f && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version
     mv /tmp/labelconvert/* /mrtrix3/share/mrtrix3/labelconvert && rm -rf /tmp/labelconvert
 
 # MRtrix3_connectome script
