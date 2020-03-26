@@ -7,9 +7,9 @@ import os
 import re
 import shutil
 from distutils.spawn import find_executable
-import mrtrix3
-from mrtrix3 import CONFIG, MRtrixError
-from mrtrix3 import app, fsl, image, matrix, path, run, utils
+import mrtrix3 #pylint: disable=import-error
+from mrtrix3 import CONFIG, MRtrixError #pylint: disable=import-error
+from mrtrix3 import app, fsl, image, matrix, path, run, utils #pylint: disable=import-error
 
 
 IS_CONTAINER = os.path.exists('/version') \
@@ -612,15 +612,9 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     re_is_complex = re.compile(r'_part-(mag|phase)_')
 
     for entry in in_dwi_image_list:
-        # os.path.split() falls over with .nii.gz extensions;
-        #   only removes the .gz
-        prefix = entry.split(os.extsep)[0]
         # Is this one image in a magnitude-phase pair?
         is_complex = re_is_complex.search(os.path.basename(entry))
         if is_complex:
-            if shared.preprocessed:
-                raise MRtrixError('If input data are pre-processed, '
-                                  'should not be stored as complex data')
             matching_text = is_complex.group(1)
             complex_part = matching_text.strip('_').split('-')[-1]
             assert complex_part in ['mag', 'phase']
@@ -646,16 +640,17 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                              + '); data will be rescaled automatically')
                     # Are the values stored as integers? If so, assume that
                     #   _one greater_ than the max phase corresponds to 2pi
-                    if phase_stats.min.is_integer() and \
-                        phase_stats.max.is_integer():
-                        phase_stats.max += 1
+                    add_to_max_phase = 1 \
+                        if phase_stats.min.is_integer() \
+                        and phase_stats.max.is_integer() \
+                        else 0
                     phase_rescale_factor = 2.0 * math.pi / \
-                                           (phase_stats.max - phase_stats.min)
+                                           (phase_stats.max
+                                            + add_to_max_phase
+                                            - phase_stats.min)
                 else:
                     phase_rescale_factor = None
 
-                # Set prefix for finding sidecar files
-                prefix = prefix.replace('_part-mag_', '_')
             else:
                 # Make sure we also have the corresponding magnitude image
                 if entry.replace('_part-phase_',
@@ -669,28 +664,47 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         else:
 
             in_phase_image = None
+
         # Find sidecar files
-        if os.path.isfile(prefix + '.bval') \
-                and os.path.isfile(prefix + '.bvec'):
-            prefix = prefix + '.'
-        else:
-            prefix = os.path.join(bids_dir, 'dwi')
-            if not (os.path.isfile(prefix + 'bval') \
-                    and os.path.isfile(prefix + 'bvec')):
-                raise MRtrixError(
-                    'Unable to locate valid diffusion gradient table '
-                    'for image \'' + entry + '\'')
-        grad_import_option = ' -fslgrad ' + prefix + 'bvec ' + prefix + 'bval'
-        in_json_path = prefix + 'json'
-        json_import_option = ''
-        if os.path.isfile(in_json_path):
-            json_import_option = ' -json_import ' + in_json_path
-        elif not shared.preprocessed:
+        # dcm2bids will have separate bvecs / bvals / json for the
+        #   magnitude and phase images;
+        # for proper BIDS compliance, these sidecar files will be stored
+        #   without the "_part-[mag|phase]" part
+
+        # os.path.split() falls over with .nii.gz extensions;
+        #   only removes the .gz
+        dwi_prefix = entry.split(os.extsep)[0] + '.'
+
+        sidecar_prefixes = [dwi_prefix,
+                            dwi_prefix.replace('_part-mag_', '_'),
+                            os.path.join(bids_dir, dwi_prefix),
+                            os.path.join(
+                                bids_dir,
+                                dwi_prefix.replace('_part-mag_', '_'))]
+        entry_bval = None
+        entry_bvec = None
+        entry_json = None
+        for prefix in sidecar_prefixes:
+            if not entry_bvec and \
+                os.path.isfile(prefix + 'bval') and \
+                os.path.isfile(prefix + 'bvec'):
+                entry_bval = prefix + 'bval'
+                entry_bvec = prefix + 'bvec'
+            if not entry_json and \
+                os.path.isfile(prefix + 'json'):
+                entry_json = prefix + 'json'
+        if not entry_bvec:
             raise MRtrixError(
-                'No sidecar JSON file found for image '
-                '\'' + entry + '\'; '
-                'cannot proceed with DWI preprocessing '
-                'without this information')
+                'Unable to locate valid diffusion gradient table '
+                'for image \'' + entry + '\'')
+        if not entry_json:
+            raise MRtrixError(
+                'Unable to locate valid JSON sidecar file '
+                'for image \'' + entry + '\'')
+
+        grad_import_option = ' -fslgrad ' + entry_bvec + ' ' + entry_bval
+        json_import_option = ' -json_import ' + entry_json
+
         # Import the data
         dwi_index += 1
         if in_phase_image:
@@ -742,12 +756,18 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
             json_path = prefix + '.json'
             with open(json_path, 'r') as f:
                 json_elements = json.load(f)
-            if 'IntendedFor' in json_elements and \
-                    not any(i.endswith(json_elements['IntendedFor'])
-                            for i in dwi_image_list):
-                app.console('Image \'' + entry + '\' is not intended '
+            if 'IntendedFor' in json_elements:
+                if isinstance(json_elements['IntendedFor'], list) and \
+                    not any(any(i.endswith(target) for i in dwi_image_list)
+                            for target in json_elements['IntendedFor']):
+                    app.console('Image \'' + entry + '\' is not intended '
                             'for use with DWIs; skipping')
-                continue
+                    continue
+                if not any(i.endswith(json_elements['IntendedFor'])
+                            for i in dwi_image_list):
+                    app.console('Image \'' + entry + '\' is not intended '
+                                'for use with DWIs; skipping')
+                    continue
             if not os.path.isfile(json_path):
                 raise MRtrixError('No sidecar JSON file found '
                                   'for image \'' + entry + '\'')
@@ -929,6 +949,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     mporder = 1 + num_slices/(mb_factor*4)
     app.debug('MPorder: ' + str(mporder))
 
+    # TODO Try introducing --b0_flm=linear, see what happens
+    # (necessary for single-refocus data, but not shown in eddy help page)
     eddy_options = []
     if shared.eddy_repol:
         eddy_options.append('--repol')
@@ -2406,7 +2428,10 @@ def run_group(bids_dir, output_verbosity, output_dir):
                                       'for session "' + session_label + '"'
                                       '(expected location: ' + entry + ')')
 
-            self.grad_import_option = ' -fslgrad ' + self.in_bvec + ' ' + self.in_bval
+            self.grad_import_option = ' -fslgrad ' \
+                                      + self.in_bvec \
+                                      + ' ' \
+                                      + self.in_bval
 
             self.parcellation = \
                 re.findall('(?<=_parc-)[a-zA-Z0-9]*',
