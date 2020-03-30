@@ -951,6 +951,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
 
     # TODO Try introducing --b0_flm=linear, see what happens
     # (necessary for single-refocus data, but not shown in eddy help page)
+    # TODO Could also look for "DiffusionScheme" = "Monopolar" in header(s)
     eddy_options = []
     if shared.eddy_repol:
         eddy_options.append('--repol')
@@ -1342,7 +1343,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                 + ' '
                 + os.path.join(output_subdir,
                                'dwi',
-                               session_label + '_brainmask.nii.gz')
+                               session_label + '_desc-brain_mask.nii.gz')
                 + ' -datatype uint8'
                 + ' -strides +1,+2,+3')
     # Even if EddyQC software is not installed, a directory is still
@@ -1367,7 +1368,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                 + ' '
                 + os.path.join(output_subdir,
                                'anat',
-                               session_label + '_brainmask.nii.gz')
+                               session_label + '_desc-brain_mask.nii.gz')
                 + ' -datatype uint8'
                 + ' -strides +1,+2,+3')
 
@@ -1470,7 +1471,7 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
     # Is there a mask present?
     in_dwi_mask_path = os.path.join(output_subdir,
                                     'dwi',
-                                    '*_brainmask.nii*')
+                                    '*_desc-brain*_mask.nii*')
     in_dwi_mask_image_list = glob.glob(in_dwi_mask_path)
     if len(in_dwi_mask_image_list) > 1:
         raise MRtrixError('More than one DWI mask found for session "'
@@ -1497,7 +1498,7 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
         # Also check for premasked data
         in_t1w_mask_image_list = glob.glob(os.path.join(output_subdir,
                                                         'anat',
-                                                        '*_brainmask.nii*'))
+                                                        '*_desc-brain*_mask.nii*'))
         if len(in_t1w_mask_image_list) > 1:
             raise MRtrixError('More than one brain mask image found '
                               'for session "' + session_label + '"')
@@ -2174,7 +2175,7 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
                     + os.path.join(output_subdir,
                                    'dwi',
                                    session_label
-                                   + '_brainmask.nii.gz')
+                                   + '_desc-brain_mask.nii.gz')
                     + ' -datatype uint8'
                     + ' -strides +1,+2,+3')
     if not in_t1w_mask_path:
@@ -2182,7 +2183,7 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
                     + os.path.join(output_subdir,
                                    'anat',
                                    session_label
-                                   + '_brainmask.nii.gz')
+                                   + '_desc-brain_mask.nii.gz')
                     + ' -datatype uint8'
                     + ' -strides +1,+2,+3')
 
@@ -2440,7 +2441,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
             # Permissible for this to not exist
             self.in_mask = os.path.join(root,
                                         'dwi',
-                                        session_label + '_brainmask.nii.gz')
+                                        session_label + '_desc-brain_mask.nii.gz')
 
             self.mu = matrix.load_vector(self.in_mu)[0]
             self.RF = matrix.load_matrix(self.in_rf)
