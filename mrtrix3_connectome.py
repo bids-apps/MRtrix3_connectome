@@ -602,7 +602,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     in_dwi_path = os.path.join(os.path.join(bids_dir, *session),
                                'dwi',
                                '*_dwi.nii*')
-    in_dwi_image_list = glob.glob(in_dwi_path)
+    in_dwi_image_list = sorted(glob.glob(in_dwi_path))
     if not in_dwi_image_list:
         raise MRtrixError('No DWI data found for session \''
                           + session_label
@@ -708,18 +708,20 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         # Import the data
         dwi_index += 1
         if in_phase_image:
-            run.command('mrcalc '
-                        + entry + ' '
+            run.command(+ 'mrconvert '
+                        + entry
+                        + grad_import_option
+                        + json_import_option
+                        + ' - '
+                        + '| '
+                        + 'mrcalc '
+                        + '- '
                         + in_phase_image + ' '
                         + (str(phase_stats.min) + ' -sub '
                            + str(phase_rescale_factor) + ' -mult ' \
                            if phase_rescale_factor else '')
-                        + '-polar - '
-                        + '| '
-                        + 'mrconvert - '
-                        + path.to_scratch('dwi' + str(dwi_index) + '.mif', True)
-                        + grad_import_option
-                        + json_import_option)
+                        + '-polar '
+                        + path.to_scratch('dwi' + str(dwi_index) + '.mif', True))
         else:
             run.command('mrconvert '
                         + entry + ' '
@@ -749,8 +751,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     fmap_image_list = []
     if os.path.isdir(fmap_dir):
         app.console('Importing fmap data into scratch directory')
-        in_fmap_image_list = glob.glob(os.path.join(fmap_dir,
-                                                    '*_dir-*_epi.nii*'))
+        in_fmap_image_list = sorted(
+            glob.glob(os.path.join(fmap_dir, '*_dir-*_epi.nii*')))
         for entry in in_fmap_image_list:
             prefix = entry.split(os.extsep)[0]
             json_path = prefix + '.json'
@@ -988,7 +990,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                 + ' '
                 + dwifslpreproc_se_epi_option
                 + dwifslpreproc_eddy_option
-                + ' -rpe_header -eddyqc_text eddyqc/')
+                + ' -rpe_header -eddyqc_text eddyqc/'
+                + ('' if app.DO_CLEANUP else ' -scratch ' + app.SCRATCH_DIR + ' -nocleanup'))
     app.cleanup(dwifslpreproc_input)
     app.cleanup(dwifslpreproc_se_epi)
 
