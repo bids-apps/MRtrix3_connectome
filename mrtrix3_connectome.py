@@ -708,7 +708,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         # Import the data
         dwi_index += 1
         if in_phase_image:
-            run.command(+ 'mrconvert '
+            run.command('mrconvert '
                         + entry
                         + grad_import_option
                         + json_import_option
