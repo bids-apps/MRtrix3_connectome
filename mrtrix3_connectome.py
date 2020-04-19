@@ -73,26 +73,37 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
                      'will proceed without performing initial b=0 - based '
                      'DWI bias field correction')
 
+        def get_eddy_help(binary_name):
+            try:
+                return run.command([binary_name, '--help'], show=False).stderr
+            except run.MRtrixCmdError as eddy_except:
+                return eddy_except.stderr
+
         self.eddy_binary = fsl.eddy_binary(True)
         if self.eddy_binary:
             self.eddy_cuda = True
-        else:
-            self.eddy_binary = fsl.eddy_binary(False)
-            self.eddy_cuda = False
+            eddy_help = get_eddy_help(self.eddy_binary)
+            if 'error while loading shared libraries' in eddy_help:
+                app.warn('CUDA version of FSL \'eddy\' present on system, '
+                         'but does not execute successfully; OpenMP version '
+                         'will instead be used')
+                self.eddy_binary = None
+                self.eddy_cuda = False
+                eddy_help = ''
         if not self.eddy_binary:
-            raise MRtrixError('Could not find FSL program \'eddy\'')
-        app.debug('Eddy binary: ' + str(self.eddy_binary))
-        app.debug('CUDA eddy present: ' + str(self.eddy_cuda))
+            self.eddy_binary = fsl.eddy_binary(False)
+            if not self.eddy_binary:
+                raise MRtrixError('Could not find FSL program \'eddy\'')
+            self.eddy_cuda = False
+            eddy_help = get_eddy_help(self.eddy_binary)
 
-        try:
-            eddy_stderr = run.command([self.eddy_binary, '--help'],
-                                      show=False).stderr
-        except run.MRtrixCmdError as eddy_except:
-            eddy_stderr = eddy_except.stderr
+        app.debug('Eddy binary: ' + str(self.eddy_binary))
+        app.debug('Eddy is CUDA version: ' + str(self.eddy_cuda))
+
         self.eddy_repol = False
         self.eddy_mporder = False
         self.eddy_mbs = False
-        for line in eddy_stderr.splitlines():
+        for line in eddy_help.splitlines():
             line = line.lstrip()
             if line.startswith('--repol'):
                 self.eddy_repol = True
