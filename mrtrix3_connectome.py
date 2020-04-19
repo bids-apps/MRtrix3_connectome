@@ -721,11 +721,11 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                            + str(phase_rescale_factor) + ' -mult ' \
                            if phase_rescale_factor else '')
                         + '-polar '
-                        + path.to_scratch('dwi' + str(dwi_index) + '.mif', True))
+                        + path.to_scratch('dwi' + str(dwi_index) + '.mif'))
         else:
             run.command('mrconvert '
                         + entry + ' '
-                        + path.to_scratch('dwi' + str(dwi_index) + '.mif', True)
+                        + path.to_scratch('dwi' + str(dwi_index) + '.mif')
                         + grad_import_option
                         + json_import_option)
 
@@ -763,10 +763,10 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                     not any(any(i.endswith(target) for i in dwi_image_list)
                             for target in json_elements['IntendedFor']):
                     app.console('Image \'' + entry + '\' is not intended '
-                            'for use with DWIs; skipping')
+                                'for use with DWIs; skipping')
                     continue
                 if not any(i.endswith(json_elements['IntendedFor'])
-                            for i in dwi_image_list):
+                           for i in dwi_image_list):
                     app.console('Image \'' + entry + '\' is not intended '
                                 'for use with DWIs; skipping')
                     continue
@@ -887,11 +887,64 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         dwifslpreproc_input = 'dwifslpreproc_in.mif'
         run.command('mrcat ' + ' '.join(dwi_image_list) + ' '
                     + dwifslpreproc_input + ' -axis 3')
-        app.cleanup(dwi_image_list)
+
+    # Some decisions regarding pre-processing depend on whether or not
+    #   a twice-refocused sequence has been used: a single-refocused
+    #   sequence may have residual eddy current distortions in b=0
+    #   volumes
+    dwifslpreproc_input_header = image.Header(dwifslpreproc_input)
+    monopolar = "DiffusionScheme" in dwifslpreproc_input_header.keyval() \
+                and dwifslpreproc_input_header \
+                    .keyval()["DiffusionScheme"] == "Monopolar"
 
     if not fmap_image_list:
         dwifslpreproc_se_epi = ''
         dwifslpreproc_se_epi_option = ''
+
+        # If no images in fmap/ directory, but DWIs are monopolar, then
+        #   don't want to let dwifslpreproc automatically grab all of the
+        #   b=0 volumes and just use those; instead, grab, for each
+        #   input DWI series, just the b=0 volumes at the start of the
+        #   series
+        if len(dwi_image_list) > 1 and monopolar:
+            try:
+                bzero_image_list = []
+                for dwi_image in dwi_image_list:
+                    first_nonzero_volume = \
+                        min([int(indices[0]) for indices in
+                             image.mrinfo(dwi_image, 'shell_indices')
+                             .split(' ')[1:]])
+                    if not first_nonzero_volume:
+                        raise MRtrixError('First DWI volume is not b=0; '
+                                          'cannot utilise b=0 volumes '
+                                          'prior to DWI volumes only')
+                    bzero_image = os.path.splitext(dwi_image)[0] \
+                                  + '_bzero.mif'
+                    run.command(['mrconvert',
+                                 dwi_image,
+                                 bzero_image,
+                                 '-coord',
+                                 '3',
+                                 ','.join(str(i) for i in
+                                          range(0, first_nonzero_volume))])
+                    bzero_image_list.append(bzero_image)
+                dwifslpreproc_se_epi = 'dwifslpreproc_seepi.mif'
+                run.command(['mrcat',
+                             bzero_image_list,
+                             dwifslpreproc_se_epi,
+                             '-axis',
+                             '3'])
+                dwifslpreproc_se_epi_option = ' -se_epi ' \
+                                                + dwifslpreproc_se_epi
+            except MRtrixError:
+                dwifslpreproc_se_epi = ''
+                dwifslpreproc_se_epi_option = ''
+                app.warn('DWIs detected as using monopolar diffusion '
+                         'sensitisation, but error encountered in extracting '
+                         'pre-DWI b=0 volumes; topup field estimate may be '
+                         'affected by eddy current distortions in b=0 '
+                         'volumes')
+
     elif len(fmap_image_list) == 1:
         dwifslpreproc_se_epi = fmap_image_list[0]
         dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
@@ -922,6 +975,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
             app.cleanup(fmap_image_list)
         dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
                                     + ' -align_seepi'
+    app.cleanup(dwi_image_list)
 
     # Step 3: Distortion correction
     app.console('Performing various geometric corrections of DWIs')
@@ -951,9 +1005,6 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     mporder = 1 + num_slices/(mb_factor*4)
     app.debug('MPorder: ' + str(mporder))
 
-    # TODO Try introducing --b0_flm=linear, see what happens
-    # (necessary for single-refocus data, but not shown in eddy help page)
-    # TODO Could also look for "DiffusionScheme" = "Monopolar" in header(s)
     eddy_options = []
     if shared.eddy_repol:
         eddy_options.append('--repol')
@@ -963,6 +1014,10 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     #    and significantly increases execution time
     #if shared.eddy_mbs:
     #    eddy_options.append('--estimate_move_by_susceptibility')
+    # High b-value monopolar data still has eddy current distortions
+    #   in b=0 images
+    if monopolar:
+        eddy_options.append('--b0_flm=linear')
 
     shell_asymmetries = \
         [float(value) for value in
@@ -991,7 +1046,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                 + dwifslpreproc_se_epi_option
                 + dwifslpreproc_eddy_option
                 + ' -rpe_header -eddyqc_text eddyqc/'
-                + ('' if app.DO_CLEANUP else ' -scratch ' + app.SCRATCH_DIR + ' -nocleanup'))
+                + ('' if app.DO_CLEANUP else
+                   ' -scratch ' + app.SCRATCH_DIR + ' -nocleanup'))
     app.cleanup(dwifslpreproc_input)
     app.cleanup(dwifslpreproc_se_epi)
 
@@ -1499,9 +1555,10 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
         in_t1w_is_preprocessed = True
         in_t1w_path = in_t1w_image_list[0]
         # Also check for premasked data
-        in_t1w_mask_image_list = glob.glob(os.path.join(output_subdir,
-                                                        'anat',
-                                                        '*_desc-brain*_mask.nii*'))
+        in_t1w_mask_image_list = \
+            glob.glob(os.path.join(output_subdir,
+                                   'anat',
+                                   '*_desc-brain*_mask.nii*'))
         if len(in_t1w_mask_image_list) > 1:
             raise MRtrixError('More than one brain mask image found '
                               'for session "' + session_label + '"')
@@ -2444,7 +2501,8 @@ def run_group(bids_dir, output_verbosity, output_dir):
             # Permissible for this to not exist
             self.in_mask = os.path.join(root,
                                         'dwi',
-                                        session_label + '_desc-brain_mask.nii.gz')
+                                        session_label
+                                        + '_desc-brain_mask.nii.gz')
 
             self.mu = matrix.load_vector(self.in_mu)[0]
             self.RF = matrix.load_matrix(self.in_rf)
