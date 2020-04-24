@@ -29,14 +29,6 @@ OPTION_PREFIX = '--' if IS_CONTAINER else '-'
 
 
 
-# Split participant-level processing
-# Level 1: Pre-processing only;
-#   include CSD at lmax=4 and mtnormalise to scale DWIs
-#   such that CSF at b=0 = intensity of 1000
-# Level 2: Rest of participant level processing
-
-
-
 class Participant1Shared(object): #pylint: disable=useless-object-inheritance
     def __init__(self):
         fsl_path = os.environ.get('FSLDIR', '')

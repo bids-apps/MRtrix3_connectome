@@ -107,7 +107,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-    git clone https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && git checkout ac5f54d0dfb3b8edd386362ff213f1941900c64f && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version
+    git clone -b 3.0.0 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version
     mv /tmp/labelconvert/* /mrtrix3/share/mrtrix3/labelconvert && rm -rf /tmp/labelconvert
 
 # MRtrix3_connectome script
