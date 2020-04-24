@@ -3356,6 +3356,14 @@ See the Mozilla Public License v. 2.0 for more details.''')
         + OPTION_PREFIX + 'streamlines 0 is not set',
         is_external=False)
     cmdline.add_citation(
+        'Tournier, J.-D.; Smith, R. E.; Raffelt, D. A.; Tabbara, '
+        'R.; Dhollander, T.; Pietsch, M; Christiaens, D.; Jeurissen, '
+        'B.; Y, C.-H.; Connelly, A.;'
+        'MRtrix3: A fast, flexible and open software framework for '
+        'medical image processing and visualisation. '
+        'NeuroImage, 2019, 202, 116137',
+        is_external=False)
+    cmdline.add_citation(
         'Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; '
         'Yushkevich, P. & Gee, J. '
         'N4ITK: Improved N3 Bias Correction. '
