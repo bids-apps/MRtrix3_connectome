@@ -3140,6 +3140,13 @@ See the Mozilla Public License v. 2.0 for more details.''')
         choices=REGISTRATION_CHOICES)
 
     cmdline.add_citation(
+        'Smith, R. E.; Connelly, A. '
+        'MRtrix3_connectome: A BIDS Application for quantitative structural '
+        'connectome construction. '
+        'In Proc OHBM, 2019, W610',
+        is_external=False)
+
+    cmdline.add_citation(
         'Andersson, J. L.; Skare, S. & Ashburner, J. '
         'How to correct susceptibility distortions in spin-echo echo-planar '
         'images: application to diffusion tensor imaging. '
