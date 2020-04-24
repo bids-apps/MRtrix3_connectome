@@ -34,6 +34,21 @@ data can be found in the [BIDS documentation](http://bids.neuroimaging.io/).
 
 ## Instructions
 
+This script can be utilised in one of three ways:
+
+### 1. As a stand-alone *MRtrix3* script
+
+The script ``mrtrix3_connectome.py`` can additionally be used *outside* of this Docker
+container, as a stand-alone Python script build against the *MRtrix3* Python libraries.
+Using the script in this way requires setting the ``PYTHONPATH`` environment variable to
+include the path to the *MRtrix3* ``lib/`` directory where it is installed on your local
+system, as described [here](https://community.mrtrix.org/t/the-mrtrix3-python-script-library/2243).
+When used in this way, the command-line interface of the script will be more consistent
+with the rest of *MRtrix3*. Note that this usage will require version `3.0.0` of *MRtrix3*
+to be installed and configured appropriately on your local system.
+
+### 2. As a Docker container
+
 The [bids/MRtrix3_connectome](https://hub.docker.com/r/bids/mrtrix3_connectome/) Docker
 container enables users to generate structural connectomes from diffusion MRI data using
 state-of-the-art techniques. The pipeline requires that data be organized in accordance
@@ -50,14 +65,14 @@ To query the help page of the tool:
 $ docker run -i --rm bids/mrtrix3_connectome
 ```
 
-To run the script in participant level mode (for processing one subject only), use e.g.:
+To run the script in participant1 level mode (for processing one subject only), use e.g.:
 
 ```{bash}
 $ docker run -i --rm \
       -v /Users/yourname/data:/bids_dataset \
       -v /Users/yourname/output:/output \
       bids/mrtrix3_connectome \
-      /bids_dataset /output participant --participant_label 01 --parcellation desikan
+      /bids_dataset /output participant1 --participant_label 01 --parcellation desikan
 ```
 
 Following processing of all participants, the script can be run in group analysis mode
@@ -71,21 +86,26 @@ $ docker run -i --rm \
       /bids_dataset /output group
 ```
 
-If you wish to run this script on a computing cluster, we recommend the use of
-[Singularity](http://singularity.lbl.gov/). Although built for Docker, this container
-can be converted using the
-[`docker2singularity` tool](https://github.com/singularityware/docker2singularity).
+### 3. As a Singularity container
 
-The script ``mrtrix3_connectome.py`` can additionally be used *outside* of this Docker
-container, as a stand-alone Python script build against the *MRtrix3* Python libraries.
-Using the script in this way requires setting the ``PYTHONPATH`` environment variable to
-include the path to the *MRtrix3* ``lib/`` directory where it is installed on your local
-system, as described [here](http://mrtrix.readthedocs.io/en/latest/troubleshooting/FAQ.html#making-use-of-python-scripts-library).
-When used in this way, the command-line interface of the script will be more consistent
-with the rest of *MRtrix3*. Note however that this script may make use of *MRtrix3*
-features or bug fixes that have not yet been merged into the ``master`` branch; in this
-case, it may be necessary to install the same version of *MRtrix3* as that installed
-within "``Dockerfile``".
+The *MRtrix3_connectome* BIDS App can also be built locally as a Singularity container.
+This is particularly useful for subsequent utilisation on high-performance computing
+hardware, as unlike Docker there are no super-user privileges or user group
+memberships required for execution. I have also personally been able to utilise the
+CUDA version of FSL's `eddy` command within this tool when running on a computing
+cluster node with GPU capability (though this can require explicit configuration;
+speak to your system administrator).
+
+Within the location in which the *MRtrix3_connectome* source code has been cloned,
+type:
+```{bash}
+$ sudo singularity build MRtrix3_connectome.sif Singularity
+```
+
+The resulting container file "`MRtrix3_connectome.sif`" can be run as a stand-alone
+executable, as long as the system on which the file is executed has a version of
+Singularity installed that is compatible with that of the system used to build the
+container.
 
 ## Documentation
 
@@ -118,6 +138,10 @@ the National Imaging Facility, a National Collaborative Research Infrastructure 
 The Florey Institute of Neuroscience and Mental Health acknowledges support from the
 Victorian Government and in particular the funding from the Operational Infrastructure
 Support Grant.
+
+Robert Smith is supported by fellowship funding from the National Imaging Facility (NIF),
+an Australian Government National Collaborative Research Infrastructure Strategy (NCRIS)
+capability.
 
 ## Citation
 
