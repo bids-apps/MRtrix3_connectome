@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     npm \
     perl-modules \
     python3 \
+    python3-numpy \
     python3-setuptools \
     tar \
     tcsh \
@@ -37,12 +38,6 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libtiff5-dev \
     zlib1g-dev
-
-# Attempt to install CUDA 8.0 for eddy_cuda
-#RUN wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_8.0.61-1_amd64.deb && \
-#    dpkg -i cuda-repo-ubuntu1404_8.0.61-1_amd64.deb && \
-#    apt-get update && apt-get install -y cuda && \
-#    rm -f cuda-repo-ubuntu1404_8.0.61-1_amd64.deb
 
 # Neuroimaging software / data dependencies
 RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.0.tar.gz | \
@@ -152,7 +147,6 @@ RUN git clone -b 3.0.0 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version
-#RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
 
 # Setup environment variables for MRtrix3
 ENV PATH /mrtrix3/bin:$PATH

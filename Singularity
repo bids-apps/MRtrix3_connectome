@@ -1,7 +1,7 @@
 Bootstrap: debootstrap
 MirrorURL: http://us.archive.ubuntu.com/ubuntu/
 OSVersion: bionic
-Include: apt bc build-essential dc file git gnupg libfftw3-dev libpng-dev libtiff5-dev nano python python-numpy python3 python3-setuptools tar tzdata unzip wget zlib1g-dev
+Include: apt bc build-essential dc file git gnupg libfftw3-dev libpng-dev libtiff5-dev nano python python3 python3-numpy python3-setuptools tar tzdata unzip wget zlib1g-dev
 
 %labels
 MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
@@ -10,8 +10,6 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     mrtrix3_connectome.py /mrtrix3_connectome.py
     neurodebian.gpg /neurodebian.gpg
     version /version
-    # TODO Erase
-    ROBEXv12.linux64.tar.gz /ROBEX.tar.gz
     Yeo2011_7N_split.txt /tmp/labelconvert/Yeo2011_7N_split.txt
     Yeo2011_17N_split.txt /tmp/labelconvert/Yeo2011_17N_split.txt
 
@@ -77,9 +75,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
     git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install
-    # TODO Revert
-    #wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
-    tar -xf ROBEX.tar.gz -C /opt
+    wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     npm install -gq bids-validator
 
 # apt cleanup to recover as much space as possible
