@@ -60,6 +60,8 @@ RUN apt-get install -y ants
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
 RUN python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
+RUN rm -f /fslinstaller.py
+RUN which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl )
 RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && \
     cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
@@ -146,6 +148,7 @@ RUN git clone -b 3.0.0 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
+    rm -rf tmp/ && \
     git describe --tags > /mrtrix3_version
 
 # Setup environment variables for MRtrix3
