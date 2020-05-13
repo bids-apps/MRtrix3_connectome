@@ -1005,7 +1005,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     else:
         num_slices = dwifslpreproc_input_header.size()[2]
     app.debug('Number of slices: ' + str(num_slices))
-    mporder = 1 + num_slices/(mb_factor*4)
+    mporder = 1 + int(math.ceil(num_slices/(mb_factor*4)))
     app.debug('MPorder: ' + str(mporder))
 
     eddy_options = []
