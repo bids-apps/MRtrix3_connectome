@@ -631,7 +631,7 @@ def get_t1w_preproc_images(bids_dir,
 
             if preproc_image_path is None:
                 raise MRtrixError('No pre-processed T1w image found from '
-                                'specified path "' + t1w_preproc + '"')
+                                  'specified path "' + t1w_preproc + '"')
 
     elif output_dir is not None:
 
@@ -1383,7 +1383,6 @@ def run_participant1(bids_dir, session, shared,
                 + dwifslpreproc_input
                 + ' '
                 + dwifslpreproc_output
-                + ' '
                 + dwifslpreproc_se_epi_option
                 + dwifslpreproc_eddy_option
                 + ' -rpe_header -eddyqc_text eddyqc/'
@@ -2469,33 +2468,28 @@ def run_participant2(bids_dir, session, shared,
                     + ' -datatype uint8'
                     + ' -strides +1,+2,+3')
 
-    if not glob.glob(
-            os.path.join(output_subdir,
-                         'anat',
-                         session_label + '*_desc-preproc*_T1w.nii*')):
-        run.command('mrconvert '
-                    + T1_image
-                    + ' '
-                    + os.path.join(output_subdir,
+    T1w_output_path = os.path.join(output_subdir,
                                    'anat',
                                    session_label + '_desc-preproc_T1w.nii.gz')
-                    + ' -strides +1,+2,+3')
-        T1_json_data = {"SkullStripped": T1_is_premasked}
-        with open(os.path.join(output_subdir,
-                               'anat',
-                               session_label + '_desc-preproc_T1w.json'),
-                  'w') as T1_json_file:
-            json.dump(T1_json_data, T1_json_file)
-    if not glob.glob(
+    run.command('mrconvert '
+                + T1_image
+                + ' '
+                + T1w_output_path
+                + ' -strides +1,+2,+3',
+                force=os.path.isfile(T1w_output_path))
+    T1_json_data = {"SkullStripped": T1_is_premasked}
+    with open(T1w_output_path.rstrip('.nii.gz') + '.json',
+              'w') as T1_json_file:
+        json.dump(T1_json_data, T1_json_file)
+    T1w_mask_output_path = \
             os.path.join(output_subdir,
                          'anat',
-                         session_label + '*_desc-brain*_mask.nii*')):
-        run.command('mrconvert T1_mask.mif '
-                    + os.path.join(output_subdir,
-                                'anat',
-                                session_label + '_desc-brain_mask.nii.gz')
-                    + ' -datatype uint8'
-                    + ' -strides +1,+2,+3')
+                         session_label + '_desc-brain_mask.nii.gz')
+    run.command('mrconvert T1_mask.mif '
+                + T1w_mask_output_path
+                + ' -datatype uint8'
+                + ' -strides +1,+2,+3',
+                force=os.path.isfile(T1w_mask_output_path))
 
     if output_verbosity > 1:
         if shared.parcellation != 'none':
