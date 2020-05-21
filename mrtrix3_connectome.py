@@ -2485,12 +2485,16 @@ def run_participant2(bids_dir, session, shared,
                                session_label + '_desc-preproc_T1w.json'),
                   'w') as T1_json_file:
             json.dump(T1_json_data, T1_json_file)
-    run.command('mrconvert T1_mask.mif '
-                + os.path.join(output_subdir,
-                               'anat',
-                               session_label + '_desc-brain_mask.nii.gz')
-                + ' -datatype uint8'
-                + ' -strides +1,+2,+3')
+    if not glob.glob(
+            os.path.join(output_subdir,
+                         'anat',
+                         session_label + '*_desc-brain*_mask.nii*')):
+        run.command('mrconvert T1_mask.mif '
+                    + os.path.join(output_subdir,
+                                'anat',
+                                session_label + '_desc-brain_mask.nii.gz')
+                    + ' -datatype uint8'
+                    + ' -strides +1,+2,+3')
 
     if output_verbosity > 1:
         if shared.parcellation != 'none':
