@@ -597,38 +597,41 @@ def get_t1w_preproc_images(bids_dir,
         # Paths may be absolute or relative to original working directory
         # TODO Where this might be more difficult is if there are multiple
         #   modalities and/or spaces in the directory
-        expected_image_basename = session_label + '*_T1w.nii*'
-        for candidate in [
-                t1w_preproc,
-                os.path.join(t1w_preproc, expected_image_basename),
-                os.path.join(t1w_preproc, 'anat', expected_image_basename),
-                os.path.join(os.path.join(t1w_preproc, *session),
-                             'anat',
-                             expected_image_basename)]:
+        if os.path.isfile(t1w_preproc):
+            preproc_image_path = t1w_preproc
+        else:
+            expected_image_basename = session_label + '*_T1w.nii*'
+            for candidate in [
+                    os.path.join(t1w_preproc,
+                                 expected_image_basename),
+                    os.path.join(t1w_preproc,
+                                 'anat',
+                                 expected_image_basename),
+                    os.path.join(os.path.join(t1w_preproc, *session),
+                                 'anat',
+                                 expected_image_basename)]:
 
-            if os.path.isfile(candidate):
-                preproc_image_path = candidate
-                break
-            glob_result = glob.glob(candidate)
-            if glob_result:
-                if len(glob_result) == 1:
-                    preproc_image_path = glob_result[0]
-                    break
-                glob_refined_result = \
-                    [item for item in glob_result if not '_space-' in item]
-                if len(glob_refined_result) == 1:
-                    preproc_image_path = glob_refined_result[0]
-                    break
-                raise MRtrixError('Unable to unambiguously select '
-                                  'pre-processed T1-weighted image '
-                                  'due to multiple candidates in location "'
-                                  + candidate
-                                  + '": '
-                                  + ';'.join(glob_result))
+                glob_result = glob.glob(candidate)
+                if glob_result:
+                    if len(glob_result) == 1:
+                        preproc_image_path = glob_result[0]
+                        break
+                    glob_refined_result = \
+                        [item for item in glob_result \
+                            if not '_space-' in item]
+                    if len(glob_refined_result) == 1:
+                        preproc_image_path = glob_refined_result[0]
+                        break
+                    raise MRtrixError('Unable to unambiguously select pre-'
+                                      'processed T1-weighted image due to '
+                                      'multiple candidates in location "'
+                                      + candidate
+                                      + '": '
+                                      + ';'.join(glob_result))
 
-        if preproc_image_path is None:
-            raise MRtrixError('No pre-processed T1w image found from '
-                              'specified path "' + t1w_preproc + '"')
+            if preproc_image_path is None:
+                raise MRtrixError('No pre-processed T1w image found from '
+                                'specified path "' + t1w_preproc + '"')
 
     elif output_dir is not None:
 
