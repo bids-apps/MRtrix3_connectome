@@ -852,6 +852,8 @@ def get_t1w_preproc_images(bids_dir,
                 # Do a semi-iterative approach here:
                 #   Get an initial brain mask, use that mask to estimate a
                 #   bias field, then re-compute the brain mask
+                # TODO Consider making this fully iterative, just like the
+                #   approach in participant1 with dwi2mask and mtnormalise
                 run.command(t1w_shared.robex_cmd
                             + ' T1.nii T1_initial_brain.nii'
                             + ' T1_initial_mask.nii')
@@ -897,7 +899,7 @@ def get_t1w_preproc_images(bids_dir,
             else:
                 assert False
 
-        run.function(os.chdir(), cwd)
+        run.function(os.chdir, cwd)
         app.cleanup(path.to_scratch('t1w_preproc'))
 
 # Completed function get_t1w_preproc()
@@ -1313,7 +1315,8 @@ def run_participant1(bids_dir, session, shared,
             app.cleanup(fmap_image_list)
         dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
                                     + ' -align_seepi'
-    app.cleanup(dwi_image_list)
+    if len(dwi_image_list) > 1:
+        app.cleanup(dwi_image_list)
 
     # Step 3: Distortion correction
     app.console('Performing various geometric corrections of DWIs')
@@ -3729,7 +3732,7 @@ def execute(): #pylint: disable=unused-variable
         for session_to_process in sessions_to_analyze:
             app.console('Commencing execution for session: \''
                         + '_'.join(session_to_process) + '\'')
-            run_participant1(app.ARGS.bids_dir,
+            run_participant1(os.path.abspath(app.ARGS.bids_dir),
                              session_to_process,
                              participant1_shared,
                              t1w_preproc_path,
@@ -3748,7 +3751,7 @@ def execute(): #pylint: disable=unused-variable
         for session_to_process in sessions_to_analyze:
             app.console('Commencing execution for session: \''
                         + '_'.join(session_to_process) + '\'')
-            run_participant2(app.ARGS.bids_dir,
+            run_participant2(os.path.abspath(app.ARGS.bids_dir),
                              session_to_process,
                              participant2_shared,
                              t1w_preproc_path,
