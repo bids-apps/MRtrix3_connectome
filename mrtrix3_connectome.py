@@ -592,6 +592,7 @@ def get_t1w_preproc_images(bids_dir,
         # Multiple possibilities for how such data may have been provided:
         # - Raw path to the image itself
         # - Path to anat/ directory
+        # - Path to subject directory within BIDS Derivatives dataset
         # - Path to BIDS Derivatives dataset
         # Paths may be absolute or relative to original working directory
         # TODO Where this might be more difficult is if there are multiple
@@ -599,15 +600,11 @@ def get_t1w_preproc_images(bids_dir,
         expected_image_basename = session_label + '*_T1w.nii*'
         for candidate in [
                 t1w_preproc,
-                path.from_user(t1w_preproc),
-                os.path.join('anat', t1w_preproc),
-                path.from_user(os.path.join('anat', t1w_preproc)),
-                os.path.join(os.path.join(*session),
+                os.path.join(t1w_preproc, expected_image_basename),
+                os.path.join(t1w_preproc, 'anat', expected_image_basename),
+                os.path.join(os.path.join(t1w_preproc, *session),
                              'anat',
-                             expected_image_basename),
-                path.from_user(os.path.join(os.path.join(*session),
-                                            'anat',
-                                            expected_image_basename))]:
+                             expected_image_basename)]:
 
             if os.path.isfile(candidate):
                 preproc_image_path = candidate
@@ -1902,11 +1899,12 @@ def run_participant2(bids_dir, session, shared,
     #     images can't possibly be detrimentally affected by
     #     bad masking
 
-    app.console('Estimating'
-                + ('' if multishell else ' white matter')
-                + ' Fibre Orientation Distribution image'
-                + ('s' if multishell else ''))
+    app.console('Estimating '
+                + (' multi-tissue ODF images'
+                   if multishell
+                   else 'Fibre Orientation Distribution image'))
     # TODO Update to use similar code to participant1?
+    # Would have consequences for group-level analysis...
     if multishell:
         run.command('dwi2fod msmt_csd dwi.mif '
                     'response_wm.txt FOD_WM.mif '
