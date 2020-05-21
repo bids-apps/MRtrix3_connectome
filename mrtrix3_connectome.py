@@ -26,6 +26,26 @@ OPTION_PREFIX = '--' if IS_CONTAINER else '-'
 # TODO Get splitext() that is robust against .nii.gz
 # Or if .split(os.extsep()) is to be used, separate out the
 #   directory path before doing the split
+# TODO This should be fixed via os.path.splitext(text.rstrip('.gz'))
+
+
+class T1wShared(object): #pylint: disable=useless-object-inheritance
+    def __init__(self):
+        try:
+            self.fsl_anat_cmd = fsl.exe_name(find_executable('fsl_anat'))
+        except MRtrixError:
+            self.fsl_anat_cmd = None
+        if find_executable('ROBEX'):
+            self.robex_cmd = find_executable('runROBEX.sh')
+        else:
+            self.robex_cmd = None
+        self.N4_cmd = find_executable('N4BiasFieldCorrection')
+
+        if not self.fsl_anat_cmd and not self.robex_cmd:
+            app.warn('No commands for T1 image processing found; '
+                     'will be unable to proceed for any session without '
+                     'pre-processed T1-weighted data')
+
 
 
 
@@ -37,31 +57,12 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
                 'Environment variable FSLDIR is not set; '
                 'please run appropriate FSL configuration script')
 
-        robex_found = find_executable('ROBEX') \
-                      and find_executable('runROBEX.sh')
-        N4_found = find_executable('N4BiasFieldCorrection')
-        if robex_found and N4_found:
-            app.console('N4BiasFieldCorrection and ROBEX found; '
-                        'will use for T1 bias field correction '
-                        'and brain extraction respectively')
-            self.brain_extraction_cmd = 'runROBEX.sh'
-        else:
-            if robex_found and not N4_found:
-                app.console('N4BiasFieldCorrection not found; '
-                            'will use FSL for T1 bias field correction '
-                            'and brain extraction')
-            elif N4_found and not robex_found:
-                app.console('ROBEX not found; '
-                            'will use FSL for T1 brain extraction')
-            else:
-                app.console('N4BiasFieldCorrection and ROBEX not found; '
-                            'will use FSL for T1 brain extraction')
-            self.brain_extraction_cmd = fsl.exe_name('fsl_anat')
+        self.t1w_shared = T1wShared()
 
         self.dwibiascorrect_algo = 'ants'
-        if not N4_found:
+        if not self.t1w_shared.N4_cmd:
             self.dwibiascorrect_algo = None
-            app.warn('Could not find ANTs program \'N4BiasFieldCorrection\'; '
+            app.warn('Could not find ANTs program "N4BiasFieldCorrection"; '
                      'will proceed without performing initial b=0 - based '
                      'DWI bias field correction')
 
@@ -76,7 +77,7 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
             self.eddy_cuda = True
             eddy_help = get_eddy_help(self.eddy_binary)
             if 'error while loading shared libraries' in eddy_help:
-                app.warn('CUDA version of FSL \'eddy\' present on system, '
+                app.warn('CUDA version of FSL "eddy" present on system, '
                          'but does not execute successfully; OpenMP version '
                          'will instead be used')
                 self.eddy_binary = None
@@ -85,7 +86,7 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
         if not self.eddy_binary:
             self.eddy_binary = fsl.eddy_binary(False)
             if not self.eddy_binary:
-                raise MRtrixError('Could not find FSL program \'eddy\'')
+                raise MRtrixError('Could not find FSL program "eddy"')
             self.eddy_cuda = False
             eddy_help = get_eddy_help(self.eddy_binary)
 
@@ -111,12 +112,6 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
 
 
 
-
-
-
-
-# If running for multiple subjects in a single command invocation,
-#     these initialisation steps need only be performed once
 class Participant2Shared(object): #pylint: disable=useless-object-inheritance
     def __init__(self, atlas_path, parcellation,
                  streamlines, template_reg):
@@ -130,24 +125,15 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
 
         self.streamlines = streamlines
 
+        # TODO Are there any participant2-level processing setups
+        #   where FSL isn't actually required?
         fsl_path = os.environ.get('FSLDIR', '')
         if not fsl_path:
             raise MRtrixError(
                 'Environment variable FSLDIR is not set; '
                 'please run appropriate FSL configuration script')
 
-        robex_found = find_executable('ROBEX') \
-                      and find_executable('runROBEX.sh')
-
-        if robex_found:
-            app.console('ROBEX found; will use for T1 brain extraction '
-                        '(if not already present in output directory)')
-            self.brain_extraction_cmd = 'runROBEX.sh'
-        else:
-            app.console('ROBEX not found; will use FSL for T1 brain '
-                        'extraction (if not already present in '
-                        'output directory)')
-            self.brain_extraction_cmd = fsl.exe_name('fsl_anat')
+        self.t1w_shared = T1wShared()
 
         self.do_freesurfer = parcellation in ['brainnetome246fs',
                                               'desikan',
@@ -222,7 +208,7 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
                     'please verify FreeSurfer installation')
             if not find_executable('recon-all'):
                 raise MRtrixError(
-                    'Could not find FreeSurfer script recon-all; '
+                    'Could not find FreeSurfer script "recon-all"; '
                     'please verify FreeSurfer installation')
             self.freesurfer_subjects_dir = os.environ['SUBJECTS_DIR'] \
                                            if 'SUBJECTS_DIR' in os.environ \
@@ -249,7 +235,7 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
             self.reconall_path = find_executable('recon-all')
             if not self.reconall_path:
                 raise MRtrixError(
-                    'Could not find FreeSurfer script recon-all; '
+                    'Could not find FreeSurfer script "recon-all"; '
                     'please verify FreeSurfer installation')
             if parcellation in ['hcpmmp1', 'yeo7fs', 'yeo17fs']:
                 if parcellation == 'hcpmmp1':
@@ -575,11 +561,363 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
 
 
 
+# Regardless of the source of T1-weighted image information,
+#   scratch directory will contain:
+# - Either:
+#   - T1.mif
+#     or
+#   - T1_premasked.mif
+#     , depending on software used (full unmasked T1-weighted image data
+#     may not be available)
+# - T1_mask.mif
+#
+# TODO Think after all that this does need to export a greater
+#   amount of information with respect to what was done & how it was derived
+# E.g. For FreeSurfer, would prefer not to use the raw T1w image unless
+#   really necessary, as there's a chance of some spatial transformation
+#   having happened
+def get_t1w_preproc_images(bids_dir,
+                           session,
+                           t1w_shared,
+                           output_dir,
+                           t1w_preproc):
+
+    session_label = '_'.join(session)
+    preproc_image_path = None
+    preproc_image_is_masked = None
+    preproc_mask_path = None
+
+    if t1w_preproc:
+
+        # Multiple possibilities for how such data may have been provided:
+        # - Raw path to the image itself
+        # - Path to anat/ directory
+        # - Path to BIDS Derivatives dataset
+        # Paths may be absolute or relative to original working directory
+        # TODO Where this might be more difficult is if there are multiple
+        #   modalities and/or spaces in the directory
+        expected_image_basename = session_label + '*_T1w.nii*'
+        for candidate in [
+                t1w_preproc,
+                path.from_user(t1w_preproc),
+                os.path.join('anat', t1w_preproc),
+                path.from_user(os.path.join('anat', t1w_preproc)),
+                os.path.join(os.path.join(*session),
+                             'anat',
+                             expected_image_basename),
+                path.from_user(os.path.join(os.path.join(*session),
+                                            'anat',
+                                            expected_image_basename))]:
+
+            if os.path.isfile(candidate):
+                preproc_image_path = candidate
+                break
+            glob_result = glob.glob(candidate)
+            if glob_result:
+                if len(glob_result) == 1:
+                    preproc_image_path = glob_result[0]
+                    break
+                glob_refined_result = \
+                    [item for item in glob_result if not '_space-' in item]
+                if len(glob_refined_result) == 1:
+                    preproc_image_path = glob_refined_result[0]
+                    break
+                raise MRtrixError('Unable to unambiguously select '
+                                  'pre-processed T1-weighted image '
+                                  'due to multiple candidates in location "'
+                                  + candidate
+                                  + '": '
+                                  + ';'.join(glob_result))
+
+        if preproc_image_path is None:
+            raise MRtrixError('No pre-processed T1w image found from '
+                              'specified path "' + t1w_preproc + '"')
+
+    elif output_dir is not None:
+
+        # Look inside of output_dir to see if there is a pre-processed
+        #   T1w image already there
+        glob_result = glob.glob(os.path.join(os.path.join(output_dir,
+                                                          *session),
+                                             'anat',
+                                             session_label + '*_T1w.nii*'))
+        if glob_result:
+            if len(glob_result) == 1:
+                preproc_image_path = glob_result[0]
+            else:
+                raise MRtrixError('Multiple T1w images found in '
+                                  + 'output directory: '
+                                  + ';'.join(glob_result))
+
+    # Same checks regardless of whether the existing pre-processed image
+    #   comes from the output directory or a user-specified location
+    if preproc_image_path:
+
+        if '_desc-preproc' not in preproc_image_path:
+            raise MRtrixError('Selected T1-weighted image "'
+                              + preproc_image_path
+                              + '" not flagged as pre-processed')
+
+        # Check to see if there's a JSON file along with the T1-weighted
+        #   image; if they is, parse it to find out whether or not the
+        #   pre-processed image has been brain-extracted
+        expected_json_path = preproc_image_path \
+                             .rstrip('.gz') \
+                             .rstrip('.nii') \
+                             + '.json'
+        try:
+            with open(expected_json_path, 'r') as t1_json_file:
+                t1_json_data = json.load(t1_json_file)
+            preproc_image_is_masked = t1_json_data.get('SkullStripped', None)
+        except IOError:
+            pass
+        if preproc_image_is_masked is None:
+            # Try to assess whether or not skull-stripping has occurred
+            #   based on the prevalence of NaNs or zero values
+            # - Obtain mask that contains:
+            #   - All voxels with non-finite value
+            #   and:
+            #   - All voxels with a value of zero
+            # - Feed to mrstats, extracting the mean
+            # - If this is > 25% of the image, it's skull-stripped
+            frac_voxels_outside_mask = \
+                float(run.command('mrcalc '
+                                  + preproc_image_path
+                                  + '0 -eq 1 '
+                                  + preproc_image_path
+                                  + ' -finite -sub -add - '
+                                  + '| '
+                                  + ' mrstats - -output mean'))
+            preproc_image_is_masked = \
+                frac_voxels_outside_mask > 0.25
+            app.warn('No sidecar information for pre-processed '
+                     + 'T1-weighted image "'
+                     + preproc_image_path
+                     + '" regarding skull-stripping; '
+                     + 'image has been inferred to '
+                     + ('be' if preproc_image_is_masked else 'not be')
+                     + ' pre-masked based on image data ('
+                     + str(int(round(100.0 * frac_voxels_outside_mask)))
+                     + '%% of voxels contain no data)')
+
+        # Copy pre-procesed T1-weighted image into scratch directory
+        run.command('mrconvert '
+                    + preproc_image_path
+                    + ' '
+                    + path.to_scratch('T1_masked.mif' \
+                                      if preproc_image_is_masked \
+                                      else 'T1.mif'))
+
+        # If we have been provided with a pre-processed T1-weighted image
+        #   (regardless of where it has come from), check to see if there
+        #   is a corresponding mask image
+        preproc_mask_path = preproc_image_path \
+                            .replace('_desc-preproc', '_desc-brain') \
+                            .replace('_T1w.nii', '_mask.nii')
+        if os.path.isfile(preproc_mask_path):
+            run.command('mrconvert '
+                        + preproc_mask_path
+                        + ' '
+                        + path.to_scratch('T1_mask.mif')
+                        + ' -datatype bit')
+        elif preproc_image_is_masked:
+            run.command('mrcalc '
+                        + preproc_image_path
+                        + ' 0 -gt '
+                        + path.to_scratch('T1_mask.mif')
+                        + ' -datatype bit')
+            # No pre-existing mask image, but we also don't want to
+            #   run our own brain extraction
+            preproc_mask_path = ''
+        else:
+            app.console('No brain mask image found alongside '
+                        'pre-processed T1-weighted image "'
+                        + preproc_image_path
+                        + '"; will generate one manually')
+            preproc_mask_path = None
+
+
+
+    # Do we need to do any pre-processing of our own?
+    if preproc_mask_path is None:
+
+        app.console('Performing requisite processing of '
+                    'T1-weighted data')
+        cwd = os.getcwd()
+        run.function(os.makedirs,
+                     path.to_scratch('t1w_preproc'))
+        run.function(os.chdir, path.to_scratch('t1w_preproc'))
+
+        if preproc_image_path:
+
+            if t1w_shared.robex_cmd:
+                app.console('Using ROBEX for brain extraction for session '
+                            + session_label
+                            + ', operating on existing pre-processed '
+                            + 'T1-weighted image')
+            elif t1w_shared.fsl_anat_path:
+                app.console('Using fsl_anat for brain extraction for session '
+                            + session_label
+                            + ' (due to ROBEX not being installed)'
+                            + ', operating on existing pre-processed '
+                            + 'T1-weighted image')
+            else:
+                raise MRtrixError('Unable to continue processing for session '
+                                  + session_label
+                                  + ': no pre-processed T1-weighted image mask '
+                                  + 'available / provided, and no appropriate '
+                                  + 'brain masking software installed')
+
+            run.command('mrconvert '
+                        + preproc_image_path
+                        + ' T1.nii -strides '
+                        + ('+1,+2,+3' if t1w_shared.robex_cmd else '-1,+2,+3'))
+
+            if t1w_shared.robex_cmd:
+                run.command(t1w_shared.robex_cmd
+                            + ' T1.nii T1_brain.nii T1_mask.nii')
+                run.command('mrconvert T1_mask.nii '
+                            + path.to_scratch('T1_mask.mif')
+                            + ' -datatype bit')
+            elif t1w_shared.fsl_anat_cmd:
+                run.command(t1w_shared.fsl_anat_cmd
+                            + ' -i T1.nii --noseg --nosubcortseg --nobias')
+                run.command('mrconvert '
+                            + fsl.find_image(
+                                os.path.join('T1.anat',
+                                             'T1_brain_mask'))
+                            + ' '
+                            + path.to_scratch('T1_mask.mif')
+                            + ' -datatype bit')
+            else:
+                assert False
+
+        else:
+
+            # No pre-processed T1-weighted image available:
+            #   do everything using the raw T1-weighted image in
+            #   the input BIDS directory
+
+            if t1w_shared.robex_cmd and t1w_shared.N4_cmd:
+                app.console('No pre-processed T1-weighted image '
+                            + 'found for session '
+                            + session_label
+                            + '; will use ROBEX and N4 for '
+                            + 'iterative brain extraction and bias field '
+                            + 'correction from raw T1-weighted image input')
+            elif t1w_shared.fsl_anat_cmd:
+                app.console('No pre-processed T1-weighted image '
+                            + 'found for session '
+                            + session_label
+                            + '; will use fsl_anat for brain extraction and '
+                            + 'bias field correction from raw T1-weighted '
+                            + 'image input'
+                            + (''
+                               if t1w_shared.robex_cmd
+                               else ' (ROBEX not installed)')
+                            + (''
+                               if t1w_shared.N4_cmd
+                               else ' (N4 not installed)'))
+            else:
+                raise MRtrixError('Cannot complete processing for session '
+                                  + session_label
+                                  + ': no pre-processed T1-weighted image '
+                                  + 'available, and software tools for '
+                                  + 'processing raw T1-weighted image '
+                                  + 'not installed')
+
+            t1w_image_list = glob.glob(os.path.join(os.path.join(bids_dir,
+                                                                 *session),
+                                                    'anat',
+                                                    '*_T1w.nii*'))
+            if len(t1w_image_list) > 1:
+                raise MRtrixError('More than one T1-weighted image found '
+                                  'for session "' + session_label + '"; '
+                                  'script not yet compatible with this')
+            if not t1w_image_list:
+                raise MRtrixError('Cannot complete processing for session '
+                                  + session_label
+                                  + ': no T1-weighted image data available '
+                                  + '(either raw or pre-processed)')
+
+            run.command('mrconvert '
+                        + t1w_image_list[0]
+                        + ' T1.nii -strides '
+                        + ('+1,+2,+3'
+                           if t1w_shared.robex_cmd and t1w_shared.N4_cmd
+                           else '-1,+2,+3'))
+
+            if t1w_shared.robex_cmd and t1w_shared.N4_cmd:
+
+                # Do a semi-iterative approach here:
+                #   Get an initial brain mask, use that mask to estimate a
+                #   bias field, then re-compute the brain mask
+                run.command(t1w_shared.robex_cmd
+                            + ' T1.nii T1_initial_brain.nii'
+                            + ' T1_initial_mask.nii')
+                app.cleanup('T1_initial_brain.nii')
+                run.command(t1w_shared.N4_cmd
+                            + ' -i T1.nii'
+                            + ' -w T1_initial_mask.nii'
+                            + ' -o T1_biascorr.nii')
+                app.cleanup('T1.nii')
+                app.cleanup('T1_initial_mask.nii')
+                run.command(t1w_shared.robex_cmd
+                            + ' T1_biascorr.nii T1_biascorr_brain.nii'
+                            + ' T1_biascorr_brain_mask.nii')
+                app.cleanup('T1_biascorr_brain.nii')
+                run.command('mrconvert T1_biascorr.nii '
+                            + path.to_scratch('T1.mif'))
+                app.cleanup('T1_biascorr.nii')
+                run.command('mrconvert T1_biascorr_brain_mask.nii '
+                            + path.to_scratch('T1_mask.mif')
+                            + ' -datatype bit')
+                app.cleanup('T1_biascorr_brain_mask.nii')
+
+            elif t1w_shared.fsl_anat_cmd:
+
+                run.command(t1w_shared.fsl_anat_cmd
+                            + ' -i T1.nii --noseg --nosubcortseg')
+                app.cleanup('T1.nii')
+                run.command('mrconvert '
+                            + fsl.find_image(
+                                os.path.join('T1.anat',
+                                             'T1_biascorr'))
+                            + ' '
+                            + path.to_scratch('T1_premasked.mif'))
+                run.command('mrconvert '
+                            + fsl.find_image(
+                                os.path.join('T1.anat',
+                                             'T1_biascorr_brain_mask'))
+                            + ' '
+                            + path.to_scratch('T1_mask.mif')
+                            + ' -datatype bit')
+                app.cleanup('T1.anat')
+
+            else:
+                assert False
+
+        run.function(os.chdir(), cwd)
+        app.cleanup(path.to_scratch('t1w_preproc'))
+
+# Completed function get_t1w_preproc()
 
 
 
 
-def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
+
+
+
+
+
+
+
+
+
+
+
+def run_participant1(bids_dir, session, shared,
+                     t1w_preproc_path, output_verbosity, output_dir):
 
     session_label = '_'.join(session)
     output_subdir = os.path.join(output_dir, *session)
@@ -813,20 +1151,17 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                           'and no fmap/ directory, '
                           'so EPI distortion correction cannot be performed')
 
-    # Import anatomical image
-    app.console('Importing T1 image into scratch directory')
-    t1w_image_list = glob.glob(os.path.join(os.path.join(bids_dir, *session),
-                                            'anat',
-                                            '*_T1w.nii*'))
-    if len(t1w_image_list) > 1:
-        raise MRtrixError('More than one T1-weighted image found '
-                          'for session "' + session_label + '"; '
-                          'script not yet compatible with this')
-    if not t1w_image_list:
-        raise MRtrixError('No T1-weighted image found for session '
-                          + str(session))
-    run.command('mrconvert ' + t1w_image_list[0] + ' '
-                + path.to_scratch('T1.mif', True))
+    # Get T1-weighted image data
+    #   (could be generated from raw data, or grabbed from a
+    #   user-specified path source;
+    #   don't look in output directory for participant1)
+    get_t1w_preproc_images(bids_dir,
+                           session,
+                           shared.t1w_shared,
+                           None,
+                           t1w_preproc_path)
+    T1_is_premasked = os.path.isfile('T1_premasked.mif')
+    T1_image = 'T1_premasked.mif' if T1_is_premasked else 'T1.mif'
 
     cwd = os.getcwd()
     app.goto_scratch_dir()
@@ -1034,8 +1369,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
         eddy_options.append('--slm=linear')
 
     dwifslpreproc_eddy_option = \
-        ' -eddy_options \" ' \
-        + ' '.join(eddy_options) + '\"' if eddy_options else ''
+        ' -eddy_options " ' \
+        + ' '.join(eddy_options) + '"' if eddy_options else ''
     run.function(os.makedirs, 'eddyqc', show=False)
     dwifslpreproc_output = 'dwifslpreproc_out.mif' \
                            if dwifslpreproc_input == 'dwifslpreproc_in.mif' \
@@ -1221,76 +1556,7 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
     app.cleanup(dwi_mask_image)
     dwi_mask_image = dwi_cropped_mask_image
 
-    # Step 8: Perform bias field correction and brain extraction on T1
-    # - If there is a pre-processed T1 already in the output directory,
-    #   as well as a brain mask, then we can utilise those directly;
-    # - If not, we'll use whatever software has been identified as available
-    #   to generate such
-    # TODO Do above;
-    #   for now, let's just perform the calculations on the raw input T1
-    #   regardless
-    # TODO Functionalise since it may be required
-    #   for both participant1 and participant2 - level analyses
-    app.console('Performing brain extraction and B1 bias field '
-                'correction of T1 image')
-    T1_header = image.Header('T1.mif')
-    T1_image = 'T1_biascorr.mif'
-    T1_mask_image = 'T1_mask.mif'
-    T1_revert_strides_option = ' -strides ' \
-                               + ','.join([str(i) \
-                                           for i in T1_header.strides()])
-    if shared.brain_extraction_cmd == 'runROBEX.sh':
-        # Do a semi-iterative approach here:
-        #   Get an initial brain mask, use that mask to estimate a
-        #   bias field, then re-compute the brain mask
-        run.command('mrconvert T1.mif T1.nii -strides +1,+2,+3')
-        run.command(shared.brain_extraction_cmd
-                    + ' T1.nii T1_initial_brain.nii T1_initial_mask.nii')
-        app.cleanup('T1_initial_brain.nii')
-        run.command('N4BiasFieldCorrection '
-                    '-i T1.nii -w T1_initial_mask.nii -o T1_biascorr.nii')
-        app.cleanup('T1.nii')
-        app.cleanup('T1_initial_mask.nii')
-        run.command(shared.brain_extraction_cmd
-                    + ' T1_biascorr.nii T1_biascorr_brain.nii '
-                    + 'T1_biascorr_brain_mask.nii')
-        # TODO Don't want to preserve the brain-extracted image;
-        #   would prefer to keep the full image with bias field correction,
-        #   and have the mask information separately
-        # TODO Does this have consequences anywhere else?
-        # TODO Suppose case could be made for FSL-based T1 processing,
-        #   where the bias field doesn't extend beyond the brain mask;
-        #   in that case, preserving the whole T1 will likely look odd
-        app.cleanup('T1_biascorr_brain.nii')
-        run.command('mrconvert T1_biascorr.nii '
-                    + T1_image
-                    + T1_revert_strides_option)
-        app.cleanup('T1_biascorr.nii')
-        run.command('mrconvert T1_biascorr_brain_mask.nii '
-                    + T1_mask_image
-                    + ' -datatype bit'
-                    + T1_revert_strides_option)
-        app.cleanup('T1_biascorr_brain_mask.nii')
-    else:
-        run.command('mrconvert T1.mif T1.nii -strides -1,+2,+3')
-        run.command(shared.brain_extraction_cmd
-                    + ' -i T1.nii --noseg --nosubcortseg')
-        app.cleanup('T1.nii')
-        run.command('mrconvert '
-                    + fsl.find_image('T1.anat' + os.sep + 'T1_biascorr')
-                    + ' '
-                    + T1_image
-                    + T1_revert_strides_option)
-        run.command('mrconvert '
-                    + fsl.find_image('T1.anat'
-                                     + os.sep
-                                     + 'T1_biascorr_brain_mask')
-                    + ' ' + T1_mask_image
-                    + ' -datatype bit'
-                    + T1_revert_strides_option)
-        app.cleanup('T1.anat')
-
-    # Step 9: Generate target images for T1->DWI registration
+    # Step 8: Generate target images for T1->DWI registration
     app.console('Generating contrast-matched images for '
                 'inter-modal registration between DWIs and T1')
     run.command('dwiextract ' + dwi_image + ' -bzero - | '
@@ -1298,25 +1564,25 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                 'mrmath - mean -axis 3 dwi_meanbzero.mif')
     run.command('mrcalc 1 dwi_meanbzero.mif -div '
                 + dwi_mask_image
-                + ' -mult - | '
+                + ' -mult -'
+                + ' | '
                 + 'mrhistmatch nonlinear - '
                 + T1_image
-                + ' dwi_pseudoT1.mif '
-                + '-mask_input '
+                + ' dwi_pseudoT1.mif'
+                + ' -mask_input '
                 + dwi_mask_image
-                + ' -mask_target '
-                + T1_mask_image)
+                + ' -mask_target T1_mask.mif')
     run.command('mrcalc 1 '
                 + T1_image
-                + ' -div '
-                + T1_mask_image
-                + ' -mult - | '
+                + ' -div'
+                + ('' if T1_is_premasked else (' T1_mask.mif -mult'))
+                + ' - | '
                 + 'mrhistmatch nonlinear'
                 + ' - dwi_meanbzero.mif T1_pseudobzero.mif'
-                + ' -mask_input ' + T1_mask_image
+                + ' -mask_input T1_mask.mif'
                 + ' -mask_target ' + dwi_mask_image)
 
-    # Step 10: Perform DWI->T1 registration
+    # Step 9: Perform DWI->T1 registration
     #   Note that two registrations are performed:
     #   Even though we have a symmetric registration, generation of the
     #   two histogram-matched images means that you will get slightly
@@ -1329,16 +1595,16 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                 + T1_image
                 + ' -type rigid'
                 + ' -mask1 ' + dwi_mask_image
-                + ' -mask2 ' + T1_mask_image
+                + ' -mask2 T1_mask.mif'
                 + ' -rigid ' + transform_pT1_T1)
     run.command('mrregister dwi_meanbzero.mif T1_pseudobzero.mif'
                 + ' -type rigid '
                 + ' -mask1 ' + dwi_mask_image
-                + ' -mask2 ' + T1_mask_image
+                + ' -mask2 T1_mask.mif'
                 + ' -rigid ' + transform_b0_pb0)
     app.cleanup('dwi_meanbzero.mif')
 
-    # Step 11: Perform DWI->T1 transformation
+    # Step 10: Perform DWI->T1 transformation
     # In this scenario, we're going to transform the DWI data to the T1
     #   rather than the other way around, since the T1 is more likely to
     #   be used as a common reference across multiple analysis pipelines,
@@ -1416,8 +1682,6 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                               'dwi',
                               'eddyqc'))
 
-    # TODO To properly conform to BIDS, need a JSON with
-    # "SkullStripped": False
     run.command('mrconvert '
                 + T1_image
                 + ' '
@@ -1425,9 +1689,13 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
                                'anat',
                                session_label + '_desc-preproc_T1w.nii.gz')
                 + ' -strides +1,+2,+3')
-    run.command('mrconvert '
-                + T1_mask_image
-                + ' '
+    T1_json_data = {"SkullStripped": T1_is_premasked}
+    with open(os.path.join(output_subdir,
+                           'anat',
+                           session_label + '_desc-preproc_T1w.json'),
+              'w') as T1_json_file:
+        json.dump(T1_json_data, T1_json_file)
+    run.command('mrconvert T1_mask.mif '
                 + os.path.join(output_subdir,
                                'anat',
                                session_label + '_desc-brain_mask.nii.gz')
@@ -1474,7 +1742,8 @@ def run_participant1(bids_dir, session, shared, output_verbosity, output_dir):
 
 
 
-def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
+def run_participant2(bids_dir, session, shared,
+                     t1w_preproc_path, output_verbosity, output_dir):
 
     session_label = '_'.join(session)
     output_subdir = os.path.join(output_dir, *session)
@@ -1542,36 +1811,26 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
     in_dwi_mask_path = in_dwi_mask_image_list[0] \
                        if in_dwi_mask_image_list \
                        else None
-
-    # Import pre-procesesd T1 image from output directory if it exists;
-    #   if not, find image in BIDS directory and perform expected processing
-    # TODO For now, assuming it's there in the output directory;
-    #   implement checking BIDS directory
-    in_t1w_image_list = glob.glob(os.path.join(output_subdir,
-                                               'anat',
-                                               '*_T1w.nii*'))
-    if len(in_t1w_image_list) > 1:
-        raise MRtrixError('More than one T1-weighted image found '
-                          'for session "' + session_label + '"; '
-                          'script not yet compatible with this')
-    if in_t1w_image_list:
-        in_t1w_is_preprocessed = True
-        in_t1w_path = in_t1w_image_list[0]
-        # Also check for premasked data
-        in_t1w_mask_image_list = \
-            glob.glob(os.path.join(output_subdir,
-                                   'anat',
-                                   '*_desc-brain*_mask.nii*'))
-        if len(in_t1w_mask_image_list) > 1:
-            raise MRtrixError('More than one brain mask image found '
-                              'for session "' + session_label + '"')
-        in_t1w_mask_path = in_t1w_mask_image_list[0] \
-                           if in_t1w_mask_image_list \
-                           else None
+    # For running FreeSurfer, want to use the raw T1-weighted image
+    if shared.do_freesurfer:
+        in_raw_t1w_paths = \
+                glob.glob(os.path.join(bids_dir,
+                                       'anat',
+                                       session_label + '*_T1w.nii*'))
+        if not in_raw_t1w_paths:
+            raise MRtrixError('No raw T1-weighted image found for session "'
+                              + session_label
+                              + '"; this is required for FreeSurfer')
+        if len(in_raw_t1w_paths) > 1:
+            raise MRtrixError('Multiple raw T1-weighted images '
+                              'found for session "'
+                              + session_label
+                              + '"; cannot select appropriate '
+                              + 'input for FreeSurfer')
+        in_raw_t1w_path = in_raw_t1w_paths[0]
     else:
-        in_t1w_is_preprocessed = False
-        in_t1w_mask_path = None
-        raise MRtrixError('Script not yet supporting non-preprocessed T1s')
+        in_raw_t1w_path = None
+
 
     # Import pre-processed data into scratch directory
     app.make_scratch_dir()
@@ -1592,17 +1851,20 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
                     + path.to_scratch('dwi_mask.mif')
                     + ' -datatype bit')
 
-    run.command('mrconvert '
-                + in_t1w_path
-                + ' '
-                + path.to_scratch('T1.mif'))
+    get_t1w_preproc_images(bids_dir,
+                           session,
+                           shared.t1w_shared,
+                           output_dir,
+                           t1w_preproc_path)
+    T1_is_premasked = os.path.isfile('T1_premasked.mif')
+    T1_image = 'T1_premasked.mif' if T1_is_premasked else 'T1.mif'
 
-    if in_t1w_mask_path:
+    if in_raw_t1w_path:
         run.command('mrconvert '
-                    + in_t1w_mask_path
+                    + in_raw_t1w_path
                     + ' '
-                    + path.to_scratch('T1_mask.mif')
-                    + ' -datatype bit')
+                    + path.to_scratch('T1_raw.nii')
+                    + ' -strides +1,+2,+3')
 
     cwd = os.getcwd()
     app.goto_scratch_dir()
@@ -1611,45 +1873,8 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
     #   that were not imported from the output directory?
     if not in_dwi_mask_path:
         app.console('Generating DWI brain mask '
-                    '(was not already present in output directory)')
+                    '(was not already present in derivatives directory)')
         run.command('dwi2mask dwi.mif dwi_mask.mif')
-
-    if not in_t1w_mask_path:
-        app.console('Performing T1 brain extraction '
-                    '(no such mask was present in output directory)')
-        # Unlike participant1-level processing, where a strong
-        #   bias field could theoretically influece brain extraction,
-        #   here we know that the T1 has been pre-processed, and therefore
-        #   there's no need for an iterative solution
-        # TODO Update once script is capable of accessing un-processed
-        #   T1 from the input BIDS directory
-        T1_header = image.Header('T1.mif')
-        T1_revert_strides_option = ' -strides ' \
-                                   + ','.join([str(i) \
-                                               for i in T1_header.strides()])
-        if shared.brain_extraction_cmd == 'runROBEX.sh':
-            run.command('mrconvert T1.mif T1.nii -strides +1,+2,+3')
-            run.command(shared.brain_extraction_cmd
-                        + ' T1.nii T1_brain.nii T1_mask.nii')
-            app.cleanup('T1.nii')
-            app.cleanup('T1_brain.nii')
-            run.command('mrconvert T1_mask.nii T1_mask.mif'
-                        ' -datatype bit'
-                        + T1_revert_strides_option)
-            app.cleanup('T1_mask.nii')
-        else:
-            run.command('mrconvert T1.mif T1.nii -strides -1,+2,+3')
-            run.command(shared.brain_extraction_cmd
-                        + ' -i T1.nii --noseg --nosubcortseg')
-            app.cleanup('T1.nii')
-            run.command('mrconvert '
-                        + fsl.find_image('T1.anat'
-                                         + os.sep
-                                         + 'T1_biascorr_brain_mask')
-                        + ' T1_mask.mif'
-                        + ' -datatype bit'
-                        + T1_revert_strides_option)
-            app.cleanup('T1.anat')
 
 
     # Step 1: Estimate response functions for spherical deconvolution
@@ -1703,8 +1928,12 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
     #   5ttgen fsl
     app.console('Generating five-tissue-type (5TT) image for '
                 'Anatomically-Constrained Tractography (ACT)')
-    run.command('5ttgen fsl T1.mif 5TT.mif '
-                '-mask T1_mask.mif')
+    run.command('5ttgen fsl '
+                + T1_image
+                + ' 5TT.mif'
+                + (' -premasked' \
+                   if T1_is_premasked \
+                   else (' -mask T1_mask.mif')))
     if output_verbosity > 1:
         run.command('5tt2vis 5TT.mif vis.mif')
 
@@ -1714,13 +1943,6 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
     if shared.do_freesurfer:
         app.console('Getting grey matter parcellation in '
                     'subject space using FreeSurfer')
-
-        # T1.nii may already exist if brain extraction was performed
-        #   within this function rather than being imported
-        # But we need to ensure that the strides are as we want them
-        run.command('mrconvert T1.mif T1.nii '
-                    '-strides +1,+2,+3',
-                    force=(not app.DO_CLEANUP))
 
         # Since we're instructing recon-all to use a different subject
         #   directory, we need to construct softlinks to a number of
@@ -1737,8 +1959,8 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
 
         # Run FreeSurfer pipeline on this subject's T1 image
         run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
-                    '-i T1.nii')
-        app.cleanup('T1.nii')
+                    '-i T1_raw.nii')
+        app.cleanup('T1_raw.nii')
         run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
                     '-all' + shared.reconall_multithread_options)
 
@@ -1978,8 +2200,7 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
             #   mitigate mask edge effects
             # Subject T1, unmasked; for fnirt --in
             run.command('mrconvert T1.mif T1.nii '
-                        '-strides -1,+2,+3',
-                        force=(not app.DO_CLEANUP))
+                        '-strides -1,+2,+3')
             # Subject brain mask, dilated; for fnirt --inmask
             run.command('maskfilter T1_mask.mif dilate - '
                         '-npass 3 | '
@@ -2183,6 +2404,8 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
         if os.path.exists(full_subdir_path):
             run.function(shutil.rmtree, full_subdir_path)
         run.function(os.makedirs, full_subdir_path)
+    if not os.path.isdir(os.path.join(output_subdir, 'anat')):
+        run.function(os.makedirs, os.path.join(output_subdir, 'anat'))
 
     parc_string = '_parc-' + shared.parcellation
 
@@ -2241,14 +2464,30 @@ def run_participant2(bids_dir, session, shared, output_verbosity, output_dir):
                                    + '_desc-brain_mask.nii.gz')
                     + ' -datatype uint8'
                     + ' -strides +1,+2,+3')
-    if not in_t1w_mask_path:
-        run.command('mrconvert T1_mask.mif '
+
+    if not glob.glob(
+            os.path.join(output_subdir,
+                         'anat',
+                         session_label + '*_desc-preproc*_T1w.nii*')):
+        run.command('mrconvert '
+                    + T1_image
+                    + ' '
                     + os.path.join(output_subdir,
                                    'anat',
-                                   session_label
-                                   + '_desc-brain_mask.nii.gz')
-                    + ' -datatype uint8'
+                                   session_label + '_desc-preproc_T1w.nii.gz')
                     + ' -strides +1,+2,+3')
+        T1_json_data = {"SkullStripped": T1_is_premasked}
+        with open(os.path.join(output_subdir,
+                               'anat',
+                               session_label + '_desc-preproc_T1w.json'),
+                  'w') as T1_json_file:
+            json.dump(T1_json_data, T1_json_file)
+    run.command('mrconvert T1_mask.mif '
+                + os.path.join(output_subdir,
+                               'anat',
+                               session_label + '_desc-brain_mask.nii.gz')
+                + ' -datatype uint8'
+                + ' -strides +1,+2,+3')
 
     if output_verbosity > 1:
         if shared.parcellation != 'none':
@@ -2417,12 +2656,9 @@ GROUP_BRAINMASKS_DIR = 'brainmasks'
 GROUP_BZEROS_DIR = 'bzeros'
 GROUP_CONNECTOMES_DIR = 'connectomes'
 GROUP_FA_DIR = 'fa'
+GROUP_RESPONSES_DIR = 'responses'
 GROUP_WMVOXELS_DIR = 'wmvoxels'
 GROUP_WARPS_DIR = 'warps'
-
-# TODO Use responsemean to generate the group mean WM response function,
-#   rather than doing a direct coefficient averaging in the code
-GROUP_RESPONSES_DIR = 'responses'
 
 def run_group(bids_dir, output_verbosity, output_dir):
 
@@ -2947,7 +3183,7 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-Covered Software is provided under this License on an \"as is\"
+Covered Software is provided under this License on an "as is"
 basis, without warranty of any kind, either expressed, implied, or
 statutory, including, without limitation, warranties that the
 Covered Software is free of defects, merchantable, fit for a
@@ -3112,26 +3348,35 @@ See the Mozilla Public License v. 2.0 for more details.''')
 
     participant_options = \
         cmdline.add_argument_group(
+            'Options that are relevant to both participant-level analyses')
+    participant_options.add_argument(
+        OPTION_PREFIX + 't1w_preproc',
+        metavar='path',
+        help='Provide a path by which pre-processed T1-weighted image data '
+             'may be found for the processed participant(s) / session(s)')
+
+    participant2_options = \
+        cmdline.add_argument_group(
             'Options that are relevant to participant2-level analysis')
     if not IS_CONTAINER:
-        participant_options.add_argument(
+        participant2_options.add_argument(
             OPTION_PREFIX + 'atlas_path',
             metavar='path',
             help='The filesystem path in which to search for atlas '
                  'parcellation files.')
-    participant_options.add_argument(
+    participant2_options.add_argument(
         OPTION_PREFIX + 'parcellation',
         help='The choice of connectome parcellation scheme '
              '(compulsory for participant2-level analysis); '
              'options are: ' + ', '.join(PARCELLATION_CHOICES) + '.',
         choices=PARCELLATION_CHOICES)
-    participant_options.add_argument(
+    participant2_options.add_argument(
         OPTION_PREFIX + 'streamlines',
         type=int,
         default=0,
         help='The number of streamlines to generate for each subject '
              '(will be determined heuristically if not explicitly set).')
-    participant_options.add_argument(
+    participant2_options.add_argument(
         OPTION_PREFIX + 'template_reg',
         metavar='software',
         help='The choice of registration software for mapping subject to '
@@ -3463,11 +3708,19 @@ def execute(): #pylint: disable=unused-variable
     if app.ARGS.output_verbosity == 4:
         app.DO_CLEANUP = False
 
+    # TODO BIDS Derivatives outputs should have the name of the tool as the
+    #   root directory; if the user-specified location has this name,
+    #   use that as the root, but otherwise a directory with this name
+    #   needs to be constructed
+
     if app.ARGS.analysis_level in ['participant1', 'participant2']:
         sessions_to_analyze = get_sessions(
             app.ARGS.bids_dir,
             participant_label=app.ARGS.participant_label,
             session_label=app.ARGS.session_label)
+        t1w_preproc_path = os.path.abspath(app.ARGS.t1w_preproc) \
+                           if app.ARGS.t1w_preproc \
+                           else None
 
     if app.ARGS.analysis_level == 'participant1':
 
@@ -3479,6 +3732,7 @@ def execute(): #pylint: disable=unused-variable
             run_participant1(app.ARGS.bids_dir,
                              session_to_process,
                              participant1_shared,
+                             t1w_preproc_path,
                              app.ARGS.output_verbosity,
                              os.path.abspath(app.ARGS.output_dir))
 
@@ -3497,6 +3751,7 @@ def execute(): #pylint: disable=unused-variable
             run_participant2(app.ARGS.bids_dir,
                              session_to_process,
                              participant2_shared,
+                             t1w_preproc_path,
                              app.ARGS.output_verbosity,
                              os.path.abspath(app.ARGS.output_dir))
 
