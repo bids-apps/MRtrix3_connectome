@@ -2410,7 +2410,7 @@ def run_participant2(bids_dir, session, shared,
     if not os.path.isdir(os.path.join(output_subdir, 'anat')):
         run.function(os.makedirs, os.path.join(output_subdir, 'anat'))
 
-    parc_string = '_parc-' + shared.parcellation
+    parc_string = '_desc-' + shared.parcellation
 
     # Generate a copy of the lookup table file:
     #   - Use the post-labelconvert file if it's used;
@@ -2498,7 +2498,7 @@ def run_participant2(bids_dir, session, shared,
                                        'anat',
                                        session_label
                                        + parc_string
-                                       + '_indices.nii.gz')
+                                       + '_dseg.nii.gz')
                         + ' -strides +1,+2,+3')
             run.function(shutil.copy,
                          'meanlength.csv',
@@ -2507,17 +2507,22 @@ def run_participant2(bids_dir, session, shared,
                                       session_label
                                       + parc_string
                                       + '_meanlength.csv'))
+        act_5tt_image_path = os.path.join(output_subdir,
+                                          'anat',
+                                          session_label
+                                          + '_desc-5tt_probseg.nii.gz')
         run.command('mrconvert 5TT.mif '
-                    + os.path.join(output_subdir,
-                                   'anat',
-                                   session_label
-                                   + '_5TT.nii.gz')
+                    + act_5tt_image_path
                     + ' -strides +1,+2,+3,+4')
+        act_5tt_json_data = {"LabelMap": ["CGM", "SGM", "WM", "CSF", "Path"]}
+        with open(act_5tt_image_path.rstrip('.nii.gz') + '.json',
+                  'w') as act_5tt_json_file:
+            json.dump(act_5tt_json_data, act_5tt_json_file)
         run.command('mrconvert vis.mif '
                     + os.path.join(output_subdir,
                                    'anat',
                                    session_label
-                                   + '_tissues3D.nii.gz')
+                                   + '_desc-vis_probseg.nii.gz')
                     + ' -strides +1,+2,+3')
         run.command('mrconvert FOD_WM.mif '
                     + os.path.join(output_subdir,
@@ -2554,7 +2559,7 @@ def run_participant2(bids_dir, session, shared,
                         + os.path.join(output_subdir,
                                        'dwi',
                                        session_label
-                                       + '_tissue-all.nii.gz')
+                                       + '_tissue-all_probseg.nii.gz')
                         + ' -strides +1,+2,+3,+4')
 
     if output_verbosity > 2:
@@ -2610,14 +2615,14 @@ def run_participant2(bids_dir, session, shared,
                                       'anat',
                                       session_label
                                       + parc_string
-                                      + '.obj'))
+                                      + '_dseg.obj'))
             run.command('mrconvert parcRGB.mif '
                         + os.path.join(output_subdir,
                                        'anat',
                                        session_label
                                        + parc_string
-                                       +'_colour.nii.gz')
-                        + ' -strides +1,+2,+3')
+                                       +'_desc-rgb_dseg.nii.gz')
+                        + ' -strides +1,+2,+3,+4')
 
     # Manually wipe and zero the scratch directory
     #   (since we might be processing more than one subject)
