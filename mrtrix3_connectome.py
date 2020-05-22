@@ -6,6 +6,7 @@ import math
 import os
 import re
 import shutil
+from collections import namedtuple
 from distutils.spawn import find_executable
 import mrtrix3 #pylint: disable=import-error
 from mrtrix3 import CONFIG, MRtrixError #pylint: disable=import-error
@@ -20,13 +21,9 @@ __version__ = 'BIDS-App \'MRtrix3_connectome\' version {}' \
               else 'BIDS-App \'MRtrix3_connectome\' standalone'
 OPTION_PREFIX = '--' if IS_CONTAINER else '-'
 
+OUT_5TT_JSON_DATA = {"LabelMap": ["CGM", "SGM", "WM", "CSF", "Path"]}
 
 
-
-# TODO Get splitext() that is robust against .nii.gz
-# Or if .split(os.extsep()) is to be used, separate out the
-#   directory path before doing the split
-# TODO This should be fixed via os.path.splitext(text.rstrip('.gz'))
 
 
 class T1wShared(object): #pylint: disable=useless-object-inheritance
@@ -125,8 +122,6 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
 
         self.streamlines = streamlines
 
-        # TODO Are there any participant2-level processing setups
-        #   where FSL isn't actually required?
         fsl_path = os.environ.get('FSLDIR', '')
         if not fsl_path:
             raise MRtrixError(
@@ -594,9 +589,6 @@ def get_t1w_preproc_images(bids_dir,
         # - Path to anat/ directory
         # - Path to subject directory within BIDS Derivatives dataset
         # - Path to BIDS Derivatives dataset
-        # Paths may be absolute or relative to original working directory
-        # TODO Where this might be more difficult is if there are multiple
-        #   modalities and/or spaces in the directory
         if os.path.isfile(t1w_preproc):
             preproc_image_path = t1w_preproc
         else:
@@ -1355,9 +1347,10 @@ def run_participant1(bids_dir, session, shared,
     #    and significantly increases execution time
     #if shared.eddy_mbs:
     #    eddy_options.append('--estimate_move_by_susceptibility')
+    #
     # High b-value monopolar data still has eddy current distortions
     #   in b=0 images
-    # TODO This appears to result in processing failure too regularly
+    # This appears to result in processing failure too regularly
     # Error messages include the following:
     # - terminate called after throwing an instance of
     #   'NEWMAT::SingularException'
@@ -1679,6 +1672,7 @@ def run_participant1(bids_dir, session, shared,
                                'dwi',
                                session_label + '_desc-preproc_dwi.bval')
                 + ' -strides +1,+2,+3,+4')
+    # TODO Absence of skull-stripping in DWI data needs to be indicated
     run.command('mrconvert '
                 + dwi_mask_image
                 + ' '
@@ -1768,14 +1762,141 @@ def run_participant2(bids_dir, session, shared,
                           + session_label
                           + '" contains an fmap/ directory;'
                           + ' should not exist if data are preprocessed')
-    for subdir in ['connectome', 'tractogram']:
-        if os.path.exists(os.path.join(output_subdir, subdir)):
-            app.warn('Output sub-directory "'
-                     + os.path.join(output_subdir, subdir)
-                     + '" already exists; contents will be '
-                     + 'erased upon completion of processing')
 
-    # TODO Check paths of individual output files
+    # Check paths of individual output files before script completion
+    #   by building a database of what files are to be written to output
+    parc_string = '_desc-' + shared.parcellation
+    OutputItem = \
+        namedtuple(
+            'OutputItem',
+            'is_image min_verbosity needs_multishell options path')
+    output_items = {
+        'response_wm.txt': \
+            OutputItem(False, 1, False, None,
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_tissue-WM_response.txt')),
+        'T1_mask.mif': \
+            OutputItem(True, 1, False,
+                       '-strides +1,+2,+3 -datatype uint8',
+                       os.path.join('anat',
+                                    session_label
+                                    + '_desc-brain_mask.nii.gz')),
+        '5TT.mif': \
+            OutputItem(True, 2, False,
+                       '-strides +1,+2,+3,+4',
+                       os.path.join('anat',
+                                    session_label
+                                    + '_desc-5tt_probseg.nii.gz')),
+        '5TT.json': \
+            OutputItem(False, 2, False, None,
+                       os.path.join('anat',
+                                    session_label
+                                    + '_desc-5tt_probseg.json')),
+        'vis.mif': \
+            OutputItem(True, 2, False, '-strides +1,+2,+3',
+                       os.path.join('anat',
+                                    session_label
+                                    + '_desc-vis_probseg.nii.gz')),
+        'FOD_WM.mif': \
+            OutputItem(True, 2, False, '-strides +1,+2,+3,+4',
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_tissue-WM_ODF.nii.gz')),
+        'response_gm.txt': \
+            OutputItem(False, 2, True, None,
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_tissue-GM_response.txt')),
+        'response_csf.txt': \
+            OutputItem(False, 2, True, None,
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_tissue-CSF_response.txt')),
+        'FOD_GM.mif': \
+            OutputItem(True, 2, True, '-strides +1,+2,+3,+4',
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_tissue-GM_ODF.nii.gz')),
+        'FOD_CSF.mif': \
+            OutputItem(True, 2, True, '-strides +1,+2,+3,+4',
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_tissue-CSF_ODF.nii.gz')),
+        'tissues.mif': \
+            OutputItem(True, 2, True, '-strides +1,+2,+3,+4',
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_tissue-all_probseg.nii.gz'))
+    }
+
+    if shared.parcellation != 'none':
+        output_items['connectome.csv'] = \
+            OutputItem(False, 1, False, None,
+                       os.path.join('connectome',
+                                    session_label
+                                    + parc_string
+                                    + '_level-participant_connectome.csv'))
+        output_items['mu.txt'] = \
+            OutputItem(False, 1, False, None,
+                       os.path.join('tractogram',
+                                    session_label + '_mu.txt'))
+        output_items['parc.mif'] = \
+            OutputItem(True, 2, False, '-strides +1,+2,+3',
+                       os.path.join('anat',
+                                    session_label
+                                    + parc_string
+                                    + '_dseg.nii.gz'))
+        output_items['meanlength.csv'] = \
+            OutputItem(False, 2, False, None,
+                       os.path.join('connectome',
+                                    session_label
+                                    + parc_string
+                                    + '_meanlength.csv'))
+        output_items['assignments.csv'] = \
+            OutputItem(False, 3, False, None,
+                       os.path.join('connectome',
+                                    session_label
+                                    + parc_string
+                                    + '_assignments.csv'))
+        output_items['nodes_smooth.obj'] = \
+            OutputItem(False, 3, False, None,
+                       os.path.join('anat',
+                                    session_label
+                                    + parc_string
+                                    + '_dseg.obj'))
+        output_items['exemplars.tck'] = \
+            OutputItem(False, 3, False, None,
+                       os.path.join('connectome',
+                                    session_label
+                                    + parc_string
+                                    + '_exemplars.tck'))
+        output_items['parcRGB.mif'] = \
+            OutputItem(True, 3, False, '-strides +1,+2,+3,+4',
+                       os.path.join('anat',
+                                    session_label
+                                    + parc_string
+                                    + '_desc-rgb_dseg.nii.gz'))
+
+    if shared.streamlines or shared.parcellation != 'none':
+        output_items['tractogram.tck'] = \
+            OutputItem(False, 3, False, None,
+                       os.path.join('tractogram',
+                                    session_label + '_tractogram.tck'))
+        output_items['weights.csv'] = \
+            OutputItem(False, 3, False, None,
+                       os.path.join('tractogram',
+                                    session_label + '_weights.csv'))
+        output_items['tdi_native.mif'] = \
+            OutputItem(True, 3, False, '-strides +1,+2,+3',
+                       os.path.join('tractogram',
+                                    session_label
+                                    + '_variant-native_tdi.nii.gz'))
+        output_items['tdi_highres.mif'] = \
+            OutputItem(True, 3, False, '-strides +1,+2,+3',
+                       os.path.join('tractogram',
+                                    session_label
+                                    + '_variant-highres_tdi.nii.gz'))
 
     in_dwi_path = os.path.join(output_subdir,
                                'dwi',
@@ -1813,10 +1934,10 @@ def run_participant2(bids_dir, session, shared,
                                 if os.path.isfile(in_dwi_json_path) \
                                 else ''
     # Is there a mask present?
-    in_dwi_mask_path = os.path.join(output_subdir,
-                                    'dwi',
-                                    '*_desc-brain*_mask.nii*')
-    in_dwi_mask_image_list = glob.glob(in_dwi_mask_path)
+    in_dwi_mask_image_list = \
+        glob.glob(os.path.join(output_subdir,
+                               'dwi',
+                               '*_desc-brain*_mask.nii*'))
     if len(in_dwi_mask_image_list) > 1:
         raise MRtrixError('More than one DWI mask found for session "'
                           + session_label
@@ -1824,6 +1945,13 @@ def run_participant2(bids_dir, session, shared,
     in_dwi_mask_path = in_dwi_mask_image_list[0] \
                        if in_dwi_mask_image_list \
                        else None
+    if not in_dwi_mask_path:
+        output_items['dwi_mask.mif'] = \
+            OutputItem(True, 1, False,
+                       '-strides +1,+2,+3 -datatype uint8',
+                       os.path.join('dwi',
+                                    session_label
+                                    + '_desc-brain_mask.nii.gz'))
     # For running FreeSurfer, want to use the raw T1-weighted image
     if shared.do_freesurfer:
         in_raw_t1w_paths = \
@@ -1843,6 +1971,23 @@ def run_participant2(bids_dir, session, shared,
         in_raw_t1w_path = in_raw_t1w_paths[0]
     else:
         in_raw_t1w_path = None
+
+    existing_output_dirs = \
+        [item for item in ['connectome', 'tractogram']
+         if os.path.exists(os.path.join(output_subdir, item))]
+    if existing_output_dirs:
+        app.warn('Output sub-directories already exist and will be '
+                 'erased upon completion of processing: '
+                 + str(existing_output_dirs))
+    existing_output_files = \
+        [item.path
+         for item in output_items.values()
+         if (os.path.exists(os.path.join(output_subdir, item.path))
+             and output_verbosity >= item.min_verbosity)]
+    if existing_output_files:
+        app.warn('Target output files already exist and will be '
+                 'over-written on script completion: '
+                 + str(existing_output_files))
 
 
     # Import pre-processed data into scratch directory
@@ -1869,8 +2014,20 @@ def run_participant2(bids_dir, session, shared,
                            shared.t1w_shared,
                            output_dir,
                            t1w_preproc_path)
-    T1_is_premasked = os.path.isfile('T1_premasked.mif')
+    T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif', False))
     T1_image = 'T1_premasked.mif' if T1_is_premasked else 'T1.mif'
+    output_items[T1_image] = \
+        OutputItem(True, 1, False, ' -strides +1,+2,+3',
+                   os.path.join(output_subdir,
+                                'anat',
+                                session_label + '_desc-preproc_T1w.nii.gz'))
+    T1_json_path = os.path.splitext(T1_image)[0] + '.json'
+    output_items[T1_json_path] = \
+        OutputItem(False, 1, False, None,
+                   os.path.join(output_subdir,
+                                'anat',
+                                session_label + '_desc-preproc_T1w.json'))
+
 
     if in_raw_t1w_path:
         run.command('mrconvert '
@@ -1882,13 +2039,16 @@ def run_participant2(bids_dir, session, shared,
     cwd = os.getcwd()
     app.goto_scratch_dir()
 
+    T1_json_data = {"SkullStripped": T1_is_premasked}
+    with open(T1_json_path, 'w') as T1_json_file:
+        json.dump(T1_json_data, T1_json_file)
+
     # Before we can begin: Are there any data we require
     #   that were not imported from the output directory?
     if not in_dwi_mask_path:
         app.console('Generating DWI brain mask '
                     '(was not already present in derivatives directory)')
         run.command('dwi2mask dwi.mif dwi_mask.mif')
-
 
     # Step 1: Estimate response functions for spherical deconvolution
     app.console('Estimating tissue response functions for '
@@ -1949,6 +2109,8 @@ def run_participant2(bids_dir, session, shared,
                    if T1_is_premasked \
                    else (' -mask T1_mask.mif')))
     if output_verbosity > 1:
+        with open('5TT.json', 'w') as out_5tt_json_file:
+            json.dump(OUT_5TT_JSON_DATA, out_5tt_json_file)
         run.command('5tt2vis 5TT.mif vis.mif')
 
     # Step 4: Generate the grey matter parcellation
@@ -2303,7 +2465,7 @@ def run_participant2(bids_dir, session, shared,
 
         # Step 5: Generate the tractogram
         app.console('Performing whole-brain fibre-tracking')
-        tractogram_filepath = 'tractogram.tck'
+        tractogram_filepath = 'tractogram_' + str(num_streamlines) + '.tck'
         run.command('tckgen FOD_WM.mif ' + tractogram_filepath + ' '
                     '-act 5TT.mif -backtrack -crop_at_gmwmi '
                     '-maxlength 250 '
@@ -2342,6 +2504,8 @@ def run_participant2(bids_dir, session, shared,
         if not num_streamlines:
             raise MRtrixError('Unable to run SIFT2 algorithm for '
                               'any number of streamlines')
+        run.function(shutil.move, tractogram_filepath, 'tractogram.tck')
+        tractogram_filepath = 'tractogram.tck'
 
 
         if output_verbosity > 2:
@@ -2353,19 +2517,19 @@ def run_participant2(bids_dir, session, shared,
             app.console('Producing Track Density Images (TDIs)')
             with open('mu.txt', 'r') as f:
                 mu = float(f.read())
-            run.command('tckmap ' + tractogram_filepath + ' '
-                        '-tck_weights_in weights.csv '
-                        '-template FOD_WM.mif '
-                        '-precise '
-                        '- | '
+            run.command('tckmap tractogram.tck -'
+                        ' -tck_weights_in weights.csv'
+                        ' -template FOD_WM.mif'
+                        ' -precise'
+                        ' | '
                         'mrcalc - ' + str(mu) + ' -mult tdi_native.mif')
             # - Conventional TDI at super-resolution
             #   (mostly just because we can)
-            run.command('tckmap ' + tractogram_filepath + ' tdi_highres.mif '
-                        '-tck_weights_in weights.csv '
-                        '-template vis.mif '
-                        '-vox ' + ','.join([str(value/3.0) for value in
-                                            image.Header('vis.mif').spacing()])
+            run.command('tckmap tractogram.tck tdi_highres.mif'
+                        ' -tck_weights_in weights.csv'
+                        ' -template vis.mif'
+                        ' -vox ' + ','.join([str(value/3.0) for value in
+                                             image.Header('vis.mif').spacing()])
                         + ' -datatype uint16')
 
 
@@ -2379,18 +2543,16 @@ def run_participant2(bids_dir, session, shared,
             ' -assignment_radial_search 5' \
             if shared.parcellation in ['yeo7mni', 'yeo17mni'] \
             else ''
-        run.command('tck2connectome '
-                    + tractogram_filepath
-                    + ' parc.mif connectome.csv '
-                    + '-tck_weights_in weights.csv '
-                    + '-out_assignments assignments.csv'
+        run.command('tck2connectome tractogram.tck'
+                    ' parc.mif connectome.csv'
+                    ' -tck_weights_in weights.csv'
+                    ' -out_assignments assignments.csv'
                     + assignment_option)
-        run.command('tck2connectome '
-                    + tractogram_filepath
-                    + ' parc.mif meanlength.csv '
-                    + '-tck_weights_in weights.csv '
-                    + '-scale_length '
-                    + '-stat_edge mean'
+        run.command('tck2connectome tractogram.tck'
+                    ' parc.mif meanlength.csv'
+                    ' -tck_weights_in weights.csv'
+                    ' -scale_length'
+                    ' -stat_edge mean'
                     + assignment_option)
 
         if output_verbosity > 2:
@@ -2400,10 +2562,10 @@ def run_participant2(bids_dir, session, shared,
                         'enhanced connectome visualisation')
             run.command('connectome2tck '
                         + tractogram_filepath
-                        + ' assignments.csv exemplars.tck '
-                        + '-tck_weights_in weights.csv '
-                        + '-exemplars parc.mif '
-                        + '-files single')
+                        + ' assignments.csv exemplars.tck'
+                        + ' -tck_weights_in weights.csv'
+                        + ' -exemplars parc.mif'
+                        + ' -files single')
             run.command('label2mesh parc.mif nodes.obj')
             run.command('meshfilter nodes.obj smooth nodes_smooth.obj')
             app.cleanup('nodes.obj')
@@ -2420,8 +2582,6 @@ def run_participant2(bids_dir, session, shared,
         run.function(os.makedirs, full_subdir_path)
     if not os.path.isdir(os.path.join(output_subdir, 'anat')):
         run.function(os.makedirs, os.path.join(output_subdir, 'anat'))
-
-    parc_string = '_desc-' + shared.parcellation
 
     # Generate a copy of the lookup table file:
     #   - Use the post-labelconvert file if it's used;
@@ -2443,191 +2603,23 @@ def run_participant2(bids_dir, session, shared,
             pass
 
     # Copy / convert necessary files to output directory
-    if shared.parcellation != 'none':
-        run.function(shutil.copy,
-                     'connectome.csv',
-                     os.path.join(output_subdir,
-                                  'connectome',
-                                  session_label
-                                  + parc_string
-                                  + '_level-participant_connectome.csv'))
-    if num_streamlines:
-        run.function(shutil.copy,
-                     'mu.txt',
-                     os.path.join(output_subdir,
-                                  'tractogram',
-                                  session_label
-                                  + '_mu.txt'))
-    run.function(shutil.copy,
-                 'response_wm.txt',
-                 os.path.join(output_subdir,
-                              'dwi',
-                              session_label
-                              + '_tissue-WM_response.txt'))
-    if not in_dwi_mask_path:
-        run.command('mrconvert dwi_mask.mif '
-                    + os.path.join(output_subdir,
-                                   'dwi',
-                                   session_label
-                                   + '_desc-brain_mask.nii.gz')
-                    + ' -datatype uint8'
-                    + ' -strides +1,+2,+3')
-
-    T1w_output_path = os.path.join(output_subdir,
-                                   'anat',
-                                   session_label + '_desc-preproc_T1w.nii.gz')
-    run.command('mrconvert '
-                + T1_image
-                + ' '
-                + T1w_output_path
-                + ' -strides +1,+2,+3',
-                force=os.path.isfile(T1w_output_path))
-    T1_json_data = {"SkullStripped": T1_is_premasked}
-    with open(T1w_output_path.rstrip('.nii.gz') + '.json',
-              'w') as T1_json_file:
-        json.dump(T1_json_data, T1_json_file)
-    T1w_mask_output_path = \
-            os.path.join(output_subdir,
-                         'anat',
-                         session_label + '_desc-brain_mask.nii.gz')
-    run.command('mrconvert T1_mask.mif '
-                + T1w_mask_output_path
-                + ' -datatype uint8'
-                + ' -strides +1,+2,+3',
-                force=os.path.isfile(T1w_mask_output_path))
-
-    if output_verbosity > 1:
-        if shared.parcellation != 'none':
-            run.command('mrconvert parc.mif '
-                        + os.path.join(output_subdir,
-                                       'anat',
-                                       session_label
-                                       + parc_string
-                                       + '_dseg.nii.gz')
-                        + ' -strides +1,+2,+3')
-            run.function(shutil.copy,
-                         'meanlength.csv',
-                         os.path.join(output_subdir,
-                                      'connectome',
-                                      session_label
-                                      + parc_string
-                                      + '_meanlength.csv'))
-        act_5tt_image_path = os.path.join(output_subdir,
-                                          'anat',
-                                          session_label
-                                          + '_desc-5tt_probseg.nii.gz')
-        run.command('mrconvert 5TT.mif '
-                    + act_5tt_image_path
-                    + ' -strides +1,+2,+3,+4')
-        act_5tt_json_data = {"LabelMap": ["CGM", "SGM", "WM", "CSF", "Path"]}
-        with open(act_5tt_image_path.rstrip('.nii.gz') + '.json',
-                  'w') as act_5tt_json_file:
-            json.dump(act_5tt_json_data, act_5tt_json_file)
-        run.command('mrconvert vis.mif '
-                    + os.path.join(output_subdir,
-                                   'anat',
-                                   session_label
-                                   + '_desc-vis_probseg.nii.gz')
-                    + ' -strides +1,+2,+3')
-        run.command('mrconvert FOD_WM.mif '
-                    + os.path.join(output_subdir,
-                                   'dwi',
-                                   session_label
-                                   + '_tissue-WM_ODF.nii.gz')
-                    + ' -strides +1,+2,+3,+4')
-        if multishell:
-            run.function(shutil.copy,
-                         'response_gm.txt',
-                         os.path.join(output_subdir,
-                                      'dwi',
-                                      session_label
-                                      + '_tissue-GM_response.txt'))
-            run.function(shutil.copy,
-                         'response_csf.txt',
-                         os.path.join(output_subdir,
-                                      'dwi',
-                                      session_label
-                                      + '_tissue-CSF_response.txt'))
-            run.command('mrconvert FOD_GM.mif '
-                        + os.path.join(output_subdir,
-                                       'dwi',
-                                       session_label
-                                       + '_tissue-GM_ODF.nii.gz')
-                        + ' -strides +1,+2,+3,+4')
-            run.command('mrconvert FOD_CSF.mif '
-                        + os.path.join(output_subdir,
-                                       'dwi',
-                                       session_label
-                                       + '_tissue-CSF_ODF.nii.gz')
-                        + ' -strides +1,+2,+3,+4')
-            run.command('mrconvert tissues.mif '
-                        + os.path.join(output_subdir,
-                                       'dwi',
-                                       session_label
-                                       + '_tissue-all_probseg.nii.gz')
-                        + ' -strides +1,+2,+3,+4')
-
-    if output_verbosity > 2:
-        if num_streamlines:
-            # Move rather than copying the tractogram just because of its size;
-            #   unless using output verbosity level 4, in which case
-            #   we want copies both in the appropriate derivatives location
-            #   and in the scratch directory copy
-            run.function(shutil.copy \
-                             if output_verbosity == 4 \
-                             else shutil.move,
-                         tractogram_filepath,
-                         os.path.join(output_subdir,
-                                      'tractogram',
-                                      session_label
-                                      + '_tractogram.tck'))
-            run.function(shutil.copy,
-                         'weights.csv',
-                         os.path.join(output_subdir,
-                                      'tractogram',
-                                      session_label
-                                      + '_weights.csv'))
-            run.command('mrconvert tdi_native.mif '
-                        + os.path.join(output_subdir,
-                                       'tractogram',
-                                       session_label
-                                       + '_variant-native_tdi.nii.gz')
-                        + ' -strides +1,+2,+3')
-            run.command('mrconvert tdi_highres.mif '
-                        + os.path.join(output_subdir,
-                                       'tractogram',
-                                       session_label
-                                       + '_variant-highres_tdi.nii.gz')
-                        + ' -strides +1,+2,+3')
-        if shared.parcellation != 'none':
-            run.function(shutil.copy,
-                         'assignments.csv',
-                         os.path.join(output_subdir,
-                                      'connectome',
-                                      session_label
-                                      + parc_string
-                                      + '_assignments.csv'))
-            run.function(shutil.copy,
-                         'exemplars.tck',
-                         os.path.join(output_subdir,
-                                      'connectome',
-                                      session_label
-                                      + parc_string
-                                      + '_exemplars.tck'))
-            run.function(shutil.copy,
-                         'nodes_smooth.obj',
-                         os.path.join(output_subdir,
-                                      'anat',
-                                      session_label
-                                      + parc_string
-                                      + '_dseg.obj'))
-            run.command('mrconvert parcRGB.mif '
-                        + os.path.join(output_subdir,
-                                       'anat',
-                                       session_label
-                                       + parc_string
-                                       +'_desc-rgb_dseg.nii.gz')
-                        + ' -strides +1,+2,+3,+4')
+    for scratch_file, output_item in output_items.items():
+        if output_verbosity >= output_item.min_verbosity \
+                and (multishell or not output_item.needs_multishell):
+            full_output_path = os.path.join(output_subdir, output_item.path)
+            if output_item.is_image:
+                run.command('mrconvert '
+                            + scratch_file
+                            + ' '
+                            + full_output_path
+                            + (' ' + output_item.options
+                               if output_item.options
+                               else ''),
+                            force=os.path.exists(full_output_path))
+            else:
+                run.function(shutil.copyfile,
+                             scratch_file,
+                             full_output_path)
 
     # Manually wipe and zero the scratch directory
     #   (since we might be processing more than one subject)
@@ -3010,6 +3002,10 @@ def run_group(bids_dir, output_verbosity, output_dir):
     if consistent_parcellation:
         progress = app.ProgressBar('Calculating group mean connectome',
                                    len(sessions)+1)
+        # TODO Calculate geometric rather than arithmetic mean
+        # Requires setting a minimum connectivity value per edge;
+        #   this should be equivalent to 1 streamline prior to
+        #   application of the multiplier
         mean_connectome = []
         for s in sessions:
             connectome = matrix.load_matrix(s.temp_connectome)
