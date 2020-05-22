@@ -2453,12 +2453,6 @@ def run_participant2(bids_dir, session, shared,
                               'dwi',
                               session_label
                               + '_tissue-WM_response.txt'))
-    # TODO Don't write this to the output directory;
-    #   rely on mrinfo -shell_bvalues being run on pre-processed DWI data
-    with open(os.path.join(output_subdir,
-                           'dwi',
-                           session_label + '_bvalues.txt'), 'w') as f:
-        f.write(' '.join([str(value) for value in bvalues]))
     if not in_dwi_mask_path:
         run.command('mrconvert dwi_mask.mif '
                     + os.path.join(output_subdir,
@@ -2681,8 +2675,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
             session_label = '_'.join(session)
             root = os.path.join(output_dir, *session)
             # Get input DWI path here rather than in function
-            root_dir = os.path.join(output_dir, *session)
-            in_dwi_image_list = glob.glob(os.path.join(root_dir,
+            in_dwi_image_list = glob.glob(os.path.join(root,
                                                        'dwi',
                                                        '*_dwi.nii*'))
             if not in_dwi_image_list:
@@ -2701,6 +2694,14 @@ def run_group(bids_dir, output_verbosity, output_dir):
             in_dwi_prefix = self.in_dwi.split(os.extsep)[0]
             self.in_bvec = in_dwi_prefix + '.bvec'
             self.in_bval = in_dwi_prefix + '.bval'
+            self.bvalues = [float(value) for value in \
+                    run.command('mrinfo '
+                                + self.in_dwi
+                                + ' -fslgrad '
+                                + self.in_bvec
+                                + ' '
+                                + self.in_bval
+                                + ' -shell_bvalues').stdout.split()]
 
             self.in_rf = os.path.join(root,
                                       'dwi',
@@ -2711,7 +2712,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
                     os.path.join(root,
                                  'connectome',
                                  session_label
-                                 + '_parc-*'
+                                 + '_desc-*'
                                  + '_level-participant'
                                  + '_connectome.csv'))
             if not connectome_files:
@@ -2741,7 +2742,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
                                       + self.in_bval
 
             self.parcellation = \
-                re.findall('(?<=_parc-)[a-zA-Z0-9]*',
+                re.findall('(?<=_desc-)[a-zA-Z0-9]*',
                            os.path.basename(self.in_connectome))[0]
 
             # Permissible for this to not exist
@@ -2817,6 +2818,28 @@ def run_group(bids_dir, output_verbosity, output_dir):
 
     app.make_scratch_dir()
     app.goto_scratch_dir()
+
+    # Before proceeding, compile session b-values and make sure that:
+    #   - the number of shells is equivalent across sessions
+    #   - the b-values don't vary too much within those shells across sessions
+    if not all(len(session.bvalues) == len(sessions[0].bvalues)
+               for session in sessions[1:]):
+        raise MRtrixError('Not all sessions DWI data contain the same '
+                          'number of b-value shells')
+    all_bvalues = [[session.bvalues[index] for session in sessions]
+                   for index in range(0, len(sessions[0].bvalues))]
+    for shell in all_bvalues:
+        shell_mean = sum(shell) / len(shell)
+        if max([max(shell)-shell_mean, shell_mean-min(shell)]) > 50.0:
+            raise MRtrixError('Excessive deviation of b-values: '
+                              + 'mean across subjects b='
+                              + str(shell_mean)
+                              + '; '
+                              + 'range '
+                              + str(min(shell))
+                              + '-'
+                              + str(max(shell)))
+
 
     # First pass through subject data in group analysis:
     #   Generate mask and FA image directories to be used in
@@ -3013,7 +3036,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
     progress.increment()
     if consistent_parcellation:
         matrix.save_matrix(os.path.join(output_dir,
-                                        'parc-'
+                                        'desc-'
                                         + parcellation
                                         + '_connectome.csv'),
                            mean_connectome)
