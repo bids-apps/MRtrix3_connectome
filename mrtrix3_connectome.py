@@ -2623,7 +2623,8 @@ def run_participant2(bids_dir, session, shared,
                             + full_output_path
                             + (' ' + output_item.options
                                if output_item.options
-                               else ''),
+                               else '')
+                            + ' -clear_property comments',
                             force=os.path.exists(full_output_path))
             else:
                 run.function(shutil.copyfile,
