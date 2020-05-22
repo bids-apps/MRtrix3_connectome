@@ -1977,8 +1977,12 @@ def run_participant2(bids_dir, session, shared,
     else:
         in_raw_t1w_path = None
 
+    subdirs_to_make = ['tractogram']
+    if shared.parcellation != 'none':
+        subdirs_to_make.insert(0, 'connectome')
+
     existing_output_dirs = \
-        [item for item in ['connectome', 'tractogram']
+        [item for item in subdirs_to_make
          if os.path.exists(os.path.join(output_subdir, item))]
     if existing_output_dirs:
         app.warn('Output sub-directories already exist and will be '
@@ -2580,7 +2584,7 @@ def run_participant2(bids_dir, session, shared,
     # Prepare output path for writing
     app.console('Processing for session "' + session_label
                 + '" completed; writing results to output directory')
-    for subdir in ['connectome', 'tractogram']:
+    for subdir in subdirs_to_make:
         full_subdir_path = os.path.join(output_subdir, subdir)
         if os.path.exists(full_subdir_path):
             run.function(shutil.rmtree, full_subdir_path)
