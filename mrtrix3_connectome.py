@@ -1892,16 +1892,21 @@ def run_participant2(bids_dir, session, shared,
             OutputItem(False, 3, False, None,
                        os.path.join('tractogram',
                                     session_label + '_weights.csv'))
-        output_items['tdi_native.mif'] = \
+        output_items['tdi_dwi.mif'] = \
             OutputItem(True, 3, False, '-strides +1,+2,+3',
                        os.path.join('tractogram',
                                     session_label
-                                    + '_variant-native_tdi.nii.gz'))
-        output_items['tdi_highres.mif'] = \
+                                    + '_space-dwi_tdi.nii.gz'))
+        output_items['tdi_t1.mif'] = \
             OutputItem(True, 3, False, '-strides +1,+2,+3',
                        os.path.join('tractogram',
                                     session_label
-                                    + '_variant-highres_tdi.nii.gz'))
+                                    + '_space-T1w_tdi.nii.gz'))
+        output_items['tdi_hires.mif'] = \
+            OutputItem(True, 3, False, '-strides +1,+2,+3',
+                       os.path.join('tractogram',
+                                    session_label
+                                    + '_space-superres_tdi.nii.gz'))
 
     in_dwi_path = os.path.join(output_subdir,
                                'dwi',
@@ -2526,20 +2531,26 @@ def run_participant2(bids_dir, session, shared,
             app.console('Producing Track Density Images (TDIs)')
             with open('mu.txt', 'r') as f:
                 mu = float(f.read())
+            # In the space of the DWI image
             run.command('tckmap tractogram.tck -'
                         ' -tck_weights_in weights.csv'
                         ' -template FOD_WM.mif'
                         ' -precise'
                         ' | '
-                        'mrcalc - ' + str(mu) + ' -mult tdi_native.mif')
+                        'mrcalc - ' + str(mu) + ' -mult tdi_dwi.mif')
+            # In the space of the T1-weighted image
+            run.command('tckmap tractogram.tck -'
+                        + ' -tck_weights_in weights.csv'
+                        + ' -template ' + T1_image
+                        + ' -precise'
+                        + ' | '
+                        + 'mrcalc - ' + str(mu) + ' -mult tdi_T1.mif')
             # - Conventional TDI at super-resolution
             #   (mostly just because we can)
-            run.command('tckmap tractogram.tck tdi_highres.mif'
+            run.command('tckmap tractogram.tck tdi_hires.mif'
                         ' -tck_weights_in weights.csv'
-                        ' -template vis.mif'
-                        ' -vox ' + ','.join([str(value/3.0) for value in
-                                             image.Header('vis.mif').spacing()])
-                        + ' -datatype uint16')
+                        ' -vox 0.25'
+                        ' -datatype uint16')
 
 
     if shared.parcellation != 'none':
