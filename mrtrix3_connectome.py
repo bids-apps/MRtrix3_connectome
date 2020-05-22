@@ -21,7 +21,8 @@ __version__ = 'BIDS-App \'MRtrix3_connectome\' version {}' \
               else 'BIDS-App \'MRtrix3_connectome\' standalone'
 OPTION_PREFIX = '--' if IS_CONTAINER else '-'
 
-OUT_5TT_JSON_DATA = {"LabelMap": ["CGM", "SGM", "WM", "CSF", "Path"]}
+OUT_DWI_JSON_DATA = {'SkullStripped': False}
+OUT_5TT_JSON_DATA = {'LabelMap': ['CGM', 'SGM', 'WM', 'CSF', 'Path']}
 
 
 
@@ -1672,7 +1673,11 @@ def run_participant1(bids_dir, session, shared,
                                'dwi',
                                session_label + '_desc-preproc_dwi.bval')
                 + ' -strides +1,+2,+3,+4')
-    # TODO Absence of skull-stripping in DWI data needs to be indicated
+    with open(os.path.join(output_subdir,
+                           'dwi',
+                           session_label + '_desc-preproc_dwi.json'),
+              'w') as out_dwi_json_file:
+        json.dump(OUT_DWI_JSON_DATA, out_dwi_json_file)
     run.command('mrconvert '
                 + dwi_mask_image
                 + ' '
