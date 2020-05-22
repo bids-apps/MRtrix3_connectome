@@ -1357,8 +1357,19 @@ def run_participant1(bids_dir, session, shared,
     #    eddy_options.append('--estimate_move_by_susceptibility')
     # High b-value monopolar data still has eddy current distortions
     #   in b=0 images
-    if monopolar:
-        eddy_options.append('--b0_flm=linear')
+    # TODO This appears to result in processing failure too regularly
+    # Error messages include the following:
+    # - terminate called after throwing an instance of
+    #   'NEWMAT::SingularException'
+    # - matrix multiplication: problem with matrix inverse;
+    #   suggest to use solve() instead
+    #   EDDY:::  ECScanClasses.cpp:::  void EDDY::ECScanManager::
+    #   SeparateFieldOffsetFromMovement(EDDY::ScanType, EDDY::OffsetModel):
+    #   Exception thrown
+    # - eddy: msg=ECScanManager::set_slice_to_vol_reference:
+    #   ref index out of bounds
+    #if monopolar:
+    #    eddy_options.append('--b0_flm=linear')
 
     shell_asymmetries = \
         [float(value) for value in
