@@ -676,11 +676,11 @@ def get_t1w_preproc_images(bids_dir,
             frac_voxels_outside_mask = \
                 float(run.command('mrcalc '
                                   + preproc_image_path
-                                  + '0 -eq 1 '
+                                  + ' 0 -eq 1 '
                                   + preproc_image_path
                                   + ' -finite -sub -add - '
                                   + '| '
-                                  + ' mrstats - -output mean'))
+                                  + ' mrstats - -output mean').stdout)
             preproc_image_is_masked = \
                 frac_voxels_outside_mask > 0.25
             app.warn('No sidecar information for pre-processed '
@@ -691,7 +691,7 @@ def get_t1w_preproc_images(bids_dir,
                      + ('be' if preproc_image_is_masked else 'not be')
                      + ' pre-masked based on image data ('
                      + str(int(round(100.0 * frac_voxels_outside_mask)))
-                     + '%% of voxels contain no data)')
+                     + '% of voxels contain no data)')
 
         # Copy pre-procesed T1-weighted image into scratch directory
         run.command('mrconvert '
