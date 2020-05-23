@@ -1,7 +1,7 @@
 Bootstrap: debootstrap
 MirrorURL: http://us.archive.ubuntu.com/ubuntu/
 OSVersion: bionic
-Include: apt bc build-essential dc file git gnupg libfftw3-dev libpng-dev libtiff5-dev nano python python3 python3-numpy python3-setuptools tar tzdata unzip wget zlib1g-dev
+Include: apt bc build-essential dc file git gnupg libegl1-mesa-dev libfftw3-dev libpng-dev libtiff5-dev nano python python3 python3-numpy python3-setuptools tar tzdata unzip wget zlib1g-dev
 
 %labels
 MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
@@ -67,8 +67,9 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     apt install -y clang libeigen3-dev libopenblas-dev nodejs npm perl-modules tcsh
 
 # Neuroimaging software / data dependencies
-    wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.1.tar.gz | tar zx -C /opt --exclude='freesurfer/trctrain' --exclude='freesurfer/subjects/fsaverage_sym' --exclude='freesurfer/subjects/fsaverage3' --exclude='freesurfer/subjects/fsaverage4' --exclude='freesurfer/subjects/fsaverage6' --exclude='freesurfer/subjects/cvs_avg35' --exclude='freesurfer/subjects/cvs_avg35_inMNI152' --exclude='freesurfer/subjects/bert' --exclude='freesurfer/subjects/V1_average' --exclude='freesurfer/average/mult-comp-cor' --exclude='freesurfer/lib/qt'
+    wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | tar zx -C /opt --exclude='freesurfer/trctrain' --exclude='freesurfer/subjects/fsaverage_sym' --exclude='freesurfer/subjects/fsaverage3' --exclude='freesurfer/subjects/fsaverage4' --exclude='freesurfer/subjects/fsaverage6' --exclude='freesurfer/subjects/cvs_avg35' --exclude='freesurfer/subjects/cvs_avg35_inMNI152' --exclude='freesurfer/subjects/bert' --exclude='freesurfer/subjects/V1_average' --exclude='freesurfer/average/mult-comp-cor' --exclude='freesurfer/lib/qt'
     echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
+    FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
     apt install -y ants
     wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
     chmod 775 fslinstaller.py
@@ -76,11 +77,12 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm /fslinstaller.py
     which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl )
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
-    git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install
+    git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     npm install -gq bids-validator
 
 # apt cleanup to recover as much space as possible
+    apt remove libegl1-mesa-dev -y && apt autoremove -y
     apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
@@ -105,7 +107,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-    git clone -b 3.0.0 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && rm -rf tmp/ && git describe --tags > /mrtrix3_version
+    git clone -b 3.0.0 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/ && cd /
     mv /tmp/labelconvert/* /mrtrix3/share/mrtrix3/labelconvert && rm -rf /tmp/labelconvert
 
 # MRtrix3_connectome script

@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     dc \
     git \
+    libegl1-mesa-dev \
     libopenblas-dev \
     nano \
     nodejs \
@@ -25,7 +26,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
     apt-get install -y tzdata
 
 # NeuroDebian setup
-RUN wget -qO- http://neuro.debian.net/lists/artful.au.full | \
+RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
     tee /etc/apt/sources.list.d/neurodebian.sources.list
 COPY neurodebian.gpg /neurodebian.gpg
 RUN apt-key add /neurodebian.gpg && \
@@ -40,7 +41,7 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev
 
 # Neuroimaging software / data dependencies
-RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.0.tar.gz | \
+RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | \
     tar zx -C /opt \
     --exclude='freesurfer/trctrain' \
     --exclude='freesurfer/subjects/fsaverage_sym' \
@@ -54,6 +55,8 @@ RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/frees
     --exclude='freesurfer/average/mult-comp-cor' \
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
+RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
+RUN FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
 RUN apt-get install -y ants
 # FSL installer appears to now be ready for use with version 6.0.0
 # eddy is also now included in FSL6
@@ -63,12 +66,13 @@ RUN python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
 RUN rm -f /fslinstaller.py
 RUN which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl )
 RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && \
-    cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install
+    cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator
 
 # apt cleanup to recover as much space as possible
+RUN apt remove -y libegl1-mesa-dev && apt autoremove -y
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
@@ -131,7 +135,6 @@ ENV MNI_DATAPATH /opt/freesurfer/mni/data
 ENV FMRI_ANALYSIS_DIR /opt/freesurfer/fsfast
 ENV PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
-RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
 
 # Make FSL happy
 ENV FSLDIR /opt/fsl
@@ -144,12 +147,13 @@ ENV FSLOUTPUTTYPE NIFTI
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-RUN git clone -b 3.0.0 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
+RUN git clone -b 3.0.0 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
-    rm -rf tmp/ && \
-    git describe --tags > /mrtrix3_version
+    git describe --tags > /mrtrix3_version && \
+    rm -rf cmd/ core/ src/ testing/ tmp/ && \
+    cd /
 
 # Setup environment variables for MRtrix3
 ENV PATH /mrtrix3/bin:$PATH
