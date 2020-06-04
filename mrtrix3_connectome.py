@@ -1155,7 +1155,8 @@ def run_participant1(bids_dir, session, shared,
                            shared.t1w_shared,
                            None,
                            t1w_preproc_path)
-    T1_is_premasked = os.path.isfile('T1_premasked.mif')
+    T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
+                                                     False))
     T1_image = 'T1_premasked.mif' if T1_is_premasked else 'T1.mif'
 
     cwd = os.getcwd()
@@ -2150,7 +2151,6 @@ def run_participant2(bids_dir, session, shared,
         # Run FreeSurfer pipeline on this subject's T1 image
         run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
                     '-i T1_raw.nii')
-        app.cleanup('T1_raw.nii')
         run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
                     '-all' + shared.reconall_multithread_options)
 
@@ -2315,8 +2315,10 @@ def run_participant2(bids_dir, session, shared,
                         + shared.mrtrix_lut_file
                         + ' parc_init.mif')
             # Fix the sub-cortical grey matter parcellations using FSL FIRST
-            run.command('labelsgmfix parc_init.mif T1.mif '
-                        + shared.mrtrix_lut_file + ' parc.mif')
+            run.command('labelsgmfix parc_init.mif T1_raw.nii '
+                        + shared.mrtrix_lut_file
+                        + ' parc.mif')
+            app.cleanup('T1_raw.nii')
             app.cleanup('parc_init.mif')
         else:
             # Non-standard sub-cortical parcellation;
@@ -2332,6 +2334,8 @@ def run_participant2(bids_dir, session, shared,
 
         # Use non-dilated brain masks for performing
         #   histogram matching & linear registration
+        # FIXME Some entries in here need to be updated
+        #   to reflect get_t1w_preproc()
         run.command('mrhistmatch linear '
                     + 'T1.mif '
                     + shared.template_image_path
