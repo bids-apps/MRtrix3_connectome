@@ -10,11 +10,11 @@ __version__ = 'BIDS-App \'MRtrix3_connectome\' version {}'.format(open('/version
 option_prefix = '--' if is_container else '-'
 
 
-def runSubject(bids_dir, label, output_prefix):
+def runSubject(bids_dir, label, session_label, output_prefix):
 
-  output_dir = os.path.join(output_prefix, label)
+  output_dir = os.path.join(output_prefix, label, session_label)
   if os.path.exists(output_dir):
-    app.warn('Output directory for subject \'' + label + '\' already exists; contents will be erased when this execution completes')
+    app.warn('Output directory for subject \'' + label + '/' + session_label + '\' already exists; contents will be erased when this execution completes')
 
   fsl_path = os.environ.get('FSLDIR', '')
   if not fsl_path:
@@ -190,7 +190,10 @@ def runSubject(bids_dir, label, output_prefix):
   #   in the acquired DWIs (i.e. not just those used for estimating the inhomogeneity field), they will
   #   need to be stored as separate NIfTI files in the 'dwi/' directory.
   app.console('Importing DWI data into temporary directory')
-  dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label + '*_dwi.nii*'))
+  if session_label:
+    dwi_image_list = glob.glob(os.path.join(bids_dir, label, session_label,'dwi', label + '_' + session_label + '*_dwi.nii*'))
+  else:
+    dwi_image_list = glob.glob(os.path.join(bids_dir, label, 'dwi', label + '*_dwi.nii*'))
   dwi_index = 1
   for entry in dwi_image_list:
     # os.path.split() falls over with .nii.gz extensions; only removes the .gz
@@ -256,7 +259,11 @@ def runSubject(bids_dir, label, output_prefix):
 
   # Import anatomical image
   app.console('Importing T1 image into temporary directory')
-  t1w_image_list = glob.glob(os.path.join(bids_dir, label, 'anat', label + '*_T1w.nii*'))
+  if session_label:
+    t1w_image_list = glob.glob(os.path.join(bids_dir, label, session_label, 'anat', label + '_' + session_label + '*_T1w.nii*'))
+  else:
+    t1w_image_list = glob.glob(os.path.join(bids_dir, label, 'anat', label + '*_T1w.nii*'))
+
   if len(t1w_image_list) > 1:
     app.error('More than one T1-weighted image found for subject ' + label + '; script not yet compatible with this')
   elif not t1w_image_list:
@@ -1036,7 +1043,7 @@ analysis_choices = [ 'participant', 'group' ]
 parcellation_choices = [ 'aal', 'aal2', 'craddock200', 'craddock400', 'desikan', 'destrieux', 'hcpmmp1', 'none', 'perry512' ]
 registration_choices = [ 'ants', 'fsl' ]
 
-app.init('Robert E. Smith (robert.smith@florey.edu.au)',
+app.init('Original Container: Robert E. Smith (robert.smith@florey.edu.au); Modifications: Michael Schirner (michael.schirner@charite.de)',
          'Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3')
 
 # If running within a container, erase existing standard options, and fill with only desired options
@@ -1056,6 +1063,9 @@ app.cmdline.add_argument('output_dir', help='The directory where the output file
 app.cmdline.add_argument('analysis_level', help='Level of the analysis that will be performed. Multiple participant level analyses can be run independently (in parallel) using the same output_dir. Options are: ' + ', '.join(analysis_choices), choices=analysis_choices)
 batch_options = app.cmdline.add_argument_group('Options specific to the batch processing of subject data')
 batch_options.add_argument(option_prefix + 'participant_label', nargs='+', help='The label(s) of the participant(s) that should be analyzed. The label(s) correspond(s) to sub-<participant_label> from the BIDS spec (so it does _not_ include "sub-"). If this parameter is not provided, all subjects will be analyzed sequentially. Multiple participants can be specified with a space-separated list.')
+
+batch_options.add_argument(option_prefix + 'session_label', help='The label of the session that should be analyzed. The label corresponds to ses-<session_label> from the BIDS spec (so it does _not_ include "ses-"). This parameter is mandatory if BIDS input data is grouped into sessions.')
+
 participant_options = app.cmdline.add_argument_group('Options that are relevant to participant-level analysis')
 if not is_container:
   participant_options.add_argument(option_prefix + 'atlas_path', metavar='path', help='The filesystem path in which to search for an atlas parcellation (may be necessary if not installed in the same location as they are placed within the BIDS App container)')
@@ -1129,11 +1139,15 @@ if app.args.analysis_level == 'participant':
 
   subjects_to_analyze = [ ]
   # Only run a subset of subjects
+
+  if app.args.session_label:
+    session_to_analyze = 'ses-' + app.args.session_label
+
   if app.args.participant_label:
     subjects_to_analyze = [ 'sub-' + sub_index for sub_index in app.args.participant_label ]
     for subject_dir in subjects_to_analyze:
-      if not os.path.isdir(os.path.join(app.args.bids_dir, subject_dir)):
-        app.error('Unable to find directory for subject: ' + subject_dir)
+      if not os.path.isdir(os.path.join(app.args.bids_dir, subject_dir, session_to_analyze)):
+        app.error('Unable to find directory for subject or session: ' + subject_dir + '/' + session_to_analyze)
   # Run all subjects sequentially
   else:
     subject_dirs = glob.glob(os.path.join(app.args.bids_dir, 'sub-*'))
@@ -1142,8 +1156,8 @@ if app.args.analysis_level == 'participant':
       app.error('Could not find any subjects in BIDS directory')
 
   for subject_label in subjects_to_analyze:
-    app.console('Commencing execution for subject ' + subject_label)
-    runSubject(app.args.bids_dir, subject_label, os.path.abspath(app.args.output_dir))
+    app.console('Commencing execution for subject ' + subject_label + '/' + session_to_analyze)
+    runSubject(app.args.bids_dir, subject_label, session_to_analyze, os.path.abspath(app.args.output_dir))
 
 # Running group level
 elif app.args.analysis_level == 'group':
