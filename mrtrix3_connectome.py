@@ -1365,6 +1365,7 @@ def run_participant1(bids_dir, session, shared,
     #   ref index out of bounds
     #if monopolar:
     #    eddy_options.append('--b0_flm=linear')
+    #
 
     shell_asymmetries = \
         [float(value) for value in
@@ -1377,23 +1378,48 @@ def run_participant1(bids_dir, session, shared,
                     'distribution of diffusion gradient direction polarities')
         eddy_options.append('--slm=linear')
 
-    dwifslpreproc_eddy_option = \
-        ' -eddy_options " ' \
-        + ' '.join(eddy_options) + '"' if eddy_options else ''
     run.function(os.makedirs, 'eddyqc', show=False)
     dwifslpreproc_output = 'dwifslpreproc_out.mif' \
                            if dwifslpreproc_input == 'dwifslpreproc_in.mif' \
                            else (os.path.splitext(dwifslpreproc_input)[0]
                                  + '_preproc.mif')
-    run.command('dwifslpreproc '
-                + dwifslpreproc_input
-                + ' '
-                + dwifslpreproc_output
-                + dwifslpreproc_se_epi_option
-                + dwifslpreproc_eddy_option
-                + ' -rpe_header -eddyqc_text eddyqc/'
-                + ('' if app.DO_CLEANUP else
-                   ' -scratch ' + app.SCRATCH_DIR + ' -nocleanup'))
+
+    eddy_olnstd_value = 4.0 # The internal eddy default
+    eddy_olnstd_option = []
+
+    while not os.path.isfile(dwifslpreproc_output):
+
+        try:
+
+            # If dwifslpreproc fails due to:
+            # EDDY:::  DoVolumeToVolumeRegistration: Unable to find volume
+            #          with no outliers in shell 0 with b-value=549.375
+            # , want to progressively increase the outlier rejection threshold
+            #   until this error no longer occurs.
+            eddy_all_options = eddy_options + eddy_olnstd_option
+            dwifslpreproc_eddy_option = \
+                ' -eddy_options " ' \
+                + ' '.join(eddy_all_options) + '"' if eddy_all_options else ''
+
+            run.command('dwifslpreproc '
+                        + dwifslpreproc_input
+                        + ' '
+                        + dwifslpreproc_output
+                        + dwifslpreproc_se_epi_option
+                        + dwifslpreproc_eddy_option
+                        + ' -rpe_header -eddyqc_text eddyqc/'
+                        + ('' if app.DO_CLEANUP else
+                           ' -scratch ' + app.SCRATCH_DIR + ' -nocleanup'))
+
+        except run.MRtrixRunError as e_dwifslpreproc:
+            if 'Unable to find volume with no outliers' in str(e_dwifslpreproc):
+                eddy_olnstd_value += 0.5
+                eddy_olnstd_option = ['--ol_nstd=' + str(eddy_olnstd_value)]
+                app.warn('FSL eddy failed due to outlier rejection; '
+                         're-running with increased threshold')
+            else:
+                raise
+
     app.cleanup(dwifslpreproc_input)
     app.cleanup(dwifslpreproc_se_epi)
 
@@ -2336,14 +2362,20 @@ def run_participant2(bids_dir, session, shared,
         #   histogram matching & linear registration
         # FIXME Some entries in here need to be updated
         #   to reflect get_t1w_preproc()
+        T1_histmatched_path = 'T1_histmatch.nii'
         run.command('mrhistmatch linear '
-                    + 'T1.mif '
+                    + T1_image
+                    + ' '
                     + shared.template_image_path
                     + ' -mask_input T1_mask.mif'
                     + ' -mask_target ' + shared.template_mask_path
-                    + ' - | '
-                    + 'mrconvert - T1_histmatch.nii '
-                    + '-strides -1,+2,+3')
+                    + ' - |'
+                    + ' mrconvert - '
+                    + T1_histmatched_path
+                    + ' -strides '
+                    + ('-1,+2,+3' \
+                       if shared.template_registration_software == 'fsl' \
+                       else '+1,+2,+3'))
 
         assert shared.template_registration_software
         if shared.template_registration_software == 'ants':
@@ -2351,106 +2383,135 @@ def run_participant2(bids_dir, session, shared,
             # Use ANTs SyN for registration to template
             # From Klein et al., NeuroImage 2009:
             run.command('ANTS 3 '
-                        '-m PR[' + shared.template_image_path
-                        + ', T1_histmatch.nii, 1, 2] '
-                        '-o ANTS '
-                        '-r Gauss[2,0] '
-                        '-t SyN[0.5] '
-                        '-i 30x99x11 '
-                        '--use-Histogram-Matching')
+                        + '-m PR['
+                        + shared.template_image_path
+                        + ', '
+                        + T1_histmatched_path
+                        + ', 1, 2]'
+                        + ' -o ANTS'
+                        + ' -r Gauss[2,0]'
+                        + ' -t SyN[0.5]'
+                        + ' -i 30x99x11'
+                        + ' --use-Histogram-Matching')
             transformed_atlas_path = 'atlas_transformed.nii'
             run.command('WarpImageMultiTransform 3 '
-                        + shared.parc_image_path + ' '
+                        + shared.parc_image_path
+                        + ' '
                         + transformed_atlas_path
-                        + ' -R T1_histmatch.nii'
+                        + ' -R '
+                        + T1_histmatched_path
                         + ' -i ANTSAffine.txt ANTSInverseWarp.nii'
                         + ' --use-NN')
-            app.cleanup(glob.glob('ANTSWarp.nii*')[0])
-            app.cleanup(glob.glob('ANTSInverseWarp.nii*')[0])
+            app.cleanup(glob.glob('ANTSWarp.nii*'))
+            app.cleanup(glob.glob('ANTSInverseWarp.nii*'))
             app.cleanup('ANTSAffine.txt')
 
         elif shared.template_registration_software == 'fsl':
 
             # Subject T1, brain masked; for flirt -in
-            run.command('mrcalc T1_histmatch.nii '
-                        'T1_mask.mif -mult '
-                        'T1_histmatch_masked.nii')
+            if T1_is_premasked:
+                flirt_in_path = T1_histmatched_path
+            else:
+                flirt_in_path = \
+                    os.path.splitext(T1_histmatched_path)[0] \
+                    + '_masked.nii'
+                run.command('mrcalc '
+                            + T1_histmatched_path
+                            + ' T1_mask.mif -mult '
+                            + flirt_in_path)
             # Template T1, brain masked; for flirt -ref
+            flirt_ref_path = 'template_masked.nii'
             run.command('mrcalc '
-                        + shared.template_image_path + ' '
+                        + shared.template_image_path
+                        + ' '
                         + shared.template_mask_path
-                        + ' -mult template_masked.nii')
+                        + ' -mult '
+                        + flirt_ref_path
+                        + ' -strides -1,+2,+3')
             # Now have data required to run flirt
-            run.command(shared.flirt_cmd + ' '
-                        '-ref template_masked.nii '
-                        '-in T1_histmatch_masked.nii '
-                        '-omat T1_to_template.mat '
-                        '-dof 12 '
-                        '-cost leastsq')
-            app.cleanup('T1_histmatch_masked.nii')
-            app.cleanup('template_masked.nii')
+            run.command(shared.flirt_cmd
+                        + ' -ref ' + flirt_ref_path
+                        + ' -in ' + flirt_in_path
+                        + ' -omat T1_to_template.mat'
+                        + ' -dof 12'
+                        + ' -cost leastsq')
+            if not T1_is_premasked:
+                app.cleanup(flirt_in_path)
+            app.cleanup(flirt_ref_path)
 
-            # Use dilated brain masks for non-linear registration to
-            #   mitigate mask edge effects
-            # Subject T1, unmasked; for fnirt --in
-            run.command('mrconvert T1.mif T1.nii '
-                        '-strides -1,+2,+3')
-            # Subject brain mask, dilated; for fnirt --inmask
-            run.command('maskfilter T1_mask.mif dilate - '
-                        '-npass 3 | '
-                        'mrconvert - T1_mask_dilated.nii '
-                        '-strides -1,+2,+3')
-            # Template brain mask, dilated; for fnirt --refmask
-            run.command('maskfilter ' + shared.template_mask_path + ' dilate '
-                        'template_mask_dilated.nii '
-                        '-npass 3')
-            # Now have data required to run fnirt
-            run.command(shared.fnirt_cmd + ' '
-                        '--config=' + shared.fnirt_config_basename + ' '
-                        '--ref=' + shared.template_image_path + ' '
-                        '--in=T1_histmatch.nii '
-                        '--aff=T1_to_template.mat '
-                        '--refmask=template_mask_dilated.nii '
-                        '--inmask=T1_mask_dilated.nii '
-                        '--cout=T1_to_template_warpcoef.nii')
-            app.cleanup('T1_mask_dilated.nii')
-            app.cleanup('template_mask_dilated.nii')
+            # If possible, use dilated brain masks for non-linear
+            #   registration to mitigate mask edge effects;
+            #   if T1-weighted image is premasked, can't do this
+            fnirt_in_path = T1_histmatched_path
+            fnirt_ref_path = shared.template_image_path
+            if T1_is_premasked:
+                fnirt_in_mask_path = 'T1_mask.nii'
+                run.command('mrconvert T1_mask.mif '
+                            + fnirt_in_mask_path
+                            + ' -strides -1,+2,+3')
+                fnirt_ref_mask_path = shared.template_mask_path
+            else:
+                fnirt_in_mask_path = 'T1_mask_dilated.nii'
+                run.command('maskfilter T1_mask.mif dilate -'
+                            + ' -npass 3'
+                            + ' |'
+                            + ' mrconvert - '
+                            + fnirt_in_mask_path
+                            + ' -strides -1,+2,+3')
+                fnirt_ref_mask_path = 'template_mask_dilated.nii'
+                run.command('maskfilter '
+                            + shared.template_mask_path
+                            + ' dilate '
+                            + fnirt_ref_mask_path
+                            + '-npass 3')
+
+            run.command(shared.fnirt_cmd
+                        + ' --config=' + shared.fnirt_config_basename
+                        + ' --ref=' + fnirt_ref_path
+                        + ' --in=' + fnirt_in_path
+                        + ' --aff=T1_to_template.mat'
+                        + ' --refmask=' + fnirt_ref_mask_path
+                        + ' --inmask=' + fnirt_in_mask_path
+                        + ' --cout=T1_to_template_warpcoef.nii')
+            app.cleanup(fnirt_in_mask_path)
+            if not T1_is_premasked:
+                app.cleanup(fnirt_ref_mask_path)
             app.cleanup('T1_to_template.mat')
             fnirt_warp_subject2template_path = \
                 fsl.find_image('T1_to_template_warpcoef')
 
             # Use result of registration to transform atlas
             #   parcellation to subject space
-            run.command(shared.invwarp_cmd + ' '
-                        '--ref=T1.nii '
-                        '--warp=' + fnirt_warp_subject2template_path + ' '
-                        '--out=template_to_T1_warpcoef.nii')
+            run.command(shared.invwarp_cmd
+                        + ' --ref=' + T1_histmatched_path
+                        + ' --warp=' + fnirt_warp_subject2template_path
+                        + ' --out=template_to_T1_warpcoef.nii')
             app.cleanup(fnirt_warp_subject2template_path)
             fnirt_warp_template2subject_path = \
                 fsl.find_image('template_to_T1_warpcoef')
-            run.command(shared.applywarp_cmd + ' '
-                        '--ref=T1.nii '
-                        '--in=' + shared.parc_image_path + ' '
-                        '--warp=' + fnirt_warp_template2subject_path + ' '
-                        '--out=atlas_transformed.nii '
-                        '--interp=nn')
+            run.command(shared.applywarp_cmd
+                        + ' --ref=' + T1_histmatched_path
+                        + ' --in=' + shared.parc_image_path
+                        + ' --warp=' + fnirt_warp_template2subject_path
+                        + ' --out=atlas_transformed.nii'
+                        + ' --interp=nn')
             app.cleanup(fnirt_warp_template2subject_path)
             transformed_atlas_path = fsl.find_image('atlas_transformed')
 
-        app.cleanup('T1.nii')
-        app.cleanup('T1_histmatch.nii')
+        app.cleanup(T1_histmatched_path)
 
         if shared.parc_lut_file and shared.mrtrix_lut_file:
-            run.command('labelconvert '
-                        + transformed_atlas_path + ' '
-                        + shared.parc_lut_file + ' '
-                        + shared.mrtrix_lut_file
-                        + ' parc.mif')
+            run.command(['labelconvert',
+                         transformed_atlas_path,
+                         shared.parc_lut_file,
+                         shared.mrtrix_lut_file,
+                         'parc.mif'])
         else:
             # Not all parcellations need to go through the labelconvert step;
             #   they may already be numbered incrementally from 1
-            run.command('mrconvert ' + transformed_atlas_path + ' parc.mif '
-                        '-strides T1.mif')
+            run.command(['mrconvert',
+                         transformed_atlas_path,
+                         'parc.mif'])
         app.cleanup(transformed_atlas_path)
 
 
