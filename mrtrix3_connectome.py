@@ -2360,8 +2360,6 @@ def run_participant2(bids_dir, session, shared,
 
         # Use non-dilated brain masks for performing
         #   histogram matching & linear registration
-        # FIXME Some entries in here need to be updated
-        #   to reflect get_t1w_preproc()
         T1_histmatched_path = 'T1_histmatch.nii'
         run.command('mrhistmatch linear '
                     + T1_image
@@ -2858,6 +2856,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
             self.median_bzero = 0.0
             self.dwiintensitynorm_factor = 1.0
             self.RF_multiplier = 1.0
+            # TODO Add voxel volume multiplier
             self.global_multiplier = 1.0
             self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
                                                 session_label + '.csv')
@@ -2882,8 +2881,6 @@ def run_group(bids_dir, output_verbosity, output_dir):
 
             self.session_label = session_label
 
-    # TODO Check output paths before commencing
-
     session_list = get_sessions(output_dir)
     if not session_list:
         raise MRtrixError(
@@ -2904,6 +2901,57 @@ def run_group(bids_dir, output_verbosity, output_dir):
     sessions = []
     for session in session_list:
         sessions.append(SessionPaths(session))
+    sessions_with_existing_files = 0
+    for session in sessions:
+        if any(os.path.isfile(item) for item in [
+                session.out_scale_intensity,
+                session.out_scalue_RF,
+                session.out_connectome]):
+            sessions_with_existing_files += 1
+    if sessions_with_existing_files:
+        # In container mode, over-write any files in place since
+        #   -force option is not present
+        if (not IS_CONTAINER) and (not app.FORCE_OVERWRITE):
+            raise MRtrixError(
+                str(sessions_with_existing_files)
+                + ' of '
+                + str(len(sessions))
+                + ' sessions have pre-existing files that would be '
+                + 'over-written (use -force to override)')
+        app.warn(str(sessions_with_existing_files)
+                 + ' of '
+                 + str(len(sessions))
+                 + ' sessions have pre-existing files that will be '
+                 + 'over-written on script completion')
+    out_wm_response_path = os.path.join(output_dir,
+                                        'tissue-WM_response.txt')
+
+    # Connectome-based calculations can only be performed if the
+    #   parcellation is consistent across all sessions
+    parcellation = sessions[0].parcellation
+    consistent_parcellation = \
+        all(s.parcellation == parcellation for s in sessions)
+    out_connectome_path = os.path.join(output_dir,
+                                       'desc-'
+                                       + parcellation
+                                       + '_connectome.csv') \
+                          if consistent_parcellation \
+                          else None
+
+    out_paths_to_check = [out_wm_response_path]
+    if consistent_parcellation:
+        out_paths_to_check.append(out_connectome_path)
+    for item in out_paths_to_check:
+        if os.path.isfile(item):
+            if (not IS_CONTAINER) and (not app.FORCE_OVERWRITE):
+                raise MRtrixError('Output path "'
+                                  + item
+                                  + '" already exists'
+                                  + ' (use -force to override)')
+            app.warn('Output path "'
+                     + item
+                     + '" already exists; will be overwritten on '
+                     + 'completion of group-level analysis')
 
     app.make_scratch_dir()
     app.goto_scratch_dir()
@@ -3082,9 +3130,6 @@ def run_group(bids_dir, output_verbosity, output_dir):
     # Third group-level calculation: Generate the group mean connectome
     # Can only do this if the parcellation is identical across subjects;
     #     this needs to be explicitly checked
-    parcellation = sessions[0].parcellation
-    consistent_parcellation = \
-        all(s.parcellation == parcellation for s in sessions)
     if consistent_parcellation:
         progress = app.ProgressBar('Calculating group mean connectome',
                                    len(sessions)+1)
@@ -3118,21 +3163,23 @@ def run_group(bids_dir, output_verbosity, output_dir):
         run.function(shutil.copyfile,
                      s.temp_connectome,
                      s.out_connectome)
-        matrix.save_vector(s.out_scale_intensity, [s.bzero_multiplier])
-        matrix.save_vector(s.out_scale_RF, [s.RF_multiplier])
+        matrix.save_vector(s.out_scale_intensity,
+                           [s.bzero_multiplier],
+                           force=IS_CONTAINER)
+        matrix.save_vector(s.out_scale_RF,
+                           [s.RF_multiplier],
+                           force=IS_CONTAINER)
         progress.increment()
     app.cleanup(GROUP_CONNECTOMES_DIR)
 
-    matrix.save_matrix(os.path.join(output_dir,
-                                    'tissue-WM_response.txt'),
-                       mean_RF)
+    matrix.save_matrix(out_wm_response_path,
+                       mean_RF,
+                       force=IS_CONTAINER)
     progress.increment()
     if consistent_parcellation:
-        matrix.save_matrix(os.path.join(output_dir,
-                                        'desc-'
-                                        + parcellation
-                                        + '_connectome.csv'),
-                           mean_connectome)
+        matrix.save_matrix(out_connectome_path,
+                           mean_connectome,
+                           force=IS_CONTAINER)
     progress.done()
 
     # For group-level analysis, function is only executed once, so
@@ -3145,7 +3192,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
                      app.SCRATCH_DIR,
                      os.path.join(output_dir, 'scratch_group'))
 
-# End of runGroup() function
+# End of run_group() function
 
 
 
