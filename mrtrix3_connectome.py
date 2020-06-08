@@ -2856,7 +2856,9 @@ def run_group(bids_dir, output_verbosity, output_dir):
             self.median_bzero = 0.0
             self.dwiintensitynorm_factor = 1.0
             self.RF_multiplier = 1.0
-            # TODO Add voxel volume multiplier
+            self.volume_multiplier = 1.0
+            for spacing in image.Header(self.in_dwi).spacing()[0:3]:
+                self.volume_multiplier *= spacing
             self.global_multiplier = 1.0
             self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
                                                 session_label + '.csv')
@@ -2871,6 +2873,12 @@ def run_group(bids_dir, output_verbosity, output_dir):
                              'connectome',
                              session_label
                              + '_factor-response'
+                             + '_multiplier.txt')
+            self.out_scale_volume = \
+                os.path.join(root,
+                             'connectome',
+                             session_label
+                             + '_factor-volume'
                              + '_multiplier.txt')
             self.out_connectome = \
                 os.path.join(root,
@@ -2905,7 +2913,8 @@ def run_group(bids_dir, output_verbosity, output_dir):
     for session in sessions:
         if any(os.path.isfile(item) for item in [
                 session.out_scale_intensity,
-                session.out_scalue_RF,
+                session.out_scale_RF,
+                session.out_scale_volume,
                 session.out_connectome]):
             sessions_with_existing_files += 1
     if sessions_with_existing_files:
@@ -3118,7 +3127,10 @@ def run_group(bids_dir, output_verbosity, output_dir):
 
         s.bzero_multiplier = mean_median_bzero / s.median_bzero
 
-        s.global_multiplier = s.mu * s.bzero_multiplier * s.RF_multiplier
+        s.global_multiplier = s.mu \
+                              * s.bzero_multiplier \
+                              * s.RF_multiplier \
+                              * s.volume_multiplier
 
         connectome = matrix.load_matrix(s.in_connectome)
         temp_connectome = [[v*s.global_multiplier for v in line]
@@ -3168,6 +3180,9 @@ def run_group(bids_dir, output_verbosity, output_dir):
                            force=IS_CONTAINER)
         matrix.save_vector(s.out_scale_RF,
                            [s.RF_multiplier],
+                           force=IS_CONTAINER)
+        matrix.save_vector(s.out_scale_volume,
+                           [s.volume_multiplier],
                            force=IS_CONTAINER)
         progress.increment()
     app.cleanup(GROUP_CONNECTOMES_DIR)
