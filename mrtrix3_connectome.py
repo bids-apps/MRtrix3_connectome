@@ -1417,8 +1417,11 @@ def run_participant1(bids_dir, session, shared,
                         + ('' if app.DO_CLEANUP else
                            ' -scratch ' + app.SCRATCH_DIR + ' -nocleanup'))
 
-        except run.MRtrixRunError as e_dwifslpreproc:
-            if 'Unable to find volume with no outliers' in str(e_dwifslpreproc):
+        except run.MRtrixCmdError as e_dwifslpreproc:
+            if any(item in str(e_dwifslpreproc) for item in [
+                    'msg=ECScanManager::set_slice_to_vol_reference: ' \
+                    'ref index out of bounds',
+                    'Unable to find volume with no outliers']):
                 eddy_olnstd_value += 0.5
                 eddy_olnstd_option = ['--ol_nstd=' + str(eddy_olnstd_value)]
                 app.warn('FSL eddy failed due to outlier rejection; '
