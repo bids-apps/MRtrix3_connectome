@@ -1090,10 +1090,16 @@ def run_participant1(bids_dir, session, shared,
         in_fmap_image_list = sorted(
             glob.glob(os.path.join(fmap_dir, '*_dir-*_epi.nii*')))
         for entry in in_fmap_image_list:
-            prefix = entry.split(os.extsep)[0]
+            prefix = entry.rstrip('.gz').splitext()[0]
             json_path = prefix + '.json'
-            with open(json_path, 'r') as f:
-                json_elements = json.load(f)
+            try:
+                with open(json_path, 'r') as f:
+                    json_elements = json.load(f)
+            except OSError:
+                app.warn('No JSON file found for image "'
+                         + entry
+                         + '"; not importing')
+                continue
             if 'IntendedFor' in json_elements:
                 if isinstance(json_elements['IntendedFor'], list) and \
                     not any(any(i.endswith(target) for i in dwi_image_list)
