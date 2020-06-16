@@ -2001,7 +2001,8 @@ def run_participant2(bids_dir, session, shared,
     # For running FreeSurfer, want to use the raw T1-weighted image
     if shared.do_freesurfer:
         in_raw_t1w_paths = \
-                glob.glob(os.path.join(bids_dir,
+                glob.glob(os.path.join(os.path.join(bids_dir,
+                                                    *session),
                                        'anat',
                                        session_label + '*_T1w.nii*'))
         if not in_raw_t1w_paths:
