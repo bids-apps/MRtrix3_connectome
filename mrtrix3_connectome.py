@@ -1090,7 +1090,7 @@ def run_participant1(bids_dir, session, shared,
         in_fmap_image_list = sorted(
             glob.glob(os.path.join(fmap_dir, '*_dir-*_epi.nii*')))
         for entry in in_fmap_image_list:
-            prefix = entry.rstrip('.gz').splitext()[0]
+            prefix = os.path.splitext(entry.rstrip('.gz'))[0]
             json_path = prefix + '.json'
             try:
                 with open(json_path, 'r') as f:
@@ -3089,7 +3089,6 @@ def run_group(bids_dir, output_verbosity, output_dir):
                                len(sessions)+1)
     run.function(os.makedirs, GROUP_WMVOXELS_DIR)
     sum_median_bzero = 0.0
-    sum_RF = []
     for s in sessions:
         run.command('mrtransform template.mif '
                     '-warp_full ' + s.temp_warp + ' '
