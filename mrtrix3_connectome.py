@@ -1451,7 +1451,7 @@ def run_participant1(bids_dir, session, shared,
     # Step 4: Generate an image containing all voxels where the
     #   DWI contains valid data
     dwi_valid_image = 'dwi_validity_mask.mif'
-    run.command('mrmath ' + dwifslpreproc_output + ' -axis 3 - |'
+    run.command('mrmath ' + dwifslpreproc_output + ' max -axis 3 - |'
                 + ' mrthreshold - '
                 + dwi_valid_image
                 + ' -abs 0.0 -comparison gt')
