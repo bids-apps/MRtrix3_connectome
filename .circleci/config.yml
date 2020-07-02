@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 
 jobs:
   build:
@@ -9,76 +9,105 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - my_cache
+            - image_cache-{{ git describe --tags --always }}
       - add_ssh_keys:
           fingerprints:
             - "f9:fc:d7:c4:a9:17:3d:09:ee:03:d7:f9:6e:0d:f5:2b"
 
-      - run: if [[ -d ~/data/mrtrix3_connectome_data ]]; then rm -rf ${HOME}/data/mrtrix3_connectome_data; fi
-      - run: if [[ ! -d ~/data ]]; then wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/u3uvf857jf4iqq1/MRtrix3_connectome_data_ver2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/MRtrix3_connectome_data_ver2.tar -C ${HOME}/data; fi
-      - run: if [[ -e ~/docker/image.tar ]]; then docker load -i ~/docker/image.tar; fi
-      - run: git describe --tags --always > version
       - run:
+          name: Load Docker image from cache if present
+          command: if [[ -e ~/docker/image.tar ]]; then docker load -i ~/docker/image.tar; fi
+      - run:
+          name: Write git tag name to text file "version"
+          command: git describe --tags --always > version
+      - run:
+          name: Build Docker container
           command: docker build -t bids/${CIRCLE_PROJECT_REPONAME,,} .
           no_output_timeout: 6h
-      - run: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
-      - run: mkdir -p ${HOME}/outputs
-
+      - run:
+          name: Save built Docker container to cache
+          command: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
       - save_cache:
-          key: my_cache
+          key: image_cache-{{ git describe --tags --always }}-{{ .Revision }}-{{ epoch }}
           paths:
             - "~/docker"
-            - "~/data"
 
-      # print version
-      - run: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
-      # participant level tests for single session dataset
+  test:
+    machine:
+      image: circleci/classic:latest
+
+    steps:
+      - checkout
+      - restore_cache:
+          key: image_cache-{{ git describe --tags --always }}-{{ .Revision }}-{{ epoch }}
       - run:
+          name: Print version
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
+      - run:
+          name: Download test data
+          command: wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/u3uvf857jf4iqq1/MRtrix3_connectome_data_ver2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/MRtrix3_connectome_data_ver2.tar -C ${HOME}/data
+      - run:
+          name: Make output directory
+          command: mkdir -p ${HOME}/outputs
+      - run:
+          name: Run participant2-level analysis for subject 01
           command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant2 --participant_label 01 --parcellation aal --streamlines 100000
           no_output_timeout: 6h
       - run:
+          name: Run participant2-level analysis for subject 02
           command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant2 --participant_label 02 --parcellation aal --streamlines 100000
           no_output_timeout: 6h
-      # group level test for single session dataset
       - run:
+          name: Run group-level analysis
           command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group
           no_output_timeout: 6h
       
       - store_artifacts:
           path: "~/output"
 
-      - persist_to_workspace:
-          root: ~/docker
-          paths:
-            - image.tar
  
-  deployment:
+  deploy:
     docker:
-      - image: circleci/buildpack-deps:stretch
+      - image: circleci/classic:latest
 
     steps:
-      - attach_workspace:
-          at: /tmp/workspace
-      - setup_remote_docker
-      - run: docker load -i /tmp/workspace/image.tar
+      - checkout
+      - restore_cache:
+          key: image_cache-{{ git describe --tags --always }}-{{ .Revision }}-{{ epoch }}
       - run:
+          name: Load Docker image
+          command: docker load -i /tmp/workspace/image.tar
+      - run:
+          name: Push "latest" tag to DockerHub
           command: if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p $DOCKER_PASS && docker push bids/${CIRCLE_PROJECT_REPONAME,,}:latest; fi
           no_output_timeout: 6h
       - run:
+          name: Create named tag and push to DockerHub
           command: if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p $DOCKER_PASS && docker tag bids/${CIRCLE_PROJECT_REPONAME,,} bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG && docker push bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG; fi
           no_output_timeout: 6h
 
 workflows:
-  version: 2
-  build-test-deploy:
+  version: 2.1
+  build_test_deploy:
     jobs:
       - build:
           filters:
             tags:
               only: /.*/
-      - deployment:
+            branches:
+              only: /.*/
+      - test:
           requires:
             - build
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              only: /.*/
+      - deploy:
+          requires:
+            - build
+            - test
           filters:
             branches:
               ignore: /.*/
