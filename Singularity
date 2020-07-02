@@ -1,16 +1,17 @@
 Bootstrap: debootstrap
 MirrorURL: http://us.archive.ubuntu.com/ubuntu/
 OSVersion: bionic
-Include: apt bc build-essential dc file git gnupg libfftw3-dev libpng-dev libtiff5-dev nano python python-numpy tar tzdata unzip wget zlib1g-dev
+Include: apt bc build-essential dc file git gnupg libegl1-mesa-dev libfftw3-dev libpng-dev libtiff5-dev nano python python3 python3-numpy python3-setuptools tar tzdata unzip wget zlib1g-dev
 
 %labels
 MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
-HARDWARE gpu
 
 %files
     mrtrix3_connectome.py /mrtrix3_connectome.py
     neurodebian.gpg /neurodebian.gpg
     version /version
+    Yeo2011_7N_split.txt /tmp/labelconvert/Yeo2011_7N_split.txt
+    Yeo2011_17N_split.txt /tmp/labelconvert/Yeo2011_17N_split.txt
 
 %environment
 
@@ -65,51 +66,23 @@ HARDWARE gpu
 # Packages that coulnd't be installed upfront
     apt install -y clang libeigen3-dev libopenblas-dev nodejs npm perl-modules tcsh
 
-# CUDA setup
-# 18.04 only has CUDA 10, for which there is no eddy_cuda compilation;
-# couldn't get CUDA 8 or 9 to install on 16.04
-#    echo "deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64 /" > /etc/apt/sources.list.d/cuda.list
-#    apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
-# Try installing 9.1 via runfile instead of repo
-#    wget -q http://developer.nvidia.com/compute/cuda/9.1/Prod/local_installers/cuda_9.1.85_387.26_linux --no-check-certificate -O cuda_9.1.85_387.26_linux.run
-#    chmod +x cuda_9.1.85_387.26_linux.run
-#    sh cuda_9.1.85_387.26_linux.run --silent --override --driver --toolkit --toolkitpath=/usr/local/cuda-9.1
-#    ln -s /usr/local/cuda-9.1 /usr/local/cuda
-#    rm -f cuda_9.1.85_387.26_linux.run
-#
-# Attempt to install CUDA 9.1 for eddy_cuda
-#    apt install -y cuda-9-1 cuda-runtime-9-1 cuda-demo-suite-9-1 cuda-drivers
-#
-# Trying duplication of apparently working formula from DKP
-    cd /tmp
-    wget -q http://developer.nvidia.com/compute/cuda/9.1/Prod/local_installers/cuda_9.1.85_387.26_linux --no-check-certificate -O cuda_9.1.85_387.26_linux.run
-    mkdir -p nvidia_installers
-    chmod +x cuda_9.1.85_387.26_linux.run
-    ./cuda_9.1.85_387.26_linux.run -extract=/tmp/nvidia_installers
-    rm -f cuda_9.1.85_387.26_linux.run
-    cd nvidia_installers
-    rm cuda-samples.9.1.85-23083092-linux.run
-    rm NVIDIA-Linux-x86_64-387.26.run
-    ls
-    ./cuda-linux.9.1.85-23083092.run -noprompt
-    cd ..
-    rm -rf nvidia_installers
-    cd ..
-    ln -s /usr/local/cuda-9.1 /usr/local/cuda
-
-
 # Neuroimaging software / data dependencies
-    wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.1.tar.gz | tar zx -C /opt --exclude='freesurfer/trctrain' --exclude='freesurfer/subjects/fsaverage_sym' --exclude='freesurfer/subjects/fsaverage3' --exclude='freesurfer/subjects/fsaverage4' --exclude='freesurfer/subjects/fsaverage6' --exclude='freesurfer/subjects/cvs_avg35' --exclude='freesurfer/subjects/cvs_avg35_inMNI152' --exclude='freesurfer/subjects/bert' --exclude='freesurfer/subjects/V1_average' --exclude='freesurfer/average/mult-comp-cor' --exclude='freesurfer/lib/qt'
+    wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | tar zx -C /opt --exclude='freesurfer/trctrain' --exclude='freesurfer/subjects/fsaverage_sym' --exclude='freesurfer/subjects/fsaverage3' --exclude='freesurfer/subjects/fsaverage4' --exclude='freesurfer/subjects/fsaverage6' --exclude='freesurfer/subjects/cvs_avg35' --exclude='freesurfer/subjects/cvs_avg35_inMNI152' --exclude='freesurfer/subjects/bert' --exclude='freesurfer/subjects/V1_average' --exclude='freesurfer/average/mult-comp-cor' --exclude='freesurfer/lib/qt'
     echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
+    FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
     apt install -y ants
     wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
     chmod 775 fslinstaller.py
-    /fslinstaller.py -d /opt/fsl -V 6.0.1 -q
+    python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
+    rm /fslinstaller.py
+    which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl )
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
+    git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     npm install -gq bids-validator
 
 # apt cleanup to recover as much space as possible
+    apt remove libegl1-mesa-dev -y && apt autoremove -y
     apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
@@ -134,7 +107,8 @@ HARDWARE gpu
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-    git clone https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && git checkout 81036fcc6dc11222515fc6cc1b2403585560bfcb && python configure -nogui && python build -persistent -nopaginate && git describe --tags > /mrtrix3_version
+    git clone -b 3.0.0 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/ && cd /
+    mv /tmp/labelconvert/* /mrtrix3/share/mrtrix3/labelconvert && rm -rf /tmp/labelconvert
 
 # MRtrix3_connectome script
     chmod 775 /mrtrix3_connectome.py

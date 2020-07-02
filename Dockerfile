@@ -7,12 +7,15 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     dc \
     git \
+    libegl1-mesa-dev \
     libopenblas-dev \
     nano \
     nodejs \
     npm \
     perl-modules \
-    python \
+    python3 \
+    python3-numpy \
+    python3-setuptools \
     tar \
     tcsh \
     unzip \
@@ -23,7 +26,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
     apt-get install -y tzdata
 
 # NeuroDebian setup
-RUN wget -qO- http://neuro.debian.net/lists/artful.au.full | \
+RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
     tee /etc/apt/sources.list.d/neurodebian.sources.list
 COPY neurodebian.gpg /neurodebian.gpg
 RUN apt-key add /neurodebian.gpg && \
@@ -37,14 +40,8 @@ RUN apt-get update && apt-get install -y \
     libtiff5-dev \
     zlib1g-dev
 
-# Attempt to install CUDA 8.0 for eddy_cuda
-#RUN wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/cuda-repo-ubuntu1404_8.0.61-1_amd64.deb && \
-#    dpkg -i cuda-repo-ubuntu1404_8.0.61-1_amd64.deb && \
-#    apt-get update && apt-get install -y cuda && \
-#    rm -f cuda-repo-ubuntu1404_8.0.61-1_amd64.deb
-
 # Neuroimaging software / data dependencies
-RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.0.tar.gz | \
+RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | \
     tar zx -C /opt \
     --exclude='freesurfer/trctrain' \
     --exclude='freesurfer/subjects/fsaverage_sym' \
@@ -58,17 +55,24 @@ RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/frees
     --exclude='freesurfer/average/mult-comp-cor' \
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
+RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
+RUN FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
 RUN apt-get install -y ants
 # FSL installer appears to now be ready for use with version 6.0.0
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
-RUN /fslinstaller.py -d /opt/fsl -V 6.0.1 -q
+RUN python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
+RUN rm -f /fslinstaller.py
+RUN which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl )
+RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && \
+    cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator
 
 # apt cleanup to recover as much space as possible
+RUN apt remove -y libegl1-mesa-dev && apt autoremove -y
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
@@ -131,7 +135,6 @@ ENV MNI_DATAPATH /opt/freesurfer/mni/data
 ENV FMRI_ANALYSIS_DIR /opt/freesurfer/fsfast
 ENV PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
 ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
-RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
 
 # Make FSL happy
 ENV FSLDIR /opt/fsl
@@ -139,21 +142,18 @@ ENV PATH $FSLDIR/bin:$PATH
 RUN /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
 ENV FSLMULTIFILEQUIT TRUE
 ENV FSLOUTPUTTYPE NIFTI
-# Prevents warning appearing when the CUDA version invariably fails to run within the container environment
-RUN rm -f $FSLDIR/bin/eddy_cuda*
 
 # Make ROBEX happy
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-# Commit checked out is 3.0_RC3 tag with subsequent hotfixes as at 24/09/2019
-RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
+RUN git clone -b 3.0.0 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
-    git checkout 81036fcc6dc11222515fc6cc1b2403585560bfcb && \
-    python configure -nogui && \
-    python build -persistent -nopaginate && \
-    git describe --tags > /mrtrix3_version
-#RUN echo $'FailOnWarn: 1\n' > /etc/mrtrix.conf
+    python3 configure -nogui && \
+    python3 build -persistent -nopaginate && \
+    git describe --tags > /mrtrix3_version && \
+    rm -rf cmd/ core/ src/ testing/ tmp/ && \
+    cd /
 
 # Setup environment variables for MRtrix3
 ENV PATH /mrtrix3/bin:$PATH
