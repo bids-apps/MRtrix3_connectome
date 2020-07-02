@@ -1580,7 +1580,7 @@ def run_participant1(bids_dir, session, shared,
                     + ' - |'
                     + ' maskfilter - connect -largest - |'
                     + ' maskfilter - clean - |'
-                    + ' mrcalc 1 - -sub - -datatype bit - |'
+                    + ' mrcalc 1 - -sub - -datatype bit |'
                     + ' maskfilter - connect -largest - |'
                     + ' maskfilter - clean - |'
                     + ' mrcalc 1 - -sub '
