@@ -9,7 +9,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - image_cache-{{ git describe --tags --always }}
+            - image_cache-{{ checksum "Dockerfile" }}
       - add_ssh_keys:
           fingerprints:
             - "f9:fc:d7:c4:a9:17:3d:09:ee:03:d7:f9:6e:0d:f5:2b"
@@ -39,7 +39,7 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: image_cache-{{ git describe --tags --always }}-{{ .Revision }}-{{ epoch }}
+          key: image_cache-{{ checksum "Dockerfile" }}-{{ .Revision }}-{{ epoch }}
       - run:
           name: Print version
           command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
