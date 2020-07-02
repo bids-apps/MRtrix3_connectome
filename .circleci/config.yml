@@ -10,6 +10,9 @@ jobs:
       - restore_cache:
           keys:
             - my_cache
+      - add_ssh_keys:
+          fingerprints:
+            - "f9:fc:d7:c4:a9:17:3d:09:ee:03:d7:f9:6e:0d:f5:2b"
 
       - run: if [[ -d ~/data/mrtrix3_connectome_data ]]; then rm -rf ${HOME}/data/mrtrix3_connectome_data; fi
       - run: if [[ ! -d ~/data ]]; then wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/u3uvf857jf4iqq1/MRtrix3_connectome_data_ver2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/MRtrix3_connectome_data_ver2.tar -C ${HOME}/data; fi

@@ -1466,6 +1466,9 @@ def run_participant1(bids_dir, session, shared,
     #     - Mtnormalise to remove any bias field;
     #     - Re-calculation of brain mask;
     #   in an iterative fashion, as all steps may influence the others.
+    #
+    # TODO Consider using a threshold of 0.5/sqrt(4pi) on the tissue sum image
+    #   as a replacement of dwi2mask within this loop
     class Tissue(object): #pylint: disable=useless-object-inheritance
         def __init__(self, name, index):
             self.name = name
