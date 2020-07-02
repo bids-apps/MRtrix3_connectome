@@ -1,0 +1,83 @@
+version: 2
+
+jobs:
+  build:
+    machine:
+      image: circleci/classic:latest
+
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - my_cache
+
+      - run: if [[ -d ~/data/mrtrix3_connectome_data ]]; then rm -rf ${HOME}/data/mrtrix3_connectome_data; fi
+      - run: if [[ ! -d ~/data ]]; then wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/u3uvf857jf4iqq1/MRtrix3_connectome_data_ver2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/MRtrix3_connectome_data_ver2.tar -C ${HOME}/data; fi
+      - run: if [[ -e ~/docker/image.tar ]]; then docker load -i ~/docker/image.tar; fi
+      - run: git describe --tags --always > version
+      - run:
+          command: docker build -t bids/${CIRCLE_PROJECT_REPONAME,,} .
+          no_output_timeout: 6h
+      - run: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
+      - run: mkdir -p ${HOME}/outputs
+
+      - save_cache:
+          key: my_cache
+          paths:
+            - "~/docker"
+            - "~/data"
+
+      # print version
+      - run: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
+      # participant level tests for single session dataset
+      - run:
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant2 --participant_label 01 --parcellation aal --streamlines 100000
+          no_output_timeout: 6h
+      - run:
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant2 --participant_label 02 --parcellation aal --streamlines 100000
+          no_output_timeout: 6h
+      # group level test for single session dataset
+      - run:
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group
+          no_output_timeout: 6h
+      
+      - store_artifacts:
+          path: "~/output"
+
+      - persist_to_workspace:
+          root: ~/docker
+          paths:
+            - image.tar
+ 
+  deployment:
+    docker:
+      - image: circleci/buildpack-deps:stretch
+
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - setup_remote_docker
+      - run: docker load -i /tmp/workspace/image.tar
+      - run:
+          command: if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p $DOCKER_PASS && docker push bids/${CIRCLE_PROJECT_REPONAME,,}:latest; fi
+          no_output_timeout: 6h
+      - run:
+          command: if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p $DOCKER_PASS && docker tag bids/${CIRCLE_PROJECT_REPONAME,,} bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG && docker push bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG; fi
+          no_output_timeout: 6h
+
+workflows:
+  version: 2
+  build-test-deploy:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /.*/
+      - deployment:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /.*/
