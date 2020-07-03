@@ -7,16 +7,9 @@ jobs:
 
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - image_cache-{{ checksum "Dockerfile" }}
       - add_ssh_keys:
           fingerprints:
             - "f9:fc:d7:c4:a9:17:3d:09:ee:03:d7:f9:6e:0d:f5:2b"
-
-      - run:
-          name: Load Docker image from cache if present
-          command: if [[ -e ~/docker/image.tar ]]; then docker load -i ~/docker/image.tar; fi
       - run:
           name: Write git tag name to text file "version"
           command: git describe --tags --always > version
@@ -24,9 +17,6 @@ jobs:
           name: Build Docker container
           command: docker build -t bids/${CIRCLE_PROJECT_REPONAME,,} .
           no_output_timeout: 6h
-      - run:
-          name: Prune intermediate Docker layers
-          command: docker builder prune
       - run:
           name: Save built Docker container to cache
           command: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
