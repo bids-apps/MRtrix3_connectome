@@ -27,6 +27,7 @@ jobs:
       - run:
           name: Save built Docker container to cache
           command: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
+          no_output_timeout: 6h
       - save_cache:
           key: image_cache-{{ git describe --tags --always }}-{{ .Revision }}-{{ epoch }}
           paths:
