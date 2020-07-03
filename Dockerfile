@@ -96,7 +96,7 @@ RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.
 RUN npm install -gq bids-validator@1.5.3
 
 # apt cleanup to recover as much space as possible
-RUN apt remove -y libegl1-mesa-dev && apt autoremove -y
+RUN apt-get remove -y libegl1-mesa-dev && apt-get autoremove -y
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases

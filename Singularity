@@ -52,10 +52,10 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Grab additional repositories
     sed -i 's/main/main restricted universe multiverse/g' /etc/apt/sources.list
-    apt-get update && apt upgrade -y
+    apt-get update && apt-get upgrade -y
 
 # Base requirements
-    apt-get update && apt-get install -y bc=1.07.1-2 build-essential=12.4ubuntu1 curl=7.58.0-2ubuntu3 dc=1.07.1-2 git=1:2.17.0-1ubuntu1 libegl1-mesa-dev=18.0.0~rc5-1ubuntu1 libopenblas-dev=0.2.20+ds-4 nano=2.9.3-2 perl-modules-5.26=5.26.1-6 python=2.7.15~rc1-1 python3=3.6.5-3 python3-pip=9.0.1-2 tar=1.29b-2 tcsh=6.20.00-7 tzdata=2020a-0ubuntu0.18.04 unzip=6.0-21ubuntu1 wget=1.19.4-1ubuntu2
+    apt-get update && apt-get install -y bc=1.07.1-2 build-essential=12.4ubuntu1 curl=7.58.0-2ubuntu3 dc=1.07.1-2 git=1:2.17.0-1ubuntu1 libegl1-mesa-dev=18.0.0~rc5-1ubuntu1 libopenblas-dev=0.2.20+ds-4 nano=2.9.3-2 perl-modules-5.26=5.26.1-6 python=2.7.15~rc1-1 python3=3.6.5-3 python3-pip=9.0.1-2 tar=1.29b-2 tcsh=6.20.00-7 tzdata=2018d-1 unzip=6.0-21ubuntu1 wget=1.19.4-1ubuntu2
 
 # PPA for newer version of nodejs, which is required for bids-validator
     curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && bash nodesource_setup.sh && rm -f nodesource_setup.sh
@@ -76,7 +76,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | tar zx -C /opt --exclude='freesurfer/trctrain' --exclude='freesurfer/subjects/fsaverage_sym' --exclude='freesurfer/subjects/fsaverage3' --exclude='freesurfer/subjects/fsaverage4' --exclude='freesurfer/subjects/fsaverage6' --exclude='freesurfer/subjects/cvs_avg35' --exclude='freesurfer/subjects/cvs_avg35_inMNI152' --exclude='freesurfer/subjects/bert' --exclude='freesurfer/subjects/V1_average' --exclude='freesurfer/average/mult-comp-cor' --exclude='freesurfer/lib/qt'
     echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
     FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
-    apt install -y ants
+    apt-get install -y ants=2.2.0-1ubuntu1
     wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
     chmod 775 fslinstaller.py
     python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
@@ -88,8 +88,8 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     npm install -gq bids-validator@1.5.3
 
 # apt cleanup to recover as much space as possible
-    apt remove libegl1-mesa-dev -y && apt autoremove -y
-    apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    apt-get remove libegl1-mesa-dev -y && apt-get autoremove -y
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
     wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | tar zx -C /opt
