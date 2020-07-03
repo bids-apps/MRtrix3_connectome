@@ -25,6 +25,9 @@ jobs:
           command: docker build -t bids/${CIRCLE_PROJECT_REPONAME,,} .
           no_output_timeout: 6h
       - run:
+          name: Prune intermediate Docker layers
+          command: docker builder prune
+      - run:
           name: Save built Docker container to cache
           command: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
           no_output_timeout: 6h
