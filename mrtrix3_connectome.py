@@ -1614,9 +1614,9 @@ def run_participant1(bids_dir, session, shared,
                            (dwi_old_mask_count + dwi_new_mask_count)
         app.debug('Dice coefficient: ' + str(dice_coefficient))
         if dice_coefficient > (1.0 - 1e-3):
-            progress.done()
-            app.console('Exiting iterative loop due to mask convergence')
+            app.debug('Exiting iterative loop due to mask convergence')
             break
+    progress.done()
 
     app.cleanup(dwifslpreproc_output)
     app.cleanup(dwi_valid_image)
