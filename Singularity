@@ -52,11 +52,10 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Grab additional repositories
     sed -i 's/main/main restricted universe multiverse/g' /etc/apt/sources.list
-    apt update
-    apt upgrade -y
+    apt-get update && apt upgrade -y
 
 # Base requirements
-    apt-get update && apt-get install -y bc=1.07.1-2 build-essential=12.4ubuntu1 curl=7.58.0-2ubuntu3 dc=1.07.1-2 git=1:2.17.0-1ubuntu1 libegl1-mesa-dev=18.0.0~rc5-1ubuntu1 libopenblas-dev=0.2.20+ds-4 nano=2.9.3-2 perl-modules-5.26=5.26.1-6 python2.7=2.7.15~rc1-1 python3=3.6.5-3 python3-pip=9.0.1-2 tar=1.29b-2 tcsh=6.20.00-7 unzip=6.0-21ubuntu1 wget=1.19.4-1ubuntu2
+    apt-get update && apt-get install -y bc=1.07.1-2 build-essential=12.4ubuntu1 curl=7.58.0-2ubuntu3 dc=1.07.1-2 git=1:2.17.0-1ubuntu1 libegl1-mesa-dev=18.0.0~rc5-1ubuntu1 libopenblas-dev=0.2.20+ds-4 nano=2.9.3-2 perl-modules-5.26=5.26.1-6 python=2.7.15~rc1-1 python3=3.6.5-3 python3-pip=9.0.1-2 tar=1.29b-2 tcsh=6.20.00-7 tzdata=2020a-0ubuntu0.18.04 unzip=6.0-21ubuntu1 wget=1.19.4-1ubuntu2
 
 # PPA for newer version of nodejs, which is required for bids-validator
     curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && bash nodesource_setup.sh && rm -f nodesource_setup.sh
@@ -64,9 +63,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # NeuroDebian setup
     wget -qO- http://neuro.debian.net/lists/bionic.au.full | tee -a /etc/apt/sources.list
-    apt-key add /neurodebian.gpg
-    apt update
-    apt upgrade -y
+    apt-key add /neurodebian.gpg && apt-get update
 
 # Python3 dependencies for eddyqc
     pip3 install --upgrade pip==20.1.1
@@ -88,7 +85,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
     git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
-    npm install -gq bids-validator
+    npm install -gq bids-validator@1.5.3
 
 # apt cleanup to recover as much space as possible
     apt remove libegl1-mesa-dev -y && apt autoremove -y
@@ -116,15 +113,10 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-    git clone -b 3.0.1 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/ && cd /
-    mv /tmp/labelconvert/* /mrtrix3/share/mrtrix3/labelconvert && rm -rf /tmp/labelconvert
+    git clone -b 3.0.1 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/
 
 # MRtrix3_connectome script
     chmod 775 /mrtrix3_connectome.py
-
-# Mount points
-    mkdir /bids_dataset
-    mkdir /output
 
 %runscript
     exec /usr/bin/python /mrtrix3_connectome.py "$@"
