@@ -29,7 +29,7 @@ jobs:
           command: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
           no_output_timeout: 6h
       - save_cache:
-          key: image_cache-{{ checksum "Dockerfile" }}-{{ .Revision }}-{{ epoch }}
+          key: image_cache-{{ .Revision }}-{{ epoch }}
           paths:
             - "~/docker"
 
@@ -40,7 +40,10 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: image_cache-{{ checksum "Dockerfile" }}-{{ .Revision }}-{{ epoch }}
+          key: image_cache-{{ .Revision }}
+      - run:
+          name: Load Docker image
+          command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
           command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
@@ -74,10 +77,10 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: image_cache-{{ checksum "Dockerfile" }}-{{ .Revision }}-{{ epoch }}
+          key: image_cache-{{ .Revision }}
       - run:
           name: Load Docker image
-          command: docker load -i /tmp/workspace/image.tar
+          command: docker load -i ~/docker/image.tar
       - run:
           name: Push "latest" tag to DockerHub
           command: if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p $DOCKER_PASS && docker push bids/${CIRCLE_PROJECT_REPONAME,,}:latest; fi
