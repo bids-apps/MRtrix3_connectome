@@ -1578,12 +1578,13 @@ def run_participant1(bids_dir, session, shared,
                     + ' mrthreshold - -abs '
                     + str(TISSUESUM_THRESHOLD)
                     + ' - |'
+                    + ' maskfilter - median - |'
                     + ' maskfilter - connect -largest - |'
-                    + ' maskfilter - clean - |'
                     + ' mrcalc 1 - -sub - -datatype bit |'
                     + ' maskfilter - connect -largest - |'
+                    + ' mrcalc 1 - -sub - -datatype bit |'
                     + ' maskfilter - clean - |'
-                    + ' mrcalc 1 - -sub '
+                    + ' mrcalc - '
                     + dwi_valid_image
                     + ' -mult '
                     + new_dwi_mask_image
