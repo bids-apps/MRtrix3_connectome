@@ -10,8 +10,6 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     mrtrix3_connectome.py /mrtrix3_connectome.py
     neurodebian.gpg /neurodebian.gpg
     version /version
-    Yeo2011_7N_split.txt /tmp/labelconvert/Yeo2011_7N_split.txt
-    Yeo2011_17N_split.txt /tmp/labelconvert/Yeo2011_17N_split.txt
 
 %environment
 
