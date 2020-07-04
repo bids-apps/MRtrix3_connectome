@@ -47,7 +47,7 @@ class T1wShared(object): #pylint: disable=useless-object-inheritance
 
 
 
-class Participant1Shared(object): #pylint: disable=useless-object-inheritance
+class PreprocShared(object): #pylint: disable=useless-object-inheritance
     def __init__(self):
         fsl_path = os.environ.get('FSLDIR', '')
         if not fsl_path:
@@ -102,7 +102,7 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
                 self.eddy_mporder = True
             elif line.startswith('--estimate_move_by_susceptibility'):
                 self.eddy_mbs = True
-# End of Participant1Shared() class
+# End of PreprocShared() class
 
 
 
@@ -110,13 +110,13 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
 
 
 
-class Participant2Shared(object): #pylint: disable=useless-object-inheritance
+class ParticipantShared(object): #pylint: disable=useless-object-inheritance
     def __init__(self, atlas_path, parcellation,
                  streamlines, template_reg):
 
         if not parcellation:
             raise MRtrixError(
-                'For participant2-level analysis, '
+                'For participant-level analysis, '
                 'desired parcellation must be provided using the '
                 + OPTION_PREFIX + 'parcellation option')
         self.parcellation = parcellation
@@ -546,7 +546,7 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
             raise MRtrixError(
                 'Could not find MRtrix3 connectome lookup table file '
                 '(expected location: ' + self.mrtrix_lut_file + ')')
-# End of Participant2Shared() class
+# End of ParticipantShared() class
 
 
 
@@ -846,7 +846,7 @@ def get_t1w_preproc_images(bids_dir,
                 #   Get an initial brain mask, use that mask to estimate a
                 #   bias field, then re-compute the brain mask
                 # TODO Consider making this fully iterative, just like the
-                #   approach in participant1 with dwi2mask and mtnormalise
+                #   approach in preproc with dwi2mask and mtnormalise
                 run.command(t1w_shared.robex_cmd
                             + ' T1.nii T1_initial_brain.nii'
                             + ' T1_initial_mask.nii')
@@ -911,8 +911,8 @@ def get_t1w_preproc_images(bids_dir,
 
 
 
-def run_participant1(bids_dir, session, shared,
-                     t1w_preproc_path, output_verbosity, output_dir):
+def run_preproc(bids_dir, session, shared,
+                t1w_preproc_path, output_verbosity, output_dir):
 
     session_label = '_'.join(session)
     output_subdir = os.path.join(output_dir, *session)
@@ -1155,7 +1155,7 @@ def run_participant1(bids_dir, session, shared,
     # Get T1-weighted image data
     #   (could be generated from raw data, or grabbed from a
     #   user-specified path source;
-    #   don't look in output directory for participant1)
+    #   don't look in output directory for preproc)
     get_t1w_preproc_images(bids_dir,
                            session,
                            shared.t1w_shared,
@@ -1763,13 +1763,13 @@ def run_participant1(bids_dir, session, shared,
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_subdir, 'scratch_participant1'))
+                     os.path.join(output_subdir, 'scratch_preproc'))
     else:
         app.console('Contents of scratch directory kept; '
                     'location: ' + app.SCRATCH_DIR)
     app.SCRATCH_DIR = ''
 
-# End of run_paticipant1() function
+# End of run_preproc() function
 
 
 
@@ -1790,8 +1790,8 @@ def run_participant1(bids_dir, session, shared,
 
 
 
-def run_participant2(bids_dir, session, shared,
-                     t1w_preproc_path, output_verbosity, output_dir):
+def run_participant(bids_dir, session, shared,
+                    t1w_preproc_path, output_verbosity, output_dir):
 
     session_label = '_'.join(session)
     output_subdir = os.path.join(output_dir, *session)
@@ -1949,7 +1949,7 @@ def run_participant2(bids_dir, session, shared,
                                '*_dwi.nii*')
     in_dwi_image_list = glob.glob(in_dwi_path)
     if len(in_dwi_image_list) > 1:
-        raise MRtrixError('To run participant1-level analysis, '
+        raise MRtrixError('To run participant-level analysis, '
                           + 'output directory should contain only one '
                           + 'DWI image file; session "'
                           + session_label
@@ -2127,7 +2127,7 @@ def run_participant2(bids_dir, session, shared,
                 + (' multi-tissue ODF images'
                    if multishell
                    else 'Fibre Orientation Distribution image'))
-    # TODO Update to use similar code to participant1?
+    # TODO Update to use similar code to preproc?
     # Would have consequences for group-level analysis...
     if multishell:
         run.command('dwi2fod msmt_csd dwi.mif '
@@ -2728,13 +2728,13 @@ def run_participant2(bids_dir, session, shared,
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_subdir, 'scratch_participant2'))
+                     os.path.join(output_subdir, 'scratch_participant'))
     else:
         app.console('Contents of scratch directory kept; '
                     'location: ' + app.SCRATCH_DIR)
     app.SCRATCH_DIR = ''
 
-# End of run_participant2() function
+# End of run_participant() function
 
 
 
@@ -3244,8 +3244,8 @@ def get_sessions(root_dir, **kwargs):
     #   looking for anything that resembles a BIDS session
     # For any sub-directory that itself contains directories "anat/" and "dwi/",
     #   store the list of sub-directories required to navigate to that point
-    # This becomes the list of feasible processing targets for either
-    #   participant-level or group-level analysis
+    # This becomes the list of feasible processing targets for any level
+    #   of analysis
     # From there:
     #   - "--participant_label" can be used to remove entries from the list
     #   - Other options can be added to restrict processing targets;
@@ -3340,7 +3340,7 @@ def get_sessions(root_dir, **kwargs):
 
 
 
-ANALYSIS_CHOICES = ['participant1', 'participant2', 'group']
+ANALYSIS_CHOICES = ['preproc', 'participant', 'group']
 
 PARCELLATION_CHOICES = ['aal',
                         'aal2',
@@ -3434,17 +3434,17 @@ See the Mozilla Public License v. 2.0 for more details.''')
             help='Skip BIDS validation')
 
     cmdline.add_description(
-        'While participant1-level analysis only requires data within the '
-        'BIDS directory, participant2-level analysis requires that the '
+        'While preproc-level analysis only requires data within the '
+        'BIDS directory, participant-level analysis requires that the '
         'output directory be pre-populated with the results from '
-        'participant1-level processing; similarly, group-level analysis '
+        'preproc-level processing; similarly, group-level analysis '
         'requires that the output directory be pre-populated with the '
-        'results from participant2-level analysis.')
+        'results from participant-level analysis.')
     cmdline.add_description(
         'The operations performed by each of the three levels of analysis '
         'are as follows:')
     cmdline.add_description(
-        '"participant1": '
+        '"preproc": '
         'DWI: Denoising; Gibbs ringing removal; motion, '
         'eddy current and EPI distortion correction and outlier detection & '
         'replacement; brain masking, bias field correction and intensity '
@@ -3452,7 +3452,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'T1-weighted image. '
         'T1-weighted image: bias field correction; brain masking.')
     cmdline.add_description(
-        '"participant2": '
+        '"participant": '
         'DWI: Response function estimation; FOD estimation. '
         'T1-weighted image (if ' + OPTION_PREFIX + 'parcellation '
         'is not none): '
@@ -3467,7 +3467,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'warping of template-based white matter mask to subject spaces; '
         'calculation of group mean white matter response function; '
         'scaling of connectomes based on white matter b=0 intensity, '
-        'response function used during participant2-level analysis, and '
+        'response function used during participant-level analysis, and '
         'SIFT model proportioinality coefficient; '
         'generation of group mean connectome.')
     cmdline.add_description(
@@ -3479,18 +3479,19 @@ See the Mozilla Public License v. 2.0 for more details.''')
         + 'include "sub-" or "ses-"). Multiple participants / sessions '
         + 'can be specified with a space-separated list.')
     cmdline.add_description(
-        'For both participant-level analyses, if no specific participants '
-        'or sessions are nominated by the user (or the user explicitly '
-        'specifies multiple participants / sessions), the script will '
-        'process each of these in series. It is additionally possible for '
-        'the user to invoke multiple instances of this script in order to '
-        'process multiple subjects at once in parallel, ensuring that '
-        'no single participant / session is being processed in parallel, '
-        'and that participant1-level output data are written fully before '
-        'commencing participant2-level analysis.')
+        'For both preproc-level and participant-level analyses, if no '
+        'specific participants or sessions are nominated by the user '
+        '(or the user explicitly specifies multiple participants / '
+        'sessions), the script will process each of these in series. '
+        'It is additionally possible for the user to invoke multiple '
+        'instances of this script in order to process multiple subjects '
+        'at once in parallel, ensuring that no single participant / '
+        'session is being processed in parallel, and that preproc-level '
+        'output data are written fully before commencing participant-level '
+        'analysis.')
     cmdline.add_description(
         'The ' + OPTION_PREFIX + 'output_verbosity option principally '
-        'affects the participant2-level analysis, modulating how many '
+        'affects the participant-level analysis, modulating how many '
         'derivative files are written to the output directory. Permitted '
         'values are from 1 to 4: 1 writes only those files requisite for '
         'group-level analysis; 2 additionally writes files typically '
@@ -3502,7 +3503,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'all analysis levels)')
     if not IS_CONTAINER:
         cmdline.add_description(
-            'If running participant2-level analysis using the script as a '
+            'If running participant-level analysis using the script as a '
             'standalone tool rather than inside the provided container, '
             'data pertaining to atlas parcellations can no longer be '
             'guaranteed to be stored at a specific location on the '
@@ -3540,37 +3541,38 @@ See the Mozilla Public License v. 2.0 for more details.''')
         nargs='+',
         help='The session(s) within each participant that should be analyzed.')
 
-    participant_options = \
+    preproc_participant_options = \
         cmdline.add_argument_group(
-            'Options that are relevant to both participant-level analyses')
-    participant_options.add_argument(
+            'Options that are relevant to both preproc-level and '
+            'participant-level analyses')
+    preproc_participant_options.add_argument(
         OPTION_PREFIX + 't1w_preproc',
         metavar='path',
         help='Provide a path by which pre-processed T1-weighted image data '
              'may be found for the processed participant(s) / session(s)')
 
-    participant2_options = \
+    participant_options = \
         cmdline.add_argument_group(
-            'Options that are relevant to participant2-level analysis')
+            'Options that are relevant to participant-level analysis')
     if not IS_CONTAINER:
-        participant2_options.add_argument(
+        participant_options.add_argument(
             OPTION_PREFIX + 'atlas_path',
             metavar='path',
             help='The filesystem path in which to search for atlas '
                  'parcellation files.')
-    participant2_options.add_argument(
+    participant_options.add_argument(
         OPTION_PREFIX + 'parcellation',
         help='The choice of connectome parcellation scheme '
-             '(compulsory for participant2-level analysis); '
+             '(compulsory for participant-level analysis); '
              'options are: ' + ', '.join(PARCELLATION_CHOICES) + '.',
         choices=PARCELLATION_CHOICES)
-    participant2_options.add_argument(
+    participant_options.add_argument(
         OPTION_PREFIX + 'streamlines',
         type=int,
         default=0,
         help='The number of streamlines to generate for each subject '
              '(will be determined heuristically if not explicitly set).')
-    participant2_options.add_argument(
+    participant_options.add_argument(
         OPTION_PREFIX + 'template_reg',
         metavar='software',
         help='The choice of registration software for mapping subject to '
@@ -3590,13 +3592,13 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'How to correct susceptibility distortions in spin-echo echo-planar '
         'images: application to diffusion tensor imaging. '
         'NeuroImage, 2003, 20, 870-888',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Jenkinson, M. & Smith, S. '
         'Non-linear registration, aka spatial normalisation. '
         'FMRIB technical report, 2010, TR07JA2',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'template_reg fsl',
         is_external=True)
     cmdline.add_citation(
@@ -3604,7 +3606,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'An integrated approach to correction for off-resonance effects and '
         'subject movement in diffusion MR imaging. '
         'NeuroImage, 2015, 125, 1063-1078',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Graham, M. S.; Zsoldos, E. '
@@ -3613,7 +3615,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'non-parametric framework for movement and distortion correction of '
         'diffusion MR images. '
         'NeuroImage, 2016, 141, 556-572',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     if not IS_CONTAINER:
         cmdline.add_citation(
@@ -3622,7 +3624,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
             'Towards a comprehensive framework for movement and distortion '
             'correction of diffusion MR images: Within volume movement. '
             'NeuroImage, 2017, 152, 450-466',
-            condition='If performing participant1-level analysis',
+            condition='If performing preproc-level analysis',
             is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Graham,, M. S.; Drobnjak, I.; Zhang, H. & '
@@ -3630,14 +3632,14 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Susceptibility-induced distortion that varies due to motion: '
         'Correction in diffusion MR without acquiring additional data. '
         'NeuroImage, 2018, 171, 277-295',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Avants, B. B.; Epstein, C. L.; Grossman, M.; Gee, J. C. '
         'Symmetric diffeomorphic image registration with cross-correlation: '
         'Evaluating automated labeling of elderly and neurodegenerative brain. '
         'Medical Image Analysis, 2008, 12, 26-41',
-        condition='If performing participant2-level analysis, '
+        condition='If performing participant-level analysis, '
         + 'using ' + OPTION_PREFIX + 'parcellation [ aal, aal2, '
         + 'brainnetome246mni, craddock200, craddock400, perry512, '
         + 'yeo7mni or yeo17mni ], '
@@ -3649,7 +3651,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Co-registration and distortion correction of diffusion and anatomical '
         'images based on inverse contrast normalization. '
         'NeuroImage, 2015, 115, 269-280',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; '
@@ -3657,7 +3659,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'A whole brain fMRI atlas generated via spatially constrained '
         'spectral clustering. '
         'Human Brain Mapping, 2012, 33(8), 1914-1928',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ craddock200 or craddock400 ]',
         is_external=True)
@@ -3666,7 +3668,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Cortical Surface-Based Analysis: '
         'I. Segmentation and Surface Reconstruction. '
         'NeuroImage, 1999, 9, 179-194',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ brainnetome246fs, desikan, destrieux, hcpmmp1, '
         + 'yeo7fs or yeo17fs ]',
@@ -3678,7 +3680,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'An automated labeling system for subdividing the human cerebral '
         'cortex on MRI scans into gyral based regions of interest. '
         'NeuroImage, 2006, 31, 968-980',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation desikan',
         is_external=True)
     cmdline.add_citation(
@@ -3686,7 +3688,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Automatic parcellation of human cortical gyri and sulci using '
         'standard anatomical nomenclature. '
         'NeuroImage, 2010, 53, 1-15',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation destrieux',
         is_external=True)
     cmdline.add_citation(
@@ -3696,7 +3698,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The Human Brainnetome Atlas: '
         'A New Brain Atlas Based on Connectional Architecture. '
         'Cerebral Cortex, 2016, 26 (8), 3508-3526',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ brainnetome246fs brainnetome246mni ]',
         is_external=True)
@@ -3706,7 +3708,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Jenkinson, M.; Smith, S. M. & Van Essen, D. C. '
         'A multi-modal parcellation of human cerebral cortex. '
         'Nature, 2016, 536, 171-178',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation hcpmmp1',
         is_external=True)
     cmdline.add_citation(
@@ -3714,28 +3716,29 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Robust Brain Extraction Across Datasets and '
         'Comparison With Publicly Available Methods. '
         'IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634',
-        condition='If performing either participant-level analysis and '
-        'ROBEX is used for T1 brain extraction',
+        condition='If performing either preproc-level or participant-level '
+        'analysis and ROBEX is used for T1 brain extraction',
         is_external=True)
     cmdline.add_citation(
         'Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. '
         'Multi-tissue constrained spherical deconvolution for improved '
         'analysis of multi-shell diffusion MRI data. '
         'NeuroImage, 2014, 103, 411-426',
-        condition='If performing either participant-level analysis',
+        condition='If performing either preproc-level or participant-level '
+        'analysis',
         is_external=False)
     cmdline.add_citation(
         'Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. '
         'Gibbs-ringing artifact removal based on local subvoxel-shifts. '
         'Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. '
         'A Bayesian model of shape and appearance for '
         'subcortical brain segmentation. '
         'NeuroImage, 2011, 56, 907-922',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'not using ' + OPTION_PREFIX + 'parcellation '
         + '[ brainnetome246fs or brainnetome246mni ]',
         is_external=True)
@@ -3745,7 +3748,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The independent influences of age and education on functional brain '
         'networks and cognition in healthy older adults. '
         'Human Brain Mapping, 2017, 38(10), 5094-5114',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation perry512',
         is_external=True)
     if not IS_CONTAINER:
@@ -3753,8 +3756,8 @@ See the Mozilla Public License v. 2.0 for more details.''')
             'Smith, S. M. '
             'Fast robust automated brain extraction. '
             'Human Brain Mapping, 2002, 17, 143-155',
-            condition='If performing either participant-level analysis and '
-            'FSL is used for T1 brain extraction',
+            condition='If performing either preproc-level or participant-level '
+            'analysis and FSL is used for T1 brain extraction',
             is_external=True)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
@@ -3762,28 +3765,29 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Improved diffusion MRI streamlines tractography through '
         'effective use of anatomical information. '
         'NeuroImage, 2012, 62, 1924-1938',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'The effects of SIFT on the reproducibility and biological '
         'accuracy of the structural connectome. '
         'NeuroImage, 2015a, 104, 253-265',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'SIFT2: Enabling dense quantitative assessment of brain white matter '
         'connectivity using streamlines tractography. '
         'NeuroImage, 2015b, 119, 338-351',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. '
         'Direct estimation of the fiber orientation density function from '
         'diffusion-weighted MRI data using spherical deconvolution. '
         'NeuroImage, 2004, 23, 1176-1185',
-        condition='If performing either participant-level analysis',
+        condition='If performing either preproc-level or participant-level '
+        'analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F. & Connelly, A. '
@@ -3791,7 +3795,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'integration over fibre orientation distributions. '
         'Proceedings of the International Society for Magnetic '
         'Resonance in Medicine, 2010, 1670',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + OPTION_PREFIX + 'streamlines 0 is not set',
         is_external=False)
     cmdline.add_citation(
@@ -3807,8 +3811,8 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Yushkevich, P. & Gee, J. '
         'N4ITK: Improved N3 Bias Correction. '
         'IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320',
-        condition='If performing either participant-level analysis, and'
-        'N4 is used for either DWI or T1 bias field correction',
+        condition='If performing either preproc-level or participant-level '
+        'analysis, and N4 is used for either DWI or T1 bias field correction',
         is_external=True)
     cmdline.add_citation(
         'Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; '
@@ -3817,7 +3821,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Macroscopic Anatomical Parcellation of the MNI MRI '
         'single-subject brain. '
         'NeuroImage, 15(1), 273-289',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         'using ' + OPTION_PREFIX + 'parcellation [ aal or aal2 ]',
         is_external=True)
     cmdline.add_citation(
@@ -3825,7 +3829,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Sijbers, J. & Fieremans, E. '
         'Denoising of diffusion MRI using random matrix theory. '
         'NeuroImage, 2016, 142, 394-406',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. '
@@ -3833,7 +3837,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The consequences for structural connectomic metrics. '
         'Neuroimage, 2016, 142, 150-162',
         condition='If utilising connectome outputs from '
-        'participant2-level analysis',
+        'participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Yeo, B.T.; Krienen, F.M.; Sepulcre, J.; Sabuncu, M.R.; Lashkari, D.; '
@@ -3842,7 +3846,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The organization of the human cerebral cortex estimated by '
         'intrinsic functional connectivity. '
         'J Neurophysiol, 2011, 106(3), 1125-1165',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ yeo7fs, yeo7mni, yeo17fs or yeo17mni ]',
         is_external=False)
@@ -3851,7 +3855,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Pantelis, C. & Bullmore, E. T. '
         'Whole-brain anatomical networks: Does the choice of nodes matter? '
         'NeuroImage, 2010, 50, 970-983',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation perry512',
         is_external=True)
     cmdline.add_citation(
@@ -3859,7 +3863,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Segmentation of brain MR images through a hidden Markov random '
         'field model and the expectation-maximization algorithm. '
         'IEEE Transactions on Medical Imaging, 2001, 20, 45-57',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=True)
 
 
@@ -3907,7 +3911,7 @@ def execute(): #pylint: disable=unused-variable
     #   use that as the root, but otherwise a directory with this name
     #   needs to be constructed
 
-    if app.ARGS.analysis_level in ['participant1', 'participant2']:
+    if app.ARGS.analysis_level in ['preproc', 'participant']:
         sessions_to_analyze = get_sessions(
             app.ARGS.bids_dir,
             participant_label=app.ARGS.participant_label,
@@ -3916,50 +3920,48 @@ def execute(): #pylint: disable=unused-variable
                            if app.ARGS.t1w_preproc \
                            else None
 
-    if app.ARGS.analysis_level == 'participant1':
+    if app.ARGS.analysis_level == 'preproc':
 
-        participant1_shared = Participant1Shared()
-
-        for session_to_process in sessions_to_analyze:
-            app.console('Commencing execution for session: \''
-                        + '_'.join(session_to_process) + '\'')
-            run_participant1(os.path.abspath(app.ARGS.bids_dir),
-                             session_to_process,
-                             participant1_shared,
-                             t1w_preproc_path,
-                             app.ARGS.output_verbosity,
-                             os.path.abspath(app.ARGS.output_dir))
-
-    # Running participant2 - level
-    if app.ARGS.analysis_level == 'participant2':
-
-        participant2_shared = \
-            Participant2Shared(getattr(app.ARGS, 'atlas_path', None),
-                               app.ARGS.parcellation,
-                               app.ARGS.streamlines,
-                               app.ARGS.template_reg)
+        preproc_shared = PreprocShared()
 
         for session_to_process in sessions_to_analyze:
             app.console('Commencing execution for session: \''
                         + '_'.join(session_to_process) + '\'')
-            run_participant2(os.path.abspath(app.ARGS.bids_dir),
-                             session_to_process,
-                             participant2_shared,
-                             t1w_preproc_path,
-                             app.ARGS.output_verbosity,
-                             os.path.abspath(app.ARGS.output_dir))
+            run_preproc(os.path.abspath(app.ARGS.bids_dir),
+                        session_to_process,
+                        preproc_shared,
+                        t1w_preproc_path,
+                        app.ARGS.output_verbosity,
+                        os.path.abspath(app.ARGS.output_dir))
 
-    # Running group level
+    if app.ARGS.analysis_level == 'participant':
+
+        participant_shared = \
+            ParticipantShared(getattr(app.ARGS, 'atlas_path', None),
+                              app.ARGS.parcellation,
+                              app.ARGS.streamlines,
+                              app.ARGS.template_reg)
+
+        for session_to_process in sessions_to_analyze:
+            app.console('Commencing execution for session: \''
+                        + '_'.join(session_to_process) + '\'')
+            run_participant(os.path.abspath(app.ARGS.bids_dir),
+                            session_to_process,
+                            participant_shared,
+                            t1w_preproc_path,
+                            app.ARGS.output_verbosity,
+                            os.path.abspath(app.ARGS.output_dir))
+
     elif app.ARGS.analysis_level == 'group':
 
         if app.ARGS.participant_label:
             raise MRtrixError('Cannot use '
                               + OPTION_PREFIX + 'participant_label option '
-                              + 'when performing group analysis')
+                              + 'when performing group-level analysis')
         if app.ARGS.session_label:
             raise MRtrixError('Cannot use '
                               + OPTION_PREFIX + 'session_label option '
-                              + 'when performing group analysis')
+                              + 'when performing group-level analysis')
 
         run_group(os.path.abspath(app.ARGS.bids_dir),
                   app.ARGS.output_verbosity,
