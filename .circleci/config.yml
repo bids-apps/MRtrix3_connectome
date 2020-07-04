@@ -26,7 +26,8 @@ jobs:
           paths:
             - "~/docker"
 
-  test:
+
+  test_preproc:
     machine:
       image: circleci/classic:latest
 
@@ -36,31 +37,40 @@ jobs:
           key: image_cache-{{ .Revision }}
       - run:
           name: Download test data
-          command: wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/u3uvf857jf4iqq1/MRtrix3_connectome_data_ver2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/MRtrix3_connectome_data_ver2.tar -C ${HOME}/data
+          command: wget -c -O ${HOME}/downloads/BIDS.tar.gz "https://osf.io/yt9an/download" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/BIDS.tar.gz -C ${HOME}/data
       - run:
           name: Load Docker image
           command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
       - run:
-          name: Make output directory
-          command: mkdir -p ${HOME}/outputs
-      - run:
-          name: Run participant2-level analysis for subject 01
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant2 --participant_label 01 --parcellation aal --streamlines 100000
+          name: Run preproc-level analysis for all subjects
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs preproc
           no_output_timeout: 6h
+
+
+  test_participant:
+    machine:
+      image: circleci/classic:latest
+
+    steps:
+      - checkout
+      - restore_cache:
+          key: image_cache-{{ .Revision }}
       - run:
-          name: Run participant2-level analysis for subject 02
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant2 --participant_label 02 --parcellation aal --streamlines 100000
-          no_output_timeout: 6h
+          name: Download test data
+          command: wget -c -O ${HOME}/downloads/preproc.tar.gz "https://osf.io/67ga4/download" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/preproc.tar.gz -C ${HOME}/data
       - run:
-          name: Run group-level analysis
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset -v ${HOME}/outputs:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group
+          name: Load Docker image
+          command: docker load -i ~/docker/image.tar
+      - run:
+          name: Print version
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
+      - run:
+          name: Run participant-level analysis for solitary subject
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --parcellation aal --streamlines 100000
           no_output_timeout: 6h
-      
-      - store_artifacts:
-          path: "~/outputs"
 
  
   deploy:
@@ -93,7 +103,15 @@ workflows:
               only: /.*/
             branches:
               only: /.*/
-      - test:
+      - test_preproc:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              only: /.*/
+      - test_participant:
           requires:
             - build
           filters:
@@ -104,7 +122,8 @@ workflows:
       - deploy:
           requires:
             - build
-            - test
+            - test_preproc
+            - test_participant            
           filters:
             branches:
               ignore: /.*/
