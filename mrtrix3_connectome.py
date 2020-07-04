@@ -1806,8 +1806,6 @@ def run_participant(bids_dir, session, shared,
                  'already exists; all contents will be erased when this '
                  'execution completes')
 
-    app.make_scratch_dir()
-
     # Check paths of individual output files before script completion
     #   by building a database of what files are to be written to output
     parc_string = '_desc-' + shared.parcellation
@@ -1948,13 +1946,6 @@ def run_participant(bids_dir, session, shared,
                                     session_label
                                     + '_space-superres_tdi.nii.gz'))
 
-    subdirs_to_make = ['tractogram']
-    if shared.parcellation != 'none':
-        subdirs_to_make.insert(0, 'connectome')
-
-    app.make_scratch_dir()
-
-
     def do_import(import_path):
         in_dwi_path = os.path.join(import_path,
                                    'dwi',
@@ -2050,6 +2041,7 @@ def run_participant(bids_dir, session, shared,
     #   that the pre-processed data be utilised from some path other than
     #   "mrtrix3_connectome/preproc/"); if that doesn't work, we wipe the
     #   scratch directory and try again based on the latter
+    app.make_scratch_dir()
     try:
         do_import(bids_dir)
     except MRtrixError as e_frombids:
@@ -2664,13 +2656,14 @@ def run_participant(bids_dir, session, shared,
     # Prepare output path for writing
     app.console('Processing for session "' + session_label
                 + '" completed; writing results to output directory')
+    subdirs_to_make = ['anat', 'dwi', 'tractogram']
+    if shared.parcellation != 'none':
+        subdirs_to_make.insert(1, 'connectome')
     for subdir in subdirs_to_make:
         full_subdir_path = os.path.join(output_subdir, subdir)
         if os.path.exists(full_subdir_path):
             run.function(shutil.rmtree, full_subdir_path)
         run.function(os.makedirs, full_subdir_path)
-    if not os.path.isdir(os.path.join(output_subdir, 'anat')):
-        run.function(os.makedirs, os.path.join(output_subdir, 'anat'))
 
     # Generate a copy of the lookup table file:
     #   - Use the post-labelconvert file if it's used;
