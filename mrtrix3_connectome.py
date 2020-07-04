@@ -2790,15 +2790,6 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
             in_dwi_prefix = self.in_dwi.split(os.extsep)[0]
             self.in_bvec = in_dwi_prefix + '.bvec'
             self.in_bval = in_dwi_prefix + '.bval'
-            self.bvalues = [float(value) for value in \
-                    run.command('mrinfo '
-                                + self.in_dwi
-                                + ' -fslgrad '
-                                + self.in_bvec
-                                + ' '
-                                + self.in_bval
-                                + ' -shell_bvalues').stdout.split()]
-
             self.in_rf = os.path.join(participant_root,
                                       'dwi',
                                       session_label
@@ -2835,6 +2826,12 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                                       + self.in_bvec \
                                       + ' ' \
                                       + self.in_bval
+
+            self.bvalues = [float(value) for value in \
+                    run.command('mrinfo '
+                                + self.in_dwi
+                                + self.grad_import_option
+                                + ' -shell_bvalues').stdout.split()]
 
             self.parcellation = \
                 re.findall('(?<=_desc-)[a-zA-Z0-9]*',
@@ -3022,11 +3019,11 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
 
     # First group-level calculation:
     # Generate the population FA template
-    if len(session_list) == 1:
+    if len(sessions) == 1:
         app.console('Duplicating single-subject FA image as '
                     'population template image')
         run.function(shutil.copyfile,
-                     session_list[0].temp_fa,
+                     sessions[0].temp_fa,
                      'template.mif')
     else:
         app.console('Generating population template for '
@@ -3048,11 +3045,11 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     app.cleanup(GROUP_BRAINMASKS_DIR)
 
     # Generate the group average response function
-    if len(session_list) == 1:
+    if len(sessions) == 1:
         app.console('Duplicating single-subject WM response function as '
                     'group-average response function')
         run.function(shutil.copyfile,
-                     session_list[0].temp_temp_rf,
+                     sessions[0].temp_rf,
                      'response.txt')
     else:
         app.console('Calculating group-average WM response function')
@@ -3070,30 +3067,41 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     #     - Store this in a file, and contribute to calculation of the
     #       mean of these values across subjects
     #     - Contribute to the group average response function
-    progress = app.ProgressBar('Generating group-average response function '
-                               'and intensity normalisation factors',
-                               len(sessions)+1)
-    run.function(os.makedirs, GROUP_WMVOXELS_DIR)
-    sum_median_bzero = 0.0
-    for s in sessions:
-        run.command('mrtransform template.mif '
-                    '-warp_full ' + s.temp_warp + ' '
-                    '-from 2 '
-                    '-template ' + s.temp_bzero + ' '
-                    '- | '
-                    'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
-        s.median_bzero = image.statistics(s.temp_bzero,
-                                          mask=s.temp_voxels).median
+    if len(sessions) == 1:
+        app.console('Calculating N=1 intensity normalisation factor')
+        run.command('mrthreshold template.mif voxels.mif -abs 0.4')
+        sessions[0].median_bzero = image.statistics(s.temp_bzero,
+                                                    mask='voxels.mif').median
         app.cleanup(s.temp_bzero)
-        app.cleanup(s.temp_voxels)
-        app.cleanup(s.temp_warp)
-        sum_median_bzero += s.median_bzero
-        progress.increment()
+        sum_median_bzero = sessions[0].median_bzero
+        app.cleanup('voxels.mif')
+    else:
+        progress = app.ProgressBar('Generating intensity '
+                                   'normalisation factors',
+                                   len(sessions))
+        run.function(os.makedirs, GROUP_WMVOXELS_DIR)
+        sum_median_bzero = 0.0
+        for s in sessions:
+            run.command('mrtransform template.mif '
+                        '-warp_full ' + s.temp_warp + ' '
+                        '-from 2 '
+                        '-template ' + s.temp_bzero + ' '
+                        '- | '
+                        'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
+            s.median_bzero = image.statistics(s.temp_bzero,
+                                              mask=s.temp_voxels).median
+            app.cleanup(s.temp_bzero)
+            app.cleanup(s.temp_voxels)
+            app.cleanup(s.temp_warp)
+            sum_median_bzero += s.median_bzero
+            progress.increment()
+        progress.done()
+
     app.cleanup(GROUP_BZEROS_DIR)
     app.cleanup(GROUP_WMVOXELS_DIR)
     app.cleanup(GROUP_WARPS_DIR)
     app.cleanup('template.mif')
-    progress.done()
+
 
     # Second group-level calculation:
     # - Calculate the mean of median b=0 values
@@ -3171,7 +3179,8 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         run.function(shutil.rmtree, group_dir)
     run.function(os.makedirs, group_dir)
     for s in sessions:
-        run.function(os.makedirs, s.out_dir)
+        run.function(os.makedirs,
+                     os.path.join(s.out_dir, 'connectome'))
         run.function(shutil.copyfile,
                      s.temp_connectome,
                      s.out_connectome)
