@@ -1951,6 +1951,12 @@ def run_participant(bids_dir, session, shared,
                                    'dwi',
                                    '*_dwi.nii*')
         in_dwi_image_list = glob.glob(in_dwi_path)
+        if not in_dwi_image_list:
+            raise MRtrixError('No DWIs found for session "'
+                              + session_label
+                              + '" loaded from "'
+                              + import_path
+                              + '"')
         if len(in_dwi_image_list) > 1:
             raise MRtrixError('To run participant-level analysis, '
                               + 'input directory should contain only one '
