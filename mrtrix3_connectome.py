@@ -558,7 +558,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
 
 # Regardless of the source of T1-weighted image information,
-#   scratch directory will contain:
+#   scratch directory will contain at completion of this function:
 # - Either:
 #   - T1.mif
 #     or
@@ -569,19 +569,16 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 #
 # TODO Think after all that this does need to export a greater
 #   amount of information with respect to what was done & how it was derived
-# E.g. For FreeSurfer, would prefer not to use the raw T1w image unless
-#   really necessary, as there's a chance of some spatial transformation
-#   having happened
-def get_t1w_preproc_images(bids_dir,
+def get_t1w_preproc_images(import_path,
                            session,
                            t1w_shared,
-                           output_dir,
                            t1w_preproc):
 
     session_label = '_'.join(session)
     preproc_image_path = None
     preproc_image_is_masked = None
     preproc_mask_path = None
+    raw_image_path = None
 
     if t1w_preproc:
 
@@ -626,20 +623,23 @@ def get_t1w_preproc_images(bids_dir,
                 raise MRtrixError('No pre-processed T1w image found from '
                                   'specified path "' + t1w_preproc + '"')
 
-    elif output_dir is not None:
+    else:
 
-        # Look inside of output_dir to see if there is a pre-processed
+        # Look inside of import_path to see if there is a pre-processed
         #   T1w image already there
-        glob_result = glob.glob(os.path.join(os.path.join(output_dir,
+        glob_result = glob.glob(os.path.join(os.path.join(import_path,
                                                           *session),
                                              'anat',
-                                             session_label + '*_T1w.nii*'))
+                                             session_label
+                                             + '*_desc-preproc*_T1w.nii*'))
         if glob_result:
             if len(glob_result) == 1:
                 preproc_image_path = glob_result[0]
             else:
-                raise MRtrixError('Multiple T1w images found in '
-                                  + 'output directory: '
+                raise MRtrixError('Multiple pre-processed T1w images found in '
+                                  + 'import directory "'
+                                  + import_path
+                                  + '": '
                                   + ';'.join(glob_result))
 
     # Same checks regardless of whether the existing pre-processed image
@@ -729,9 +729,30 @@ def get_t1w_preproc_images(bids_dir,
                         + '"; will generate one manually')
             preproc_mask_path = None
 
+    else:
 
+        # Check input path for raw un-processed T1w image
+        glob_result = glob.glob(os.path.join(os.path.join(import_path,
+                                                          *session),
+                                             'anat',
+                                             session_label + '*_T1w.nii*'))
+        if not glob_result:
+            raise MRtrixError('No raw or pre-processed T1-weighted images '
+                              + 'could be found in input directory "'
+                              + import_path
+                              + '" for session '
+                              + session_label)
+        if len(glob_result) > 1:
+            raise MRtrixError('Multiple raw T1w images found in '
+                              + 'input directory "'
+                              + import_path
+                              + '" for session '
+                              + session_label
+                              + ': '
+                              + ';'.join(glob_result))
+        raw_image_path = glob_result[0]
 
-    # Do we need to do any pre-processing of our own?
+    # Do we need to do any pre-processing of our own at all?
     if preproc_mask_path is None:
 
         app.console('Performing requisite processing of '
@@ -788,9 +809,7 @@ def get_t1w_preproc_images(bids_dir,
         else:
 
             # No pre-processed T1-weighted image available:
-            #   do everything using the raw T1-weighted image in
-            #   the input BIDS directory
-
+            #   do everything based on the raw T1-weighted image
             if t1w_shared.robex_cmd and t1w_shared.N4_cmd:
                 app.console('No pre-processed T1-weighted image '
                             + 'found for session '
@@ -819,22 +838,8 @@ def get_t1w_preproc_images(bids_dir,
                                   + 'processing raw T1-weighted image '
                                   + 'not installed')
 
-            t1w_image_list = glob.glob(os.path.join(os.path.join(bids_dir,
-                                                                 *session),
-                                                    'anat',
-                                                    '*_T1w.nii*'))
-            if len(t1w_image_list) > 1:
-                raise MRtrixError('More than one T1-weighted image found '
-                                  'for session "' + session_label + '"; '
-                                  'script not yet compatible with this')
-            if not t1w_image_list:
-                raise MRtrixError('Cannot complete processing for session '
-                                  + session_label
-                                  + ': no T1-weighted image data available '
-                                  + '(either raw or pre-processed)')
-
             run.command('mrconvert '
-                        + t1w_image_list[0]
+                        + raw_image_path
                         + ' T1.nii -strides '
                         + ('+1,+2,+3'
                            if t1w_shared.robex_cmd and t1w_shared.N4_cmd
@@ -912,10 +917,10 @@ def get_t1w_preproc_images(bids_dir,
 
 
 def run_preproc(bids_dir, session, shared,
-                t1w_preproc_path, output_verbosity, output_dir):
+                t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_subdir = os.path.join(output_dir, *session)
+    output_subdir = os.path.join(output_app_dir, 'preproc', *session)
     if os.path.exists(output_subdir):
         app.warn('Output directory for session "' + session_label + '" '
                  'already exists; all contents will be erased when this '
@@ -1159,7 +1164,6 @@ def run_preproc(bids_dir, session, shared,
     get_t1w_preproc_images(bids_dir,
                            session,
                            shared.t1w_shared,
-                           None,
                            t1w_preproc_path)
     T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
                                                      False))
@@ -1763,7 +1767,7 @@ def run_preproc(bids_dir, session, shared,
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_subdir, 'scratch_preproc'))
+                     os.path.join(output_subdir, 'scratch'))
     else:
         app.console('Contents of scratch directory kept; '
                     'location: ' + app.SCRATCH_DIR)
@@ -1791,18 +1795,18 @@ def run_preproc(bids_dir, session, shared,
 
 
 def run_participant(bids_dir, session, shared,
-                    t1w_preproc_path, output_verbosity, output_dir):
+                    t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_subdir = os.path.join(output_dir, *session)
-    if not os.path.exists(output_subdir):
-        raise MRtrixError('No output directory found for session "'
-                          + session_label + '"')
-    if os.path.exists(os.path.join(output_subdir, 'fmap')):
-        raise MRtrixError('Output directory for session "'
-                          + session_label
-                          + '" contains an fmap/ directory;'
-                          + ' should not exist if data are preprocessed')
+    output_analysis_level_path = os.path.join(output_app_dir, 'participant')
+    output_subdir = os.path.join(output_analysis_level_path, *session)
+
+    if os.path.exists(output_subdir):
+        app.warn('Output directory for session "' + session_label + '" '
+                 'already exists; all contents will be erased when this '
+                 'execution completes')
+
+    app.make_scratch_dir()
 
     # Check paths of individual output files before script completion
     #   by building a database of what files are to be written to output
@@ -1877,7 +1881,7 @@ def run_participant(bids_dir, session, shared,
                        os.path.join('connectome',
                                     session_label
                                     + parc_string
-                                    + '_level-participant_connectome.csv'))
+                                    + '_connectome.csv'))
         output_items['mu.txt'] = \
             OutputItem(False, 1, False, None,
                        os.path.join('tractogram',
@@ -1944,128 +1948,134 @@ def run_participant(bids_dir, session, shared,
                                     session_label
                                     + '_space-superres_tdi.nii.gz'))
 
-    in_dwi_path = os.path.join(output_subdir,
-                               'dwi',
-                               '*_dwi.nii*')
-    in_dwi_image_list = glob.glob(in_dwi_path)
-    if len(in_dwi_image_list) > 1:
-        raise MRtrixError('To run participant-level analysis, '
-                          + 'output directory should contain only one '
-                          + 'DWI image file; session "'
-                          + session_label
-                          + '" contains '
-                          + str(len(in_dwi_image_list)))
-    in_dwi_path = in_dwi_image_list[0]
-    if not '_desc-preproc_' in in_dwi_path:
-        raise MRtrixError('Input DWI image '
-                          + in_dwi_path
-                          + ' not flagged as pre-processed data')
-    in_dwi_path_prefix = in_dwi_path.split(os.extsep)[0]
-    # Don't look for bvec / bval in a lower directory in this case
-    in_bvec_path = in_dwi_path_prefix + '.bvec'
-    in_bval_path = in_dwi_path_prefix + '.bval'
-    if not os.path.isfile(in_bvec_path) \
-        or not os.path.isfile(in_bval_path):
-        raise MRtrixError('Did not find bvec / bval pair '
-                          + 'corresponding to image '
-                          + in_dwi_path
-                          + ' (expected locations: "'
-                          + in_bvec_path
-                          + '" "'
-                          + in_bval_path
-                          + '")')
-    # JSON isn't compulsory in this case
-    in_dwi_json_path = in_dwi_path_prefix + 'json'
-    in_dwi_json_import_option = ' -json_import ' + in_dwi_json_path \
-                                if os.path.isfile(in_dwi_json_path) \
-                                else ''
-    # Is there a mask present?
-    in_dwi_mask_image_list = \
-        glob.glob(os.path.join(output_subdir,
-                               'dwi',
-                               '*_desc-brain*_mask.nii*'))
-    if len(in_dwi_mask_image_list) > 1:
-        raise MRtrixError('More than one DWI mask found for session "'
-                          + session_label
-                          + '"')
-    in_dwi_mask_path = in_dwi_mask_image_list[0] \
-                       if in_dwi_mask_image_list \
-                       else None
-    if not in_dwi_mask_path:
-        output_items['dwi_mask.mif'] = \
-            OutputItem(True, 1, False,
-                       '-strides +1,+2,+3 -datatype uint8',
-                       os.path.join('dwi',
-                                    session_label
-                                    + '_desc-brain_mask.nii.gz'))
-    # For running FreeSurfer, want to use the raw T1-weighted image
-    if shared.do_freesurfer:
-        in_raw_t1w_paths = \
-                glob.glob(os.path.join(os.path.join(bids_dir,
-                                                    *session),
-                                       'anat',
-                                       session_label + '*_T1w.nii*'))
-        if not in_raw_t1w_paths:
-            raise MRtrixError('No raw T1-weighted image found for session "'
-                              + session_label
-                              + '"; this is required for FreeSurfer')
-        if len(in_raw_t1w_paths) > 1:
-            raise MRtrixError('Multiple raw T1-weighted images '
-                              'found for session "'
-                              + session_label
-                              + '"; cannot select appropriate '
-                              + 'input for FreeSurfer')
-        in_raw_t1w_path = in_raw_t1w_paths[0]
-    else:
-        in_raw_t1w_path = None
-
     subdirs_to_make = ['tractogram']
     if shared.parcellation != 'none':
         subdirs_to_make.insert(0, 'connectome')
 
-    existing_output_dirs = \
-        [item for item in subdirs_to_make
-         if os.path.exists(os.path.join(output_subdir, item))]
-    if existing_output_dirs:
-        app.warn('Output sub-directories already exist and will be '
-                 'erased upon completion of processing: '
-                 + str(existing_output_dirs))
-    existing_output_files = \
-        [item.path
-         for item in output_items.values()
-         if (os.path.exists(os.path.join(output_subdir, item.path))
-             and output_verbosity >= item.min_verbosity)]
-    if existing_output_files:
-        app.warn('Target output files already exist and will be '
-                 'over-written on script completion: '
-                 + str(existing_output_files))
-
-
-    # Import pre-processed data into scratch directory
     app.make_scratch_dir()
-    app.console('Importing pre-processed data into scratch directory')
 
-    run.command('mrconvert '
-                + in_dwi_path
-                + ' '
-                + path.to_scratch('dwi.mif')
-                + ' -fslgrad ' + in_bvec_path + ' ' + in_bval_path
-                + in_dwi_json_import_option
-                + ' -strides 0,0,0,1')
 
-    if in_dwi_mask_path:
+    def do_import(import_path):
+        in_dwi_path = os.path.join(import_path,
+                                   'dwi',
+                                   '*_dwi.nii*')
+        in_dwi_image_list = glob.glob(in_dwi_path)
+        if len(in_dwi_image_list) > 1:
+            raise MRtrixError('To run participant-level analysis, '
+                              + 'input directory should contain only one '
+                              + 'DWI image file; session "'
+                              + session_label
+                              + '" loaded from "'
+                              + import_path
+                              + '" contains '
+                              + str(len(in_dwi_image_list)))
+        in_dwi_path = in_dwi_image_list[0]
+        if not '_desc-preproc_' in in_dwi_path:
+            raise MRtrixError('Input DWI image "'
+                              + in_dwi_path
+                              + '" loaded from "'
+                              + import_path
+                              + '" not flagged as pre-processed data')
+        in_dwi_path_prefix = in_dwi_path.split(os.extsep)[0]
+        # Don't look for bvec / bval in a lower directory in this case
+        in_bvec_path = in_dwi_path_prefix + '.bvec'
+        in_bval_path = in_dwi_path_prefix + '.bval'
+        if not os.path.isfile(in_bvec_path) \
+            or not os.path.isfile(in_bval_path):
+            raise MRtrixError('Did not find bvec / bval pair '
+                              + 'corresponding to image '
+                              + in_dwi_path
+                              + ' (expected locations: "'
+                              + in_bvec_path
+                              + '" "'
+                              + in_bval_path
+                              + '")')
+        # JSON isn't compulsory in this case
+        in_dwi_json_path = in_dwi_path_prefix + 'json'
+        in_dwi_json_import_option = ' -json_import ' + in_dwi_json_path \
+                                    if os.path.isfile(in_dwi_json_path) \
+                                    else ''
+        # Is there a mask present?
+        in_dwi_mask_image_list = \
+            glob.glob(os.path.join(output_subdir,
+                                   'dwi',
+                                   '*_desc-brain*_mask.nii*'))
+        if len(in_dwi_mask_image_list) > 1:
+            raise MRtrixError('More than one DWI mask found for session "'
+                              + session_label
+                              + '"')
+        in_dwi_mask_path = in_dwi_mask_image_list[0] \
+                        if in_dwi_mask_image_list \
+                        else None
+        if not in_dwi_mask_path:
+            output_items['dwi_mask.mif'] = \
+                OutputItem(True, 1, False,
+                           '-strides +1,+2,+3 -datatype uint8',
+                           os.path.join('dwi',
+                                        session_label
+                                        + '_desc-brain_mask.nii.gz'))
+
+        app.console('Importing pre-processed data into scratch directory')
+
         run.command('mrconvert '
-                    + in_dwi_mask_path
+                    + in_dwi_path
                     + ' '
-                    + path.to_scratch('dwi_mask.mif')
-                    + ' -datatype bit')
+                    + path.to_scratch('dwi.mif')
+                    + ' -fslgrad ' + in_bvec_path + ' ' + in_bval_path
+                    + in_dwi_json_import_option
+                    + ' -strides 0,0,0,1')
 
-    get_t1w_preproc_images(bids_dir,
-                           session,
-                           shared.t1w_shared,
-                           output_dir,
-                           t1w_preproc_path)
-    T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif', False))
+        if in_dwi_mask_path:
+            run.command('mrconvert '
+                        + in_dwi_mask_path
+                        + ' '
+                        + path.to_scratch('dwi_mask.mif')
+                        + ' -datatype bit')
+
+        get_t1w_preproc_images(import_path,
+                               session,
+                               shared.t1w_shared,
+                               t1w_preproc_path)
+        T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
+                                                         False))
+        if shared.do_freesurfer and T1_is_premasked:
+            raise MRtrixError('Cannot execute FreeSurfer for obtaining '
+                              'parcellation: input T1-weighted image is '
+                              'already skull-stripped')
+    # End of do_import() function
+
+
+    # We first make an attempt at loading all requisite data from
+    #   "bids_dir" (since the user may have used that path to request
+    #   that the pre-processed data be utilised from some path other than
+    #   "mrtrix3_connectome/preproc/"); if that doesn't work, we wipe the
+    #   scratch directory and try again based on the latter
+    try:
+        do_import(bids_dir)
+    except MRtrixError as e_frombids:
+        for item in os.listdir(app.SCRATCH_DIR):
+            os.remove(os.path.join(app.SCRATCH_DIR, item))
+        try:
+            do_import(os.path.join(output_app_dir, 'preproc'))
+        except MRtrixError as e_fromoutput:
+            err = 'Unable to import requisite pre-processed data from ' \
+                  'either specified input directory or MRtrix3_connectome ' \
+                  'output directory\n\n'
+            err += 'Error when loading from "' + bids_dir + '":\n'
+            err += str(e_frombids) + '\n'
+            err += 'Error when loading from "' + output_app_dir + '":\n'
+            err += str(e_fromoutput) + '\n'
+            raise MRtrixError(err)
+
+
+    cwd = os.getcwd()
+    app.goto_scratch_dir()
+
+
+    # T1-weighted data are always written to output directory regardless;
+    #   output paths can only be constructed now
+    T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
+                                                     False))
     T1_image = 'T1_premasked.mif' if T1_is_premasked else 'T1.mif'
     output_items[T1_image] = \
         OutputItem(True, 1, False, ' -strides +1,+2,+3',
@@ -2078,27 +2088,13 @@ def run_participant(bids_dir, session, shared,
                    os.path.join(output_subdir,
                                 'anat',
                                 session_label + '_desc-preproc_T1w.json'))
-
-
-    if in_raw_t1w_path:
-        run.command('mrconvert '
-                    + in_raw_t1w_path
-                    + ' '
-                    + path.to_scratch('T1_raw.nii')
-                    + ' -strides +1,+2,+3')
-
-    cwd = os.getcwd()
-    app.goto_scratch_dir()
-
     T1_json_data = {"SkullStripped": T1_is_premasked}
-    with open(T1_json_path, 'w') as T1_json_file:
-        json.dump(T1_json_data, T1_json_file)
 
     # Before we can begin: Are there any data we require
     #   that were not imported from the output directory?
-    if not in_dwi_mask_path:
+    if not os.path.isfile('dwi_mask.mif'):
         app.console('Generating DWI brain mask '
-                    '(was not already present in derivatives directory)')
+                    '(was not already present in pre-processing directory)')
         run.command('dwi2mask dwi.mif dwi_mask.mif')
 
     # Step 1: Estimate response functions for spherical deconvolution
@@ -2687,7 +2683,7 @@ def run_participant(bids_dir, session, shared,
                       else shared.parc_lut_file
     if lut_export_file:
         lut_export_path = \
-            os.path.join(output_dir,
+            os.path.join(output_analysis_level_path,
                          parc_string[1:] + '_lookup'
                          + os.path.splitext(lut_export_file)[1])
         try:
@@ -2715,6 +2711,9 @@ def run_participant(bids_dir, session, shared,
                              scratch_file,
                              full_output_path)
 
+    with open(T1_json_path, 'w') as T1_json_file:
+        json.dump(T1_json_data, T1_json_file)
+
     # Manually wipe and zero the scratch directory
     #   (since we might be processing more than one subject)
     os.chdir(cwd)
@@ -2728,7 +2727,7 @@ def run_participant(bids_dir, session, shared,
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_subdir, 'scratch_participant'))
+                     os.path.join(output_subdir, 'scratch'))
     else:
         app.console('Contents of scratch directory kept; '
                     'location: ' + app.SCRATCH_DIR)
@@ -2758,7 +2757,10 @@ GROUP_RESPONSES_DIR = 'responses'
 GROUP_WMVOXELS_DIR = 'wmvoxels'
 GROUP_WARPS_DIR = 'warps'
 
-def run_group(bids_dir, output_verbosity, output_dir):
+def run_group(bids_dir, output_verbosity, output_app_dir):
+
+    participant_dir = os.path.join(output_app_dir, 'participant')
+    group_dir = os.path.join(output_app_dir, 'group')
 
     # Participant-level analysis no longer generates FA and mean b=0 images
     # These really should not be that expensive to compute in series,
@@ -2770,9 +2772,10 @@ def run_group(bids_dir, output_verbosity, output_dir):
     class SessionPaths(object):
         def __init__(self, session):
             session_label = '_'.join(session)
-            root = os.path.join(output_dir, *session)
+            participant_root = os.path.join(group_dir, *session)
+            group_root = os.path.join(group_dir, *session)
             # Get input DWI path here rather than in function
-            in_dwi_image_list = glob.glob(os.path.join(root,
+            in_dwi_image_list = glob.glob(os.path.join(participant_root,
                                                        'dwi',
                                                        '*_dwi.nii*'))
             if not in_dwi_image_list:
@@ -2800,17 +2803,16 @@ def run_group(bids_dir, output_verbosity, output_dir):
                                 + self.in_bval
                                 + ' -shell_bvalues').stdout.split()]
 
-            self.in_rf = os.path.join(root,
+            self.in_rf = os.path.join(participant_root,
                                       'dwi',
                                       session_label
                                       + '_tissue-WM_response.txt')
             connectome_files = \
                 glob.glob(
-                    os.path.join(root,
+                    os.path.join(participant_root,
                                  'connectome',
                                  session_label
                                  + '_desc-*'
-                                 + '_level-participant'
                                  + '_connectome.csv'))
             if not connectome_files:
                 raise MRtrixError('No participant-level connectome file '
@@ -2823,7 +2825,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
                                   + session_label
                                   + '"; this is not yet supported')
             self.in_connectome = connectome_files[0]
-            self.in_mu = os.path.join(root,
+            self.in_mu = os.path.join(participant_root,
                                       'tractogram',
                                       session_label + '_mu.txt')
 
@@ -2843,7 +2845,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
                            os.path.basename(self.in_connectome))[0]
 
             # Permissible for this to not exist
-            self.in_mask = os.path.join(root,
+            self.in_mask = os.path.join(participant_root,
                                         'dwi',
                                         session_label
                                         + '_desc-brain_mask.nii.gz')
@@ -2872,38 +2874,42 @@ def run_group(bids_dir, output_verbosity, output_dir):
             self.global_multiplier = 1.0
             self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
                                                 session_label + '.csv')
+            self.out_dir = group_root
             self.out_scale_intensity = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
                              session_label
                              + '_factor-intensity'
                              + '_multiplier.txt')
             self.out_scale_RF = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
                              session_label
                              + '_factor-response'
                              + '_multiplier.txt')
             self.out_scale_volume = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
                              session_label
                              + '_factor-volume'
                              + '_multiplier.txt')
             self.out_connectome = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
-                             os.path.basename(self.in_connectome)
-                             .replace('_level-participant',
-                                      '_level-group'))
+                             os.path.basename(self.in_connectome))
 
             self.session_label = session_label
 
-    session_list = get_sessions(output_dir)
+    session_list = get_sessions(participant_dir)
     if not session_list:
         raise MRtrixError(
             'No processed session data found in output directory '
-            'directory \'' + output_dir + '\' for group analysis')
+            'directory \'' + participant_dir + '\' for group analysis')
+    if os.path.exists(group_dir):
+        app.warn('Output directory for group-level analysis '
+                 'already exists; all contents will be erased when this '
+                 'execution completes')
+
 
     bids_session_list = get_sessions(bids_dir)
     not_processed = [session for session in bids_session_list \
@@ -2919,58 +2925,20 @@ def run_group(bids_dir, output_verbosity, output_dir):
     sessions = []
     for session in session_list:
         sessions.append(SessionPaths(session))
-    sessions_with_existing_files = 0
-    for session in sessions:
-        if any(os.path.isfile(item) for item in [
-                session.out_scale_intensity,
-                session.out_scale_RF,
-                session.out_scale_volume,
-                session.out_connectome]):
-            sessions_with_existing_files += 1
-    if sessions_with_existing_files:
-        # In container mode, over-write any files in place since
-        #   -force option is not present
-        if (not IS_CONTAINER) and (not app.FORCE_OVERWRITE):
-            raise MRtrixError(
-                str(sessions_with_existing_files)
-                + ' of '
-                + str(len(sessions))
-                + ' sessions have pre-existing files that would be '
-                + 'over-written (use -force to override)')
-        app.warn(str(sessions_with_existing_files)
-                 + ' of '
-                 + str(len(sessions))
-                 + ' sessions have pre-existing files that will be '
-                 + 'over-written on script completion')
-    out_wm_response_path = os.path.join(output_dir,
-                                        'tissue-WM_response.txt')
+
+
 
     # Connectome-based calculations can only be performed if the
     #   parcellation is consistent across all sessions
     parcellation = sessions[0].parcellation
     consistent_parcellation = \
         all(s.parcellation == parcellation for s in sessions)
-    out_connectome_path = os.path.join(output_dir,
+    out_connectome_path = os.path.join(group_dir,
                                        'desc-'
                                        + parcellation
                                        + '_connectome.csv') \
                           if consistent_parcellation \
                           else None
-
-    out_paths_to_check = [out_wm_response_path]
-    if consistent_parcellation:
-        out_paths_to_check.append(out_connectome_path)
-    for item in out_paths_to_check:
-        if os.path.isfile(item):
-            if (not IS_CONTAINER) and (not app.FORCE_OVERWRITE):
-                raise MRtrixError('Output path "'
-                                  + item
-                                  + '" already exists'
-                                  + ' (use -force to override)')
-            app.warn('Output path "'
-                     + item
-                     + '" already exists; will be overwritten on '
-                     + 'completion of group-level analysis')
 
     app.make_scratch_dir()
     app.goto_scratch_dir()
@@ -3180,7 +3148,11 @@ def run_group(bids_dir, output_verbosity, output_dir):
     #     both per-subject and group information
     progress = app.ProgressBar('Writing results to output directory',
                                len(sessions)+2)
+    if os.path.exists(group_dir):
+        run.function(shutil.rmtree, group_dir)
+    run.function(os.makedirs, group_dir)
     for s in sessions:
+        run.function(os.makedirs, s.out_dir)
         run.function(shutil.copyfile,
                      s.temp_connectome,
                      s.out_connectome)
@@ -3196,7 +3168,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
         progress.increment()
     app.cleanup(GROUP_CONNECTOMES_DIR)
 
-    matrix.save_matrix(out_wm_response_path,
+    matrix.save_matrix(os.path.join(group_dir, 'tissue-WM_response.txt'),
                        mean_RF,
                        force=IS_CONTAINER)
     progress.increment()
@@ -3214,7 +3186,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_dir, 'scratch_group'))
+                     os.path.join(group_dir, 'scratch'))
 
 # End of run_group() function
 
@@ -3906,10 +3878,28 @@ def execute(): #pylint: disable=unused-variable
     if app.ARGS.output_verbosity == 4:
         app.DO_CLEANUP = False
 
-    # TODO BIDS Derivatives outputs should have the name of the tool as the
-    #   root directory; if the user-specified location has this name,
-    #   use that as the root, but otherwise a directory with this name
-    #   needs to be constructed
+    # Locate root directory of BIDS App output based on user input
+    #   (i.e. location of directory "mrtrix3_connectome", which itself
+    #   contains sub-directories for each analysis level)
+    # Note: abspath() removes any trailing path separator
+    output_abspath = os.path.abspath(app.ARGS.output_dir)
+    output_basename = os.path.basename(output_abspath)
+    output_dirname = os.path.dirname(output_abspath)
+    # Basename of output path is the analysis level being requested
+    if output_basename.lower() == app.ARGS.analysis_level:
+        output_app_path = os.path.dirname(output_dirname)
+        if os.path.basename(os.path.dirname(output_app_path)) \
+                           .lower() != 'mrtrix3_connectome':
+            raise MRtrixError('Output directory structure malformed')
+    # Basename of output path is "mrtrix3_connectome"
+    elif output_basename.lower() == 'mrtrix3_connectome':
+        output_app_path = output_dirname
+    # Basename of output path is unknown
+    else:
+        output_app_path = os.path.join(output_abspath, 'mrtrix3_connectome')
+    if not os.path.isdir(output_app_path):
+        run.function(os.makedirs, output_app_path)
+
 
     if app.ARGS.analysis_level in ['preproc', 'participant']:
         sessions_to_analyze = get_sessions(
@@ -3932,7 +3922,7 @@ def execute(): #pylint: disable=unused-variable
                         preproc_shared,
                         t1w_preproc_path,
                         app.ARGS.output_verbosity,
-                        os.path.abspath(app.ARGS.output_dir))
+                        output_app_path)
 
     if app.ARGS.analysis_level == 'participant':
 
@@ -3950,7 +3940,7 @@ def execute(): #pylint: disable=unused-variable
                             participant_shared,
                             t1w_preproc_path,
                             app.ARGS.output_verbosity,
-                            os.path.abspath(app.ARGS.output_dir))
+                            output_app_path)
 
     elif app.ARGS.analysis_level == 'group':
 
@@ -3965,7 +3955,7 @@ def execute(): #pylint: disable=unused-variable
 
         run_group(os.path.abspath(app.ARGS.bids_dir),
                   app.ARGS.output_verbosity,
-                  os.path.abspath(app.ARGS.output_dir))
+                  output_app_path)
 
 
 
