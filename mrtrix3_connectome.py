@@ -1806,6 +1806,7 @@ def run_participant(bids_dir, session, shared,
                  'already exists; all contents will be erased when this '
                  'execution completes')
 
+
     # Check paths of individual output files before script completion
     #   by building a database of what files are to be written to output
     parc_string = '_desc-' + shared.parcellation
@@ -1946,32 +1947,27 @@ def run_participant(bids_dir, session, shared,
                                     session_label
                                     + '_space-superres_tdi.nii.gz'))
 
+
     def do_import(import_path):
-        in_dwi_path = os.path.join(import_path,
+        in_dwi_path = os.path.join(os.path.join(import_path, *session),
                                    'dwi',
                                    '*_dwi.nii*')
         in_dwi_image_list = glob.glob(in_dwi_path)
         if not in_dwi_image_list:
             raise MRtrixError('No DWIs found for session "'
                               + session_label
-                              + '" loaded from "'
-                              + import_path
                               + '"')
         if len(in_dwi_image_list) > 1:
             raise MRtrixError('To run participant-level analysis, '
                               + 'input directory should contain only one '
                               + 'DWI image file; session "'
                               + session_label
-                              + '" loaded from "'
-                              + import_path
                               + '" contains '
                               + str(len(in_dwi_image_list)))
         in_dwi_path = in_dwi_image_list[0]
         if not '_desc-preproc_' in in_dwi_path:
             raise MRtrixError('Input DWI image "'
                               + in_dwi_path
-                              + '" loaded from "'
-                              + import_path
                               + '" not flagged as pre-processed data')
         in_dwi_path_prefix = in_dwi_path.split(os.extsep)[0]
         # Don't look for bvec / bval in a lower directory in this case
@@ -2058,11 +2054,11 @@ def run_participant(bids_dir, session, shared,
         except MRtrixError as e_fromoutput:
             err = 'Unable to import requisite pre-processed data from ' \
                   'either specified input directory or MRtrix3_connectome ' \
-                  'output directory\n\n'
-            err += 'Error when loading from "' + bids_dir + '":\n'
+                  'output directory\n'
+            err += 'Error when attempting load from "' + bids_dir + '":\n'
             err += str(e_frombids) + '\n'
-            err += 'Error when loading from "' + output_app_dir + '":\n'
-            err += str(e_fromoutput) + '\n'
+            err += 'Error when attempting load from "' + output_app_dir + '":\n'
+            err += str(e_fromoutput)
             raise MRtrixError(err)
 
 
