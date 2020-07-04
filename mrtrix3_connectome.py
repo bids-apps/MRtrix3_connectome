@@ -2753,6 +2753,7 @@ GROUP_WARPS_DIR = 'warps'
 
 def run_group(bids_dir, output_verbosity, output_app_dir):
 
+    preproc_dir = os.path.join(output_app_dir, 'preproc')
     participant_dir = os.path.join(output_app_dir, 'participant')
     group_dir = os.path.join(output_app_dir, 'group')
 
@@ -2766,10 +2767,11 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     class SessionPaths(object):
         def __init__(self, session):
             session_label = '_'.join(session)
-            participant_root = os.path.join(group_dir, *session)
+            preproc_root = os.path.join(preproc_dir, *session)
+            participant_root = os.path.join(participant_dir, *session)
             group_root = os.path.join(group_dir, *session)
             # Get input DWI path here rather than in function
-            in_dwi_image_list = glob.glob(os.path.join(participant_root,
+            in_dwi_image_list = glob.glob(os.path.join(preproc_root,
                                                        'dwi',
                                                        '*_dwi.nii*'))
             if not in_dwi_image_list:
@@ -2838,11 +2840,16 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                 re.findall('(?<=_desc-)[a-zA-Z0-9]*',
                            os.path.basename(self.in_connectome))[0]
 
-            # Permissible for this to not exist
-            self.in_mask = os.path.join(participant_root,
+            # Permissible for this to not exist at either location
+            self.in_mask = os.path.join(preproc_root,
                                         'dwi',
                                         session_label
                                         + '_desc-brain_mask.nii.gz')
+            if not os.path.isfile(self.in_mask):
+                self.in_mask = os.path.join(preproc_root,
+                                            'dwi',
+                                            session_label
+                                            + '_desc-brain_mask.nii.gz')
 
             self.mu = matrix.load_vector(self.in_mu)[0]
             self.RF = matrix.load_matrix(self.in_rf)
