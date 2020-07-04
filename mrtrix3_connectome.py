@@ -2905,6 +2905,9 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         raise MRtrixError(
             'No processed session data found in output directory '
             'directory \'' + participant_dir + '\' for group analysis')
+    if len(session_list) == 1:
+        app.warn('Only one session present in participant directory; '
+                 'some group-level analysis steps will be skipped')
     if os.path.exists(group_dir):
         app.warn('Output directory for group-level analysis '
                  'already exists; all contents will be erased when this '
@@ -2947,7 +2950,7 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     #   - the number of shells is equivalent across sessions
     #   - the b-values don't vary too much within those shells across sessions
     if not all(len(session.bvalues) == len(sessions[0].bvalues)
-               for session in sessions[1:]):
+               for session in sessions):
         raise MRtrixError('Not all sessions DWI data contain the same '
                           'number of b-value shells')
     all_bvalues = [[session.bvalues[index] for session in sessions]
@@ -3018,29 +3021,43 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
 
     # First group-level calculation:
     # Generate the population FA template
-    app.console('Generating population template for '
-                'intensity normalisation WM mask derivation')
-    run.command('population_template '
-                + GROUP_FA_DIR
-                + ' template.mif'
-                + ' -mask_dir '
-                + GROUP_BRAINMASKS_DIR
-                + ' -warp_dir '
-                + GROUP_WARPS_DIR
-                + ' -type rigid_affine_nonlinear'
-                + ' -rigid_scale 0.25,0.5,0.8,1.0'
-                + ' -affine_scale 0.7,0.8,1.0,1.0'
-                + ' -nl_scale 0.5,0.75,1.0,1.0,1.0'
-                + ' -nl_niter 5,5,5,5,5'
-                + ' -linear_no_pause')
+    if len(session_list) == 1:
+        app.console('Duplicating single-subject FA image as '
+                    'population template image')
+        run.function(shutil.copyfile,
+                     session_list[0].temp_fa,
+                     'template.mif')
+    else:
+        app.console('Generating population template for '
+                    'intensity normalisation WM mask derivation')
+        run.command('population_template '
+                    + GROUP_FA_DIR
+                    + ' template.mif'
+                    + ' -mask_dir '
+                    + GROUP_BRAINMASKS_DIR
+                    + ' -warp_dir '
+                    + GROUP_WARPS_DIR
+                    + ' -type rigid_affine_nonlinear'
+                    + ' -rigid_scale 0.25,0.5,0.8,1.0'
+                    + ' -affine_scale 0.7,0.8,1.0,1.0'
+                    + ' -nl_scale 0.5,0.75,1.0,1.0,1.0'
+                    + ' -nl_niter 5,5,5,5,5'
+                    + ' -linear_no_pause')
     app.cleanup(GROUP_FA_DIR)
     app.cleanup(GROUP_BRAINMASKS_DIR)
 
     # Generate the group average response function
-    app.console('Calculating group-average WM response function')
-    run.command(['responsemean',
-                 [s.temp_rf for s in sessions],
-                 'response.txt'])
+    if len(session_list) == 1:
+        app.console('Duplicating single-subject WM response function as '
+                    'group-average response function')
+        run.function(shutil.copyfile,
+                     session_list[0].temp_temp_rf,
+                     'response.txt')
+    else:
+        app.console('Calculating group-average WM response function')
+        run.command(['responsemean',
+                     [s.temp_rf for s in sessions],
+                     'response.txt'])
     app.cleanup(GROUP_RESPONSES_DIR)
     mean_RF = matrix.load_matrix('response.txt')
     mean_RF_lzero = [line[0] for line in mean_RF]
@@ -3087,6 +3104,7 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     #   - Multiply by (mean median b=0) / (subject median b=0)
     #   - Multiply by (subject RF size) / (mean RF size)
     #     (needs to account for multi-shell data)
+    #   - Multiply by voxel volume
     # - Write the result to file
     progress = app.ProgressBar('Applying normalisation scaling to '
                                'subject connectomes',
