@@ -35,14 +35,14 @@ jobs:
       - restore_cache:
           key: image_cache-{{ .Revision }}
       - run:
+          name: Download test data
+          command: wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/u3uvf857jf4iqq1/MRtrix3_connectome_data_ver2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/MRtrix3_connectome_data_ver2.tar -C ${HOME}/data
+      - run:
           name: Load Docker image
           command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
           command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
-      - run:
-          name: Download test data
-          command: wget -c -P ${HOME}/downloads/ "https://www.dropbox.com/s/u3uvf857jf4iqq1/MRtrix3_connectome_data_ver2.tar" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/MRtrix3_connectome_data_ver2.tar -C ${HOME}/data
       - run:
           name: Make output directory
           command: mkdir -p ${HOME}/outputs
@@ -60,7 +60,7 @@ jobs:
           no_output_timeout: 6h
       
       - store_artifacts:
-          path: "~/output"
+          path: "~/outputs"
 
  
   deploy:
