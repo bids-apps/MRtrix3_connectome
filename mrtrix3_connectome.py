@@ -49,7 +49,7 @@ class T1wShared(object): #pylint: disable=useless-object-inheritance
 
 
 
-class Participant1Shared(object): #pylint: disable=useless-object-inheritance
+class PreprocShared(object): #pylint: disable=useless-object-inheritance
     def __init__(self):
         fsl_path = os.environ.get('FSLDIR', '')
         if not fsl_path:
@@ -104,7 +104,7 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
                 self.eddy_mporder = True
             elif line.startswith('--estimate_move_by_susceptibility'):
                 self.eddy_mbs = True
-# End of Participant1Shared() class
+# End of PreprocShared() class
 
 
 
@@ -112,13 +112,13 @@ class Participant1Shared(object): #pylint: disable=useless-object-inheritance
 
 
 
-class Participant2Shared(object): #pylint: disable=useless-object-inheritance
+class ParticipantShared(object): #pylint: disable=useless-object-inheritance
     def __init__(self, atlas_path, parcellation,
                  streamlines, template_reg):
 
         if not parcellation:
             raise MRtrixError(
-                'For participant2-level analysis, '
+                'For participant-level analysis, '
                 'desired parcellation must be provided using the '
                 + OPTION_PREFIX + 'parcellation option')
         self.parcellation = parcellation
@@ -548,7 +548,7 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
             raise MRtrixError(
                 'Could not find MRtrix3 connectome lookup table file '
                 '(expected location: ' + self.mrtrix_lut_file + ')')
-# End of Participant2Shared() class
+# End of ParticipantShared() class
 
 
 
@@ -560,7 +560,7 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
 
 
 # Regardless of the source of T1-weighted image information,
-#   scratch directory will contain:
+#   scratch directory will contain at completion of this function:
 # - Either:
 #   - T1.mif
 #     or
@@ -571,19 +571,16 @@ class Participant2Shared(object): #pylint: disable=useless-object-inheritance
 #
 # TODO Think after all that this does need to export a greater
 #   amount of information with respect to what was done & how it was derived
-# E.g. For FreeSurfer, would prefer not to use the raw T1w image unless
-#   really necessary, as there's a chance of some spatial transformation
-#   having happened
-def get_t1w_preproc_images(bids_dir,
+def get_t1w_preproc_images(import_path,
                            session,
                            t1w_shared,
-                           output_dir,
                            t1w_preproc):
 
     session_label = '_'.join(session)
     preproc_image_path = None
     preproc_image_is_masked = None
     preproc_mask_path = None
+    raw_image_path = None
 
     if t1w_preproc:
 
@@ -628,20 +625,23 @@ def get_t1w_preproc_images(bids_dir,
                 raise MRtrixError('No pre-processed T1w image found from '
                                   'specified path "' + t1w_preproc + '"')
 
-    elif output_dir is not None:
+    else:
 
-        # Look inside of output_dir to see if there is a pre-processed
+        # Look inside of import_path to see if there is a pre-processed
         #   T1w image already there
-        glob_result = glob.glob(os.path.join(os.path.join(output_dir,
+        glob_result = glob.glob(os.path.join(os.path.join(import_path,
                                                           *session),
                                              'anat',
-                                             session_label + '*_T1w.nii*'))
+                                             session_label
+                                             + '*_desc-preproc*_T1w.nii*'))
         if glob_result:
             if len(glob_result) == 1:
                 preproc_image_path = glob_result[0]
             else:
-                raise MRtrixError('Multiple T1w images found in '
-                                  + 'output directory: '
+                raise MRtrixError('Multiple pre-processed T1w images found in '
+                                  + 'import directory "'
+                                  + import_path
+                                  + '": '
                                   + ';'.join(glob_result))
 
     # Same checks regardless of whether the existing pre-processed image
@@ -731,9 +731,30 @@ def get_t1w_preproc_images(bids_dir,
                         + '"; will generate one manually')
             preproc_mask_path = None
 
+    else:
 
+        # Check input path for raw un-processed T1w image
+        glob_result = glob.glob(os.path.join(os.path.join(import_path,
+                                                          *session),
+                                             'anat',
+                                             session_label + '*_T1w.nii*'))
+        if not glob_result:
+            raise MRtrixError('No raw or pre-processed T1-weighted images '
+                              + 'could be found in input directory "'
+                              + import_path
+                              + '" for session '
+                              + session_label)
+        if len(glob_result) > 1:
+            raise MRtrixError('Multiple raw T1w images found in '
+                              + 'input directory "'
+                              + import_path
+                              + '" for session '
+                              + session_label
+                              + ': '
+                              + ';'.join(glob_result))
+        raw_image_path = glob_result[0]
 
-    # Do we need to do any pre-processing of our own?
+    # Do we need to do any pre-processing of our own at all?
     if preproc_mask_path is None:
 
         app.console('Performing requisite processing of '
@@ -790,9 +811,7 @@ def get_t1w_preproc_images(bids_dir,
         else:
 
             # No pre-processed T1-weighted image available:
-            #   do everything using the raw T1-weighted image in
-            #   the input BIDS directory
-
+            #   do everything based on the raw T1-weighted image
             if t1w_shared.robex_cmd and t1w_shared.N4_cmd:
                 app.console('No pre-processed T1-weighted image '
                             + 'found for session '
@@ -821,22 +840,8 @@ def get_t1w_preproc_images(bids_dir,
                                   + 'processing raw T1-weighted image '
                                   + 'not installed')
 
-            t1w_image_list = glob.glob(os.path.join(os.path.join(bids_dir,
-                                                                 *session),
-                                                    'anat',
-                                                    '*_T1w.nii*'))
-            if len(t1w_image_list) > 1:
-                raise MRtrixError('More than one T1-weighted image found '
-                                  'for session "' + session_label + '"; '
-                                  'script not yet compatible with this')
-            if not t1w_image_list:
-                raise MRtrixError('Cannot complete processing for session '
-                                  + session_label
-                                  + ': no T1-weighted image data available '
-                                  + '(either raw or pre-processed)')
-
             run.command('mrconvert '
-                        + t1w_image_list[0]
+                        + raw_image_path
                         + ' T1.nii -strides '
                         + ('+1,+2,+3'
                            if t1w_shared.robex_cmd and t1w_shared.N4_cmd
@@ -848,7 +853,7 @@ def get_t1w_preproc_images(bids_dir,
                 #   Get an initial brain mask, use that mask to estimate a
                 #   bias field, then re-compute the brain mask
                 # TODO Consider making this fully iterative, just like the
-                #   approach in participant1 with dwi2mask and mtnormalise
+                #   approach in preproc with dwi2mask and mtnormalise
                 run.command(t1w_shared.robex_cmd
                             + ' T1.nii T1_initial_brain.nii'
                             + ' T1_initial_mask.nii')
@@ -913,11 +918,11 @@ def get_t1w_preproc_images(bids_dir,
 
 
 
-def run_participant1(bids_dir, session, shared,
-                     t1w_preproc_path, output_verbosity, output_dir):
+def run_preproc(bids_dir, session, shared,
+                t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_subdir = os.path.join(output_dir, *session)
+    output_subdir = os.path.join(output_app_dir, 'preproc', *session)
     if os.path.exists(output_subdir):
         app.warn('Output directory for session "' + session_label + '" '
                  'already exists; all contents will be erased when this '
@@ -1157,11 +1162,10 @@ def run_participant1(bids_dir, session, shared,
     # Get T1-weighted image data
     #   (could be generated from raw data, or grabbed from a
     #   user-specified path source;
-    #   don't look in output directory for participant1)
+    #   don't look in output directory for preproc)
     get_t1w_preproc_images(bids_dir,
                            session,
                            shared.t1w_shared,
-                           None,
                            t1w_preproc_path)
     T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
                                                      False))
@@ -1799,13 +1803,13 @@ def run_participant1(bids_dir, session, shared,
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_subdir, 'scratch_participant1'))
+                     os.path.join(output_subdir, 'scratch'))
     else:
         app.console('Contents of scratch directory kept; '
                     'location: ' + app.SCRATCH_DIR)
     app.SCRATCH_DIR = ''
 
-# End of run_paticipant1() function
+# End of run_preproc() function
 
 
 
@@ -1826,19 +1830,18 @@ def run_participant1(bids_dir, session, shared,
 
 
 
-def run_participant2(bids_dir, session, shared,
-                     t1w_preproc_path, output_verbosity, output_dir):
+def run_participant(bids_dir, session, shared,
+                    t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_subdir = os.path.join(output_dir, *session)
-    if not os.path.exists(output_subdir):
-        raise MRtrixError('No output directory found for session "'
-                          + session_label + '"')
-    if os.path.exists(os.path.join(output_subdir, 'fmap')):
-        raise MRtrixError('Output directory for session "'
-                          + session_label
-                          + '" contains an fmap/ directory;'
-                          + ' should not exist if data are preprocessed')
+    output_analysis_level_path = os.path.join(output_app_dir, 'participant')
+    output_subdir = os.path.join(output_analysis_level_path, *session)
+
+    if os.path.exists(output_subdir):
+        app.warn('Output directory for session "' + session_label + '" '
+                 'already exists; all contents will be erased when this '
+                 'execution completes')
+
 
     # Check paths of individual output files before script completion
     #   by building a database of what files are to be written to output
@@ -1913,7 +1916,7 @@ def run_participant2(bids_dir, session, shared,
                        os.path.join('connectome',
                                     session_label
                                     + parc_string
-                                    + '_level-participant_connectome.csv'))
+                                    + '_connectome.csv'))
         output_items['mu.txt'] = \
             OutputItem(False, 1, False, None,
                        os.path.join('tractogram',
@@ -1980,161 +1983,150 @@ def run_participant2(bids_dir, session, shared,
                                     session_label
                                     + '_space-superres_tdi.nii.gz'))
 
-    in_dwi_path = os.path.join(output_subdir,
-                               'dwi',
-                               '*_dwi.nii*')
-    in_dwi_image_list = glob.glob(in_dwi_path)
-    if len(in_dwi_image_list) > 1:
-        raise MRtrixError('To run participant1-level analysis, '
-                          + 'output directory should contain only one '
-                          + 'DWI image file; session "'
-                          + session_label
-                          + '" contains '
-                          + str(len(in_dwi_image_list)))
-    in_dwi_path = in_dwi_image_list[0]
-    if not '_desc-preproc_' in in_dwi_path:
-        raise MRtrixError('Input DWI image '
-                          + in_dwi_path
-                          + ' not flagged as pre-processed data')
-    in_dwi_path_prefix = in_dwi_path.split(os.extsep)[0]
-    # Don't look for bvec / bval in a lower directory in this case
-    in_bvec_path = in_dwi_path_prefix + '.bvec'
-    in_bval_path = in_dwi_path_prefix + '.bval'
-    if not os.path.isfile(in_bvec_path) \
-        or not os.path.isfile(in_bval_path):
-        raise MRtrixError('Did not find bvec / bval pair '
-                          + 'corresponding to image '
-                          + in_dwi_path
-                          + ' (expected locations: "'
-                          + in_bvec_path
-                          + '" "'
-                          + in_bval_path
-                          + '")')
-    # JSON isn't compulsory in this case
-    in_dwi_json_path = in_dwi_path_prefix + 'json'
-    in_dwi_json_import_option = ' -json_import ' + in_dwi_json_path \
-                                if os.path.isfile(in_dwi_json_path) \
-                                else ''
-    # Is there a mask present?
-    in_dwi_mask_image_list = \
-        glob.glob(os.path.join(output_subdir,
-                               'dwi',
-                               '*_desc-brain*_mask.nii*'))
-    if len(in_dwi_mask_image_list) > 1:
-        raise MRtrixError('More than one DWI mask found for session "'
-                          + session_label
-                          + '"')
-    in_dwi_mask_path = in_dwi_mask_image_list[0] \
-                       if in_dwi_mask_image_list \
-                       else None
-    if not in_dwi_mask_path:
-        output_items['dwi_mask.mif'] = \
-            OutputItem(True, 1, False,
-                       '-strides +1,+2,+3 -datatype uint8',
-                       os.path.join('dwi',
-                                    session_label
-                                    + '_desc-brain_mask.nii.gz'))
-    # For running FreeSurfer, want to use the raw T1-weighted image
-    if shared.do_freesurfer:
-        in_raw_t1w_paths = \
-                glob.glob(os.path.join(os.path.join(bids_dir,
-                                                    *session),
-                                       'anat',
-                                       session_label + '*_T1w.nii*'))
-        if not in_raw_t1w_paths:
-            raise MRtrixError('No raw T1-weighted image found for session "'
+
+    def do_import(import_path):
+        in_dwi_path = os.path.join(os.path.join(import_path, *session),
+                                   'dwi',
+                                   '*_dwi.nii*')
+        in_dwi_image_list = glob.glob(in_dwi_path)
+        if not in_dwi_image_list:
+            raise MRtrixError('No DWIs found for session "'
                               + session_label
-                              + '"; this is required for FreeSurfer')
-        if len(in_raw_t1w_paths) > 1:
-            raise MRtrixError('Multiple raw T1-weighted images '
-                              'found for session "'
+                              + '"')
+        if len(in_dwi_image_list) > 1:
+            raise MRtrixError('To run participant-level analysis, '
+                              + 'input directory should contain only one '
+                              + 'DWI image file; session "'
                               + session_label
-                              + '"; cannot select appropriate '
-                              + 'input for FreeSurfer')
-        in_raw_t1w_path = in_raw_t1w_paths[0]
-    else:
-        in_raw_t1w_path = None
+                              + '" contains '
+                              + str(len(in_dwi_image_list)))
+        in_dwi_path = in_dwi_image_list[0]
+        if not '_desc-preproc_' in in_dwi_path:
+            raise MRtrixError('Input DWI image "'
+                              + in_dwi_path
+                              + '" not flagged as pre-processed data')
+        in_dwi_path_prefix = in_dwi_path.split(os.extsep)[0]
+        # Don't look for bvec / bval in a lower directory in this case
+        in_bvec_path = in_dwi_path_prefix + '.bvec'
+        in_bval_path = in_dwi_path_prefix + '.bval'
+        if not os.path.isfile(in_bvec_path) \
+            or not os.path.isfile(in_bval_path):
+            raise MRtrixError('Did not find bvec / bval pair '
+                              + 'corresponding to image '
+                              + in_dwi_path
+                              + ' (expected locations: "'
+                              + in_bvec_path
+                              + '" "'
+                              + in_bval_path
+                              + '")')
+        # JSON isn't compulsory in this case
+        in_dwi_json_path = in_dwi_path_prefix + 'json'
+        in_dwi_json_import_option = ' -json_import ' + in_dwi_json_path \
+                                    if os.path.isfile(in_dwi_json_path) \
+                                    else ''
+        # Is there a mask present?
+        in_dwi_mask_image_list = \
+            glob.glob(os.path.join(output_subdir,
+                                   'dwi',
+                                   '*_desc-brain*_mask.nii*'))
+        if len(in_dwi_mask_image_list) > 1:
+            raise MRtrixError('More than one DWI mask found for session "'
+                              + session_label
+                              + '"')
+        in_dwi_mask_path = in_dwi_mask_image_list[0] \
+                        if in_dwi_mask_image_list \
+                        else None
+        if not in_dwi_mask_path:
+            output_items['dwi_mask.mif'] = \
+                OutputItem(True, 1, False,
+                           '-strides +1,+2,+3 -datatype uint8',
+                           os.path.join('dwi',
+                                        session_label
+                                        + '_desc-brain_mask.nii.gz'))
 
-    subdirs_to_make = ['tractogram']
-    if shared.parcellation != 'none':
-        subdirs_to_make.insert(0, 'connectome')
+        app.console('Importing pre-processed data into scratch directory')
 
-    existing_output_dirs = \
-        [item for item in subdirs_to_make
-         if os.path.exists(os.path.join(output_subdir, item))]
-    if existing_output_dirs:
-        app.warn('Output sub-directories already exist and will be '
-                 'erased upon completion of processing: '
-                 + str(existing_output_dirs))
-    existing_output_files = \
-        [item.path
-         for item in output_items.values()
-         if (os.path.exists(os.path.join(output_subdir, item.path))
-             and output_verbosity >= item.min_verbosity)]
-    if existing_output_files:
-        app.warn('Target output files already exist and will be '
-                 'over-written on script completion: '
-                 + str(existing_output_files))
-
-
-    # Import pre-processed data into scratch directory
-    app.make_scratch_dir()
-    app.console('Importing pre-processed data into scratch directory')
-
-    run.command('mrconvert '
-                + in_dwi_path
-                + ' '
-                + path.to_scratch('dwi.mif')
-                + ' -fslgrad ' + in_bvec_path + ' ' + in_bval_path
-                + in_dwi_json_import_option
-                + ' -strides 0,0,0,1')
-
-    if in_dwi_mask_path:
         run.command('mrconvert '
-                    + in_dwi_mask_path
+                    + in_dwi_path
                     + ' '
-                    + path.to_scratch('dwi_mask.mif')
-                    + ' -datatype bit')
+                    + path.to_scratch('dwi.mif')
+                    + ' -fslgrad ' + in_bvec_path + ' ' + in_bval_path
+                    + in_dwi_json_import_option
+                    + ' -strides 0,0,0,1')
 
-    get_t1w_preproc_images(bids_dir,
-                           session,
-                           shared.t1w_shared,
-                           output_dir,
-                           t1w_preproc_path)
-    T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif', False))
+        if in_dwi_mask_path:
+            run.command('mrconvert '
+                        + in_dwi_mask_path
+                        + ' '
+                        + path.to_scratch('dwi_mask.mif')
+                        + ' -datatype bit')
+
+        get_t1w_preproc_images(import_path,
+                               session,
+                               shared.t1w_shared,
+                               t1w_preproc_path)
+        T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
+                                                         False))
+        if shared.do_freesurfer and T1_is_premasked:
+            raise MRtrixError('Cannot execute FreeSurfer for obtaining '
+                              'parcellation: input T1-weighted image is '
+                              'already skull-stripped')
+    # End of do_import() function
+
+
+    # We first make an attempt at loading all requisite data from
+    #   "bids_dir" (since the user may have used that path to request
+    #   that the pre-processed data be utilised from some path other than
+    #   "mrtrix3_connectome/preproc/"); if that doesn't work, we wipe the
+    #   scratch directory and try again based on the latter
+    app.make_scratch_dir()
+    try:
+        do_import(bids_dir)
+    except MRtrixError as e_frombids:
+        for item in os.listdir(app.SCRATCH_DIR):
+            os.remove(os.path.join(app.SCRATCH_DIR, item))
+        try:
+            do_import(os.path.join(output_app_dir, 'preproc'))
+        except MRtrixError as e_fromoutput:
+            err = 'Unable to import requisite pre-processed data from ' \
+                  'either specified input directory or MRtrix3_connectome ' \
+                  'output directory\n'
+            err += 'Error when attempting load from "' + bids_dir + '":\n'
+            err += str(e_frombids) + '\n'
+            err += 'Error when attempting load from "' + output_app_dir + '":\n'
+            err += str(e_fromoutput)
+            raise MRtrixError(err)
+
+
+    cwd = os.getcwd()
+    app.goto_scratch_dir()
+
+
+    # T1-weighted data are always written to output directory regardless;
+    #   output paths can only be constructed now
+    T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
+                                                     False))
     T1_image = 'T1_premasked.mif' if T1_is_premasked else 'T1.mif'
     output_items[T1_image] = \
         OutputItem(True, 1, False, ' -strides +1,+2,+3',
                    os.path.join(output_subdir,
                                 'anat',
                                 session_label + '_desc-preproc_T1w.nii.gz'))
+    T1_json_data = {"SkullStripped": T1_is_premasked}
     T1_json_path = os.path.splitext(T1_image)[0] + '.json'
+    with open(T1_json_path, 'w') as T1_json_file:
+        json.dump(T1_json_data, T1_json_file)
     output_items[T1_json_path] = \
         OutputItem(False, 1, False, None,
                    os.path.join(output_subdir,
                                 'anat',
                                 session_label + '_desc-preproc_T1w.json'))
 
-
-    if in_raw_t1w_path:
-        run.command('mrconvert '
-                    + in_raw_t1w_path
-                    + ' '
-                    + path.to_scratch('T1_raw.nii')
-                    + ' -strides +1,+2,+3')
-
-    cwd = os.getcwd()
-    app.goto_scratch_dir()
-
-    T1_json_data = {"SkullStripped": T1_is_premasked}
-    with open(T1_json_path, 'w') as T1_json_file:
-        json.dump(T1_json_data, T1_json_file)
-
     # Before we can begin: Are there any data we require
     #   that were not imported from the output directory?
-    if not in_dwi_mask_path:
+    if not os.path.isfile('dwi_mask.mif'):
         app.console('Generating DWI brain mask '
-                    '(was not already present in derivatives directory)')
+                    '(was not already present in pre-processing directory)')
         run.command('dwi2mask dwi.mif dwi_mask.mif')
 
     # Step 1: Estimate response functions for spherical deconvolution
@@ -2160,10 +2152,10 @@ def run_participant2(bids_dir, session, shared,
     #     bad masking
 
     app.console('Estimating '
-                + (' multi-tissue ODF images'
+                + ('multi-tissue ODF images'
                    if multishell
                    else 'Fibre Orientation Distribution image'))
-    # TODO Update to use similar code to participant1?
+    # TODO Update to use similar code to preproc?
     # Would have consequences for group-level analysis...
     if multishell:
         run.command('dwi2fod msmt_csd dwi.mif '
@@ -2704,13 +2696,14 @@ def run_participant2(bids_dir, session, shared,
     # Prepare output path for writing
     app.console('Processing for session "' + session_label
                 + '" completed; writing results to output directory')
+    subdirs_to_make = ['anat', 'dwi', 'tractogram']
+    if shared.parcellation != 'none':
+        subdirs_to_make.insert(1, 'connectome')
     for subdir in subdirs_to_make:
         full_subdir_path = os.path.join(output_subdir, subdir)
         if os.path.exists(full_subdir_path):
             run.function(shutil.rmtree, full_subdir_path)
         run.function(os.makedirs, full_subdir_path)
-    if not os.path.isdir(os.path.join(output_subdir, 'anat')):
-        run.function(os.makedirs, os.path.join(output_subdir, 'anat'))
 
     # Generate a copy of the lookup table file:
     #   - Use the post-labelconvert file if it's used;
@@ -2723,7 +2716,7 @@ def run_participant2(bids_dir, session, shared,
                       else shared.parc_lut_file
     if lut_export_file:
         lut_export_path = \
-            os.path.join(output_dir,
+            os.path.join(output_analysis_level_path,
                          parc_string[1:] + '_lookup'
                          + os.path.splitext(lut_export_file)[1])
         try:
@@ -2764,13 +2757,13 @@ def run_participant2(bids_dir, session, shared,
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_subdir, 'scratch_participant2'))
+                     os.path.join(output_subdir, 'scratch'))
     else:
         app.console('Contents of scratch directory kept; '
                     'location: ' + app.SCRATCH_DIR)
     app.SCRATCH_DIR = ''
 
-# End of run_participant2() function
+# End of run_participant() function
 
 
 
@@ -2794,7 +2787,11 @@ GROUP_RESPONSES_DIR = 'responses'
 GROUP_WMVOXELS_DIR = 'wmvoxels'
 GROUP_WARPS_DIR = 'warps'
 
-def run_group(bids_dir, output_verbosity, output_dir):
+def run_group(bids_dir, output_verbosity, output_app_dir):
+
+    preproc_dir = os.path.join(output_app_dir, 'preproc')
+    participant_dir = os.path.join(output_app_dir, 'participant')
+    group_dir = os.path.join(output_app_dir, 'group')
 
     # Participant-level analysis no longer generates FA and mean b=0 images
     # These really should not be that expensive to compute in series,
@@ -2806,9 +2803,11 @@ def run_group(bids_dir, output_verbosity, output_dir):
     class SessionPaths(object):
         def __init__(self, session):
             session_label = '_'.join(session)
-            root = os.path.join(output_dir, *session)
+            preproc_root = os.path.join(preproc_dir, *session)
+            participant_root = os.path.join(participant_dir, *session)
+            group_root = os.path.join(group_dir, *session)
             # Get input DWI path here rather than in function
-            in_dwi_image_list = glob.glob(os.path.join(root,
+            in_dwi_image_list = glob.glob(os.path.join(preproc_root,
                                                        'dwi',
                                                        '*_dwi.nii*'))
             if not in_dwi_image_list:
@@ -2827,26 +2826,16 @@ def run_group(bids_dir, output_verbosity, output_dir):
             in_dwi_prefix = self.in_dwi.split(os.extsep)[0]
             self.in_bvec = in_dwi_prefix + '.bvec'
             self.in_bval = in_dwi_prefix + '.bval'
-            self.bvalues = [float(value) for value in \
-                    run.command('mrinfo '
-                                + self.in_dwi
-                                + ' -fslgrad '
-                                + self.in_bvec
-                                + ' '
-                                + self.in_bval
-                                + ' -shell_bvalues').stdout.split()]
-
-            self.in_rf = os.path.join(root,
+            self.in_rf = os.path.join(participant_root,
                                       'dwi',
                                       session_label
                                       + '_tissue-WM_response.txt')
             connectome_files = \
                 glob.glob(
-                    os.path.join(root,
+                    os.path.join(participant_root,
                                  'connectome',
                                  session_label
                                  + '_desc-*'
-                                 + '_level-participant'
                                  + '_connectome.csv'))
             if not connectome_files:
                 raise MRtrixError('No participant-level connectome file '
@@ -2859,7 +2848,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
                                   + session_label
                                   + '"; this is not yet supported')
             self.in_connectome = connectome_files[0]
-            self.in_mu = os.path.join(root,
+            self.in_mu = os.path.join(participant_root,
                                       'tractogram',
                                       session_label + '_mu.txt')
 
@@ -2874,15 +2863,26 @@ def run_group(bids_dir, output_verbosity, output_dir):
                                       + ' ' \
                                       + self.in_bval
 
+            self.bvalues = [float(value) for value in \
+                    run.command('mrinfo '
+                                + self.in_dwi
+                                + self.grad_import_option
+                                + ' -shell_bvalues').stdout.split()]
+
             self.parcellation = \
                 re.findall('(?<=_desc-)[a-zA-Z0-9]*',
                            os.path.basename(self.in_connectome))[0]
 
-            # Permissible for this to not exist
-            self.in_mask = os.path.join(root,
+            # Permissible for this to not exist at either location
+            self.in_mask = os.path.join(preproc_root,
                                         'dwi',
                                         session_label
                                         + '_desc-brain_mask.nii.gz')
+            if not os.path.isfile(self.in_mask):
+                self.in_mask = os.path.join(preproc_root,
+                                            'dwi',
+                                            session_label
+                                            + '_desc-brain_mask.nii.gz')
 
             self.mu = matrix.load_vector(self.in_mu)[0]
             self.RF = matrix.load_matrix(self.in_rf)
@@ -2908,38 +2908,45 @@ def run_group(bids_dir, output_verbosity, output_dir):
             self.global_multiplier = 1.0
             self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
                                                 session_label + '.csv')
+            self.out_dir = group_root
             self.out_scale_intensity = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
                              session_label
                              + '_factor-intensity'
                              + '_multiplier.txt')
             self.out_scale_RF = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
                              session_label
                              + '_factor-response'
                              + '_multiplier.txt')
             self.out_scale_volume = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
                              session_label
                              + '_factor-volume'
                              + '_multiplier.txt')
             self.out_connectome = \
-                os.path.join(root,
+                os.path.join(group_root,
                              'connectome',
-                             os.path.basename(self.in_connectome)
-                             .replace('_level-participant',
-                                      '_level-group'))
+                             os.path.basename(self.in_connectome))
 
             self.session_label = session_label
 
-    session_list = get_sessions(output_dir)
+    session_list = get_sessions(participant_dir)
     if not session_list:
         raise MRtrixError(
             'No processed session data found in output directory '
-            'directory \'' + output_dir + '\' for group analysis')
+            'directory \'' + participant_dir + '\' for group analysis')
+    if len(session_list) == 1:
+        app.warn('Only one session present in participant directory; '
+                 'some group-level analysis steps will be skipped')
+    if os.path.exists(group_dir):
+        app.warn('Output directory for group-level analysis '
+                 'already exists; all contents will be erased when this '
+                 'execution completes')
+
 
     bids_session_list = get_sessions(bids_dir)
     not_processed = [session for session in bids_session_list \
@@ -2955,58 +2962,20 @@ def run_group(bids_dir, output_verbosity, output_dir):
     sessions = []
     for session in session_list:
         sessions.append(SessionPaths(session))
-    sessions_with_existing_files = 0
-    for session in sessions:
-        if any(os.path.isfile(item) for item in [
-                session.out_scale_intensity,
-                session.out_scale_RF,
-                session.out_scale_volume,
-                session.out_connectome]):
-            sessions_with_existing_files += 1
-    if sessions_with_existing_files:
-        # In container mode, over-write any files in place since
-        #   -force option is not present
-        if (not IS_CONTAINER) and (not app.FORCE_OVERWRITE):
-            raise MRtrixError(
-                str(sessions_with_existing_files)
-                + ' of '
-                + str(len(sessions))
-                + ' sessions have pre-existing files that would be '
-                + 'over-written (use -force to override)')
-        app.warn(str(sessions_with_existing_files)
-                 + ' of '
-                 + str(len(sessions))
-                 + ' sessions have pre-existing files that will be '
-                 + 'over-written on script completion')
-    out_wm_response_path = os.path.join(output_dir,
-                                        'tissue-WM_response.txt')
+
+
 
     # Connectome-based calculations can only be performed if the
     #   parcellation is consistent across all sessions
     parcellation = sessions[0].parcellation
     consistent_parcellation = \
         all(s.parcellation == parcellation for s in sessions)
-    out_connectome_path = os.path.join(output_dir,
+    out_connectome_path = os.path.join(group_dir,
                                        'desc-'
                                        + parcellation
                                        + '_connectome.csv') \
                           if consistent_parcellation \
                           else None
-
-    out_paths_to_check = [out_wm_response_path]
-    if consistent_parcellation:
-        out_paths_to_check.append(out_connectome_path)
-    for item in out_paths_to_check:
-        if os.path.isfile(item):
-            if (not IS_CONTAINER) and (not app.FORCE_OVERWRITE):
-                raise MRtrixError('Output path "'
-                                  + item
-                                  + '" already exists'
-                                  + ' (use -force to override)')
-            app.warn('Output path "'
-                     + item
-                     + '" already exists; will be overwritten on '
-                     + 'completion of group-level analysis')
 
     app.make_scratch_dir()
     app.goto_scratch_dir()
@@ -3015,7 +2984,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
     #   - the number of shells is equivalent across sessions
     #   - the b-values don't vary too much within those shells across sessions
     if not all(len(session.bvalues) == len(sessions[0].bvalues)
-               for session in sessions[1:]):
+               for session in sessions):
         raise MRtrixError('Not all sessions DWI data contain the same '
                           'number of b-value shells')
     all_bvalues = [[session.bvalues[index] for session in sessions]
@@ -3086,29 +3055,43 @@ def run_group(bids_dir, output_verbosity, output_dir):
 
     # First group-level calculation:
     # Generate the population FA template
-    app.console('Generating population template for '
-                'intensity normalisation WM mask derivation')
-    run.command('population_template '
-                + GROUP_FA_DIR
-                + ' template.mif'
-                + ' -mask_dir '
-                + GROUP_BRAINMASKS_DIR
-                + ' -warp_dir '
-                + GROUP_WARPS_DIR
-                + ' -type rigid_affine_nonlinear'
-                + ' -rigid_scale 0.25,0.5,0.8,1.0'
-                + ' -affine_scale 0.7,0.8,1.0,1.0'
-                + ' -nl_scale 0.5,0.75,1.0,1.0,1.0'
-                + ' -nl_niter 5,5,5,5,5'
-                + ' -linear_no_pause')
+    if len(sessions) == 1:
+        app.console('Duplicating single-subject FA image as '
+                    'population template image')
+        run.function(shutil.copyfile,
+                     sessions[0].temp_fa,
+                     'template.mif')
+    else:
+        app.console('Generating population template for '
+                    'intensity normalisation WM mask derivation')
+        run.command('population_template '
+                    + GROUP_FA_DIR
+                    + ' template.mif'
+                    + ' -mask_dir '
+                    + GROUP_BRAINMASKS_DIR
+                    + ' -warp_dir '
+                    + GROUP_WARPS_DIR
+                    + ' -type rigid_affine_nonlinear'
+                    + ' -rigid_scale 0.25,0.5,0.8,1.0'
+                    + ' -affine_scale 0.7,0.8,1.0,1.0'
+                    + ' -nl_scale 0.5,0.75,1.0,1.0,1.0'
+                    + ' -nl_niter 5,5,5,5,5'
+                    + ' -linear_no_pause')
     app.cleanup(GROUP_FA_DIR)
     app.cleanup(GROUP_BRAINMASKS_DIR)
 
     # Generate the group average response function
-    app.console('Calculating group-average WM response function')
-    run.command(['responsemean',
-                 [s.temp_rf for s in sessions],
-                 'response.txt'])
+    if len(sessions) == 1:
+        app.console('Duplicating single-subject WM response function as '
+                    'group-average response function')
+        run.function(shutil.copyfile,
+                     sessions[0].temp_rf,
+                     'response.txt')
+    else:
+        app.console('Calculating group-average WM response function')
+        run.command(['responsemean',
+                     [s.temp_rf for s in sessions],
+                     'response.txt'])
     app.cleanup(GROUP_RESPONSES_DIR)
     mean_RF = matrix.load_matrix('response.txt')
     mean_RF_lzero = [line[0] for line in mean_RF]
@@ -3120,30 +3103,41 @@ def run_group(bids_dir, output_verbosity, output_dir):
     #     - Store this in a file, and contribute to calculation of the
     #       mean of these values across subjects
     #     - Contribute to the group average response function
-    progress = app.ProgressBar('Generating group-average response function '
-                               'and intensity normalisation factors',
-                               len(sessions)+1)
-    run.function(os.makedirs, GROUP_WMVOXELS_DIR)
-    sum_median_bzero = 0.0
-    for s in sessions:
-        run.command('mrtransform template.mif '
-                    '-warp_full ' + s.temp_warp + ' '
-                    '-from 2 '
-                    '-template ' + s.temp_bzero + ' '
-                    '- | '
-                    'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
-        s.median_bzero = image.statistics(s.temp_bzero,
-                                          mask=s.temp_voxels).median
+    if len(sessions) == 1:
+        app.console('Calculating N=1 intensity normalisation factor')
+        run.command('mrthreshold template.mif voxels.mif -abs 0.4')
+        sessions[0].median_bzero = image.statistics(s.temp_bzero,
+                                                    mask='voxels.mif').median
         app.cleanup(s.temp_bzero)
-        app.cleanup(s.temp_voxels)
-        app.cleanup(s.temp_warp)
-        sum_median_bzero += s.median_bzero
-        progress.increment()
+        sum_median_bzero = sessions[0].median_bzero
+        app.cleanup('voxels.mif')
+    else:
+        progress = app.ProgressBar('Generating intensity '
+                                   'normalisation factors',
+                                   len(sessions))
+        run.function(os.makedirs, GROUP_WMVOXELS_DIR)
+        sum_median_bzero = 0.0
+        for s in sessions:
+            run.command('mrtransform template.mif '
+                        '-warp_full ' + s.temp_warp + ' '
+                        '-from 2 '
+                        '-template ' + s.temp_bzero + ' '
+                        '- | '
+                        'mrthreshold - ' + s.temp_voxels + ' -abs 0.4')
+            s.median_bzero = image.statistics(s.temp_bzero,
+                                              mask=s.temp_voxels).median
+            app.cleanup(s.temp_bzero)
+            app.cleanup(s.temp_voxels)
+            app.cleanup(s.temp_warp)
+            sum_median_bzero += s.median_bzero
+            progress.increment()
+        progress.done()
+
     app.cleanup(GROUP_BZEROS_DIR)
     app.cleanup(GROUP_WMVOXELS_DIR)
     app.cleanup(GROUP_WARPS_DIR)
     app.cleanup('template.mif')
-    progress.done()
+
 
     # Second group-level calculation:
     # - Calculate the mean of median b=0 values
@@ -3155,6 +3149,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
     #   - Multiply by (mean median b=0) / (subject median b=0)
     #   - Multiply by (subject RF size) / (mean RF size)
     #     (needs to account for multi-shell data)
+    #   - Multiply by voxel volume
     # - Write the result to file
     progress = app.ProgressBar('Applying normalisation scaling to '
                                'subject connectomes',
@@ -3216,7 +3211,12 @@ def run_group(bids_dir, output_verbosity, output_dir):
     #     both per-subject and group information
     progress = app.ProgressBar('Writing results to output directory',
                                len(sessions)+2)
+    if os.path.exists(group_dir):
+        run.function(shutil.rmtree, group_dir)
+    run.function(os.makedirs, group_dir)
     for s in sessions:
+        run.function(os.makedirs,
+                     os.path.join(s.out_dir, 'connectome'))
         run.function(shutil.copyfile,
                      s.temp_connectome,
                      s.out_connectome)
@@ -3232,7 +3232,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
         progress.increment()
     app.cleanup(GROUP_CONNECTOMES_DIR)
 
-    matrix.save_matrix(out_wm_response_path,
+    matrix.save_matrix(os.path.join(group_dir, 'tissue-WM_response.txt'),
                        mean_RF,
                        force=IS_CONTAINER)
     progress.increment()
@@ -3250,7 +3250,7 @@ def run_group(bids_dir, output_verbosity, output_dir):
         app.console('Copying scratch directory to output location')
         run.function(shutil.copytree,
                      app.SCRATCH_DIR,
-                     os.path.join(output_dir, 'scratch_group'))
+                     os.path.join(group_dir, 'scratch'))
 
 # End of run_group() function
 
@@ -3280,8 +3280,8 @@ def get_sessions(root_dir, **kwargs):
     #   looking for anything that resembles a BIDS session
     # For any sub-directory that itself contains directories "anat/" and "dwi/",
     #   store the list of sub-directories required to navigate to that point
-    # This becomes the list of feasible processing targets for either
-    #   participant-level or group-level analysis
+    # This becomes the list of feasible processing targets for any level
+    #   of analysis
     # From there:
     #   - "--participant_label" can be used to remove entries from the list
     #   - Other options can be added to restrict processing targets;
@@ -3291,6 +3291,7 @@ def get_sessions(root_dir, **kwargs):
         if 'anat' in subdir_list and 'dwi' in subdir_list:
             all_sessions.append(os.path.relpath(dir_name, start=root_dir))
             del subdir_list
+    all_sessions = sorted(all_sessions)
     app.debug(str(all_sessions))
 
     result = []
@@ -3376,7 +3377,7 @@ def get_sessions(root_dir, **kwargs):
 
 
 
-ANALYSIS_CHOICES = ['participant1', 'participant2', 'group']
+ANALYSIS_CHOICES = ['preproc', 'participant', 'group']
 
 PARCELLATION_CHOICES = ['aal',
                         'aal2',
@@ -3470,17 +3471,17 @@ See the Mozilla Public License v. 2.0 for more details.''')
             help='Skip BIDS validation')
 
     cmdline.add_description(
-        'While participant1-level analysis only requires data within the '
-        'BIDS directory, participant2-level analysis requires that the '
+        'While preproc-level analysis only requires data within the '
+        'BIDS directory, participant-level analysis requires that the '
         'output directory be pre-populated with the results from '
-        'participant1-level processing; similarly, group-level analysis '
+        'preproc-level processing; similarly, group-level analysis '
         'requires that the output directory be pre-populated with the '
-        'results from participant2-level analysis.')
+        'results from participant-level analysis.')
     cmdline.add_description(
         'The operations performed by each of the three levels of analysis '
         'are as follows:')
     cmdline.add_description(
-        '"participant1": '
+        '"preproc": '
         'DWI: Denoising; Gibbs ringing removal; motion, '
         'eddy current and EPI distortion correction and outlier detection & '
         'replacement; brain masking, bias field correction and intensity '
@@ -3488,7 +3489,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'T1-weighted image. '
         'T1-weighted image: bias field correction; brain masking.')
     cmdline.add_description(
-        '"participant2": '
+        '"participant": '
         'DWI: Response function estimation; FOD estimation. '
         'T1-weighted image (if ' + OPTION_PREFIX + 'parcellation '
         'is not none): '
@@ -3503,7 +3504,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'warping of template-based white matter mask to subject spaces; '
         'calculation of group mean white matter response function; '
         'scaling of connectomes based on white matter b=0 intensity, '
-        'response function used during participant2-level analysis, and '
+        'response function used during participant-level analysis, and '
         'SIFT model proportioinality coefficient; '
         'generation of group mean connectome.')
     cmdline.add_description(
@@ -3515,18 +3516,19 @@ See the Mozilla Public License v. 2.0 for more details.''')
         + 'include "sub-" or "ses-"). Multiple participants / sessions '
         + 'can be specified with a space-separated list.')
     cmdline.add_description(
-        'For both participant-level analyses, if no specific participants '
-        'or sessions are nominated by the user (or the user explicitly '
-        'specifies multiple participants / sessions), the script will '
-        'process each of these in series. It is additionally possible for '
-        'the user to invoke multiple instances of this script in order to '
-        'process multiple subjects at once in parallel, ensuring that '
-        'no single participant / session is being processed in parallel, '
-        'and that participant1-level output data are written fully before '
-        'commencing participant2-level analysis.')
+        'For both preproc-level and participant-level analyses, if no '
+        'specific participants or sessions are nominated by the user '
+        '(or the user explicitly specifies multiple participants / '
+        'sessions), the script will process each of these in series. '
+        'It is additionally possible for the user to invoke multiple '
+        'instances of this script in order to process multiple subjects '
+        'at once in parallel, ensuring that no single participant / '
+        'session is being processed in parallel, and that preproc-level '
+        'output data are written fully before commencing participant-level '
+        'analysis.')
     cmdline.add_description(
         'The ' + OPTION_PREFIX + 'output_verbosity option principally '
-        'affects the participant2-level analysis, modulating how many '
+        'affects the participant-level analysis, modulating how many '
         'derivative files are written to the output directory. Permitted '
         'values are from 1 to 4: 1 writes only those files requisite for '
         'group-level analysis; 2 additionally writes files typically '
@@ -3538,7 +3540,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'all analysis levels)')
     if not IS_CONTAINER:
         cmdline.add_description(
-            'If running participant2-level analysis using the script as a '
+            'If running participant-level analysis using the script as a '
             'standalone tool rather than inside the provided container, '
             'data pertaining to atlas parcellations can no longer be '
             'guaranteed to be stored at a specific location on the '
@@ -3576,37 +3578,38 @@ See the Mozilla Public License v. 2.0 for more details.''')
         nargs='+',
         help='The session(s) within each participant that should be analyzed.')
 
-    participant_options = \
+    preproc_participant_options = \
         cmdline.add_argument_group(
-            'Options that are relevant to both participant-level analyses')
-    participant_options.add_argument(
+            'Options that are relevant to both preproc-level and '
+            'participant-level analyses')
+    preproc_participant_options.add_argument(
         OPTION_PREFIX + 't1w_preproc',
         metavar='path',
         help='Provide a path by which pre-processed T1-weighted image data '
              'may be found for the processed participant(s) / session(s)')
 
-    participant2_options = \
+    participant_options = \
         cmdline.add_argument_group(
-            'Options that are relevant to participant2-level analysis')
+            'Options that are relevant to participant-level analysis')
     if not IS_CONTAINER:
-        participant2_options.add_argument(
+        participant_options.add_argument(
             OPTION_PREFIX + 'atlas_path',
             metavar='path',
             help='The filesystem path in which to search for atlas '
                  'parcellation files.')
-    participant2_options.add_argument(
+    participant_options.add_argument(
         OPTION_PREFIX + 'parcellation',
         help='The choice of connectome parcellation scheme '
-             '(compulsory for participant2-level analysis); '
+             '(compulsory for participant-level analysis); '
              'options are: ' + ', '.join(PARCELLATION_CHOICES) + '.',
         choices=PARCELLATION_CHOICES)
-    participant2_options.add_argument(
+    participant_options.add_argument(
         OPTION_PREFIX + 'streamlines',
         type=int,
         default=0,
         help='The number of streamlines to generate for each subject '
              '(will be determined heuristically if not explicitly set).')
-    participant2_options.add_argument(
+    participant_options.add_argument(
         OPTION_PREFIX + 'template_reg',
         metavar='software',
         help='The choice of registration software for mapping subject to '
@@ -3626,13 +3629,13 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'How to correct susceptibility distortions in spin-echo echo-planar '
         'images: application to diffusion tensor imaging. '
         'NeuroImage, 2003, 20, 870-888',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Jenkinson, M. & Smith, S. '
         'Non-linear registration, aka spatial normalisation. '
         'FMRIB technical report, 2010, TR07JA2',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'template_reg fsl',
         is_external=True)
     cmdline.add_citation(
@@ -3640,7 +3643,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'An integrated approach to correction for off-resonance effects and '
         'subject movement in diffusion MR imaging. '
         'NeuroImage, 2015, 125, 1063-1078',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Graham, M. S.; Zsoldos, E. '
@@ -3649,7 +3652,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'non-parametric framework for movement and distortion correction of '
         'diffusion MR images. '
         'NeuroImage, 2016, 141, 556-572',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     if not IS_CONTAINER:
         cmdline.add_citation(
@@ -3658,7 +3661,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
             'Towards a comprehensive framework for movement and distortion '
             'correction of diffusion MR images: Within volume movement. '
             'NeuroImage, 2017, 152, 450-466',
-            condition='If performing participant1-level analysis',
+            condition='If performing preproc-level analysis',
             is_external=True)
     cmdline.add_citation(
         'Andersson, J. L. R.; Graham,, M. S.; Drobnjak, I.; Zhang, H. & '
@@ -3666,14 +3669,14 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Susceptibility-induced distortion that varies due to motion: '
         'Correction in diffusion MR without acquiring additional data. '
         'NeuroImage, 2018, 171, 277-295',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Avants, B. B.; Epstein, C. L.; Grossman, M.; Gee, J. C. '
         'Symmetric diffeomorphic image registration with cross-correlation: '
         'Evaluating automated labeling of elderly and neurodegenerative brain. '
         'Medical Image Analysis, 2008, 12, 26-41',
-        condition='If performing participant2-level analysis, '
+        condition='If performing participant-level analysis, '
         + 'using ' + OPTION_PREFIX + 'parcellation [ aal, aal2, '
         + 'brainnetome246mni, craddock200, craddock400, perry512, '
         + 'yeo7mni or yeo17mni ], '
@@ -3685,7 +3688,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Co-registration and distortion correction of diffusion and anatomical '
         'images based on inverse contrast normalization. '
         'NeuroImage, 2015, 115, 269-280',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Craddock, R. C.; James, G. A.; Holtzheimer, P. E.; Hu, X. P.; '
@@ -3693,7 +3696,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'A whole brain fMRI atlas generated via spatially constrained '
         'spectral clustering. '
         'Human Brain Mapping, 2012, 33(8), 1914-1928',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ craddock200 or craddock400 ]',
         is_external=True)
@@ -3702,7 +3705,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Cortical Surface-Based Analysis: '
         'I. Segmentation and Surface Reconstruction. '
         'NeuroImage, 1999, 9, 179-194',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ brainnetome246fs, desikan, destrieux, hcpmmp1, '
         + 'yeo7fs or yeo17fs ]',
@@ -3714,7 +3717,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'An automated labeling system for subdividing the human cerebral '
         'cortex on MRI scans into gyral based regions of interest. '
         'NeuroImage, 2006, 31, 968-980',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation desikan',
         is_external=True)
     cmdline.add_citation(
@@ -3722,7 +3725,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Automatic parcellation of human cortical gyri and sulci using '
         'standard anatomical nomenclature. '
         'NeuroImage, 2010, 53, 1-15',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation destrieux',
         is_external=True)
     cmdline.add_citation(
@@ -3732,7 +3735,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The Human Brainnetome Atlas: '
         'A New Brain Atlas Based on Connectional Architecture. '
         'Cerebral Cortex, 2016, 26 (8), 3508-3526',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ brainnetome246fs brainnetome246mni ]',
         is_external=True)
@@ -3742,7 +3745,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Jenkinson, M.; Smith, S. M. & Van Essen, D. C. '
         'A multi-modal parcellation of human cerebral cortex. '
         'Nature, 2016, 536, 171-178',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation hcpmmp1',
         is_external=True)
     cmdline.add_citation(
@@ -3750,28 +3753,29 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Robust Brain Extraction Across Datasets and '
         'Comparison With Publicly Available Methods. '
         'IEEE Transactions on Medical Imaging, 2011, 30, 1617-1634',
-        condition='If performing either participant-level analysis and '
-        'ROBEX is used for T1 brain extraction',
+        condition='If performing either preproc-level or participant-level '
+        'analysis and ROBEX is used for T1 brain extraction',
         is_external=True)
     cmdline.add_citation(
         'Jeurissen, B; Tournier, J-D; Dhollander, T; Connelly, A & Sijbers, J. '
         'Multi-tissue constrained spherical deconvolution for improved '
         'analysis of multi-shell diffusion MRI data. '
         'NeuroImage, 2014, 103, 411-426',
-        condition='If performing either participant-level analysis',
+        condition='If performing either preproc-level or participant-level '
+        'analysis',
         is_external=False)
     cmdline.add_citation(
         'Kellner, E.; Dhital, B.; Kiselev, V. G.; Reisert, M. '
         'Gibbs-ringing artifact removal based on local subvoxel-shifts. '
         'Magnetic Resonance in Medicine, 2006, 76(5), 1574-1581',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=True)
     cmdline.add_citation(
         'Patenaude, B.; Smith, S. M.; Kennedy, D. N. & Jenkinson, M. '
         'A Bayesian model of shape and appearance for '
         'subcortical brain segmentation. '
         'NeuroImage, 2011, 56, 907-922',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'not using ' + OPTION_PREFIX + 'parcellation '
         + '[ brainnetome246fs or brainnetome246mni ]',
         is_external=True)
@@ -3781,7 +3785,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The independent influences of age and education on functional brain '
         'networks and cognition in healthy older adults. '
         'Human Brain Mapping, 2017, 38(10), 5094-5114',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation perry512',
         is_external=True)
     if not IS_CONTAINER:
@@ -3789,8 +3793,8 @@ See the Mozilla Public License v. 2.0 for more details.''')
             'Smith, S. M. '
             'Fast robust automated brain extraction. '
             'Human Brain Mapping, 2002, 17, 143-155',
-            condition='If performing either participant-level analysis and '
-            'FSL is used for T1 brain extraction',
+            condition='If performing either preproc-level or participant-level '
+            'analysis and FSL is used for T1 brain extraction',
             is_external=True)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
@@ -3798,28 +3802,29 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Improved diffusion MRI streamlines tractography through '
         'effective use of anatomical information. '
         'NeuroImage, 2012, 62, 1924-1938',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'The effects of SIFT on the reproducibility and biological '
         'accuracy of the structural connectome. '
         'NeuroImage, 2015a, 104, 253-265',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'SIFT2: Enabling dense quantitative assessment of brain white matter '
         'connectivity using streamlines tractography. '
         'NeuroImage, 2015b, 119, 338-351',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. '
         'Direct estimation of the fiber orientation density function from '
         'diffusion-weighted MRI data using spherical deconvolution. '
         'NeuroImage, 2004, 23, 1176-1185',
-        condition='If performing either participant-level analysis',
+        condition='If performing either preproc-level or participant-level '
+        'analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F. & Connelly, A. '
@@ -3827,7 +3832,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'integration over fibre orientation distributions. '
         'Proceedings of the International Society for Magnetic '
         'Resonance in Medicine, 2010, 1670',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + OPTION_PREFIX + 'streamlines 0 is not set',
         is_external=False)
     cmdline.add_citation(
@@ -3843,8 +3848,8 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Yushkevich, P. & Gee, J. '
         'N4ITK: Improved N3 Bias Correction. '
         'IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320',
-        condition='If performing either participant-level analysis, and'
-        'N4 is used for either DWI or T1 bias field correction',
+        condition='If performing either preproc-level or participant-level '
+        'analysis, and N4 is used for either DWI or T1 bias field correction',
         is_external=True)
     cmdline.add_citation(
         'Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; '
@@ -3853,7 +3858,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Macroscopic Anatomical Parcellation of the MNI MRI '
         'single-subject brain. '
         'NeuroImage, 15(1), 273-289',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         'using ' + OPTION_PREFIX + 'parcellation [ aal or aal2 ]',
         is_external=True)
     cmdline.add_citation(
@@ -3861,7 +3866,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Sijbers, J. & Fieremans, E. '
         'Denoising of diffusion MRI using random matrix theory. '
         'NeuroImage, 2016, 142, 394-406',
-        condition='If performing participant1-level analysis',
+        condition='If performing preproc-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Yeh, C.H.; Smith, R.E.; Liang, X.; Calamante, F.; Connelly, A. '
@@ -3869,7 +3874,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The consequences for structural connectomic metrics. '
         'Neuroimage, 2016, 142, 150-162',
         condition='If utilising connectome outputs from '
-        'participant2-level analysis',
+        'participant-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Yeo, B.T.; Krienen, F.M.; Sepulcre, J.; Sabuncu, M.R.; Lashkari, D.; '
@@ -3878,7 +3883,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'The organization of the human cerebral cortex estimated by '
         'intrinsic functional connectivity. '
         'J Neurophysiol, 2011, 106(3), 1125-1165',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation '
         + '[ yeo7fs, yeo7mni, yeo17fs or yeo17mni ]',
         is_external=False)
@@ -3887,7 +3892,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Pantelis, C. & Bullmore, E. T. '
         'Whole-brain anatomical networks: Does the choice of nodes matter? '
         'NeuroImage, 2010, 50, 970-983',
-        condition='If performing participant2-level analysis and '
+        condition='If performing participant-level analysis and '
         + 'using ' + OPTION_PREFIX + 'parcellation perry512',
         is_external=True)
     cmdline.add_citation(
@@ -3895,7 +3900,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Segmentation of brain MR images through a hidden Markov random '
         'field model and the expectation-maximization algorithm. '
         'IEEE Transactions on Medical Imaging, 2001, 20, 45-57',
-        condition='If performing participant2-level analysis',
+        condition='If performing participant-level analysis',
         is_external=True)
 
 
@@ -3938,12 +3943,30 @@ def execute(): #pylint: disable=unused-variable
     if app.ARGS.output_verbosity == 4:
         app.DO_CLEANUP = False
 
-    # TODO BIDS Derivatives outputs should have the name of the tool as the
-    #   root directory; if the user-specified location has this name,
-    #   use that as the root, but otherwise a directory with this name
-    #   needs to be constructed
+    # Locate root directory of BIDS App output based on user input
+    #   (i.e. location of directory "mrtrix3_connectome", which itself
+    #   contains sub-directories for each analysis level)
+    # Note: abspath() removes any trailing path separator
+    output_abspath = os.path.abspath(app.ARGS.output_dir)
+    output_basename = os.path.basename(output_abspath)
+    output_dirname = os.path.dirname(output_abspath)
+    # Basename of output path is the analysis level being requested
+    if output_basename.lower() == app.ARGS.analysis_level:
+        output_app_path = os.path.dirname(output_dirname)
+        if os.path.basename(os.path.dirname(output_app_path)) \
+                           .lower() != 'mrtrix3_connectome':
+            raise MRtrixError('Output directory structure malformed')
+    # Basename of output path is "mrtrix3_connectome"
+    elif output_basename.lower() == 'mrtrix3_connectome':
+        output_app_path = output_dirname
+    # Basename of output path is unknown
+    else:
+        output_app_path = os.path.join(output_abspath, 'MRtrix3_connectome')
+    if not os.path.isdir(output_app_path):
+        run.function(os.makedirs, output_app_path)
 
-    if app.ARGS.analysis_level in ['participant1', 'participant2']:
+
+    if app.ARGS.analysis_level in ['preproc', 'participant']:
         sessions_to_analyze = get_sessions(
             app.ARGS.bids_dir,
             participant_label=app.ARGS.participant_label,
@@ -3952,54 +3975,52 @@ def execute(): #pylint: disable=unused-variable
                            if app.ARGS.t1w_preproc \
                            else None
 
-    if app.ARGS.analysis_level == 'participant1':
+    if app.ARGS.analysis_level == 'preproc':
 
-        participant1_shared = Participant1Shared()
-
-        for session_to_process in sessions_to_analyze:
-            app.console('Commencing execution for session: \''
-                        + '_'.join(session_to_process) + '\'')
-            run_participant1(os.path.abspath(app.ARGS.bids_dir),
-                             session_to_process,
-                             participant1_shared,
-                             t1w_preproc_path,
-                             app.ARGS.output_verbosity,
-                             os.path.abspath(app.ARGS.output_dir))
-
-    # Running participant2 - level
-    if app.ARGS.analysis_level == 'participant2':
-
-        participant2_shared = \
-            Participant2Shared(getattr(app.ARGS, 'atlas_path', None),
-                               app.ARGS.parcellation,
-                               app.ARGS.streamlines,
-                               app.ARGS.template_reg)
+        preproc_shared = PreprocShared()
 
         for session_to_process in sessions_to_analyze:
             app.console('Commencing execution for session: \''
                         + '_'.join(session_to_process) + '\'')
-            run_participant2(os.path.abspath(app.ARGS.bids_dir),
-                             session_to_process,
-                             participant2_shared,
-                             t1w_preproc_path,
-                             app.ARGS.output_verbosity,
-                             os.path.abspath(app.ARGS.output_dir))
+            run_preproc(os.path.abspath(app.ARGS.bids_dir),
+                        session_to_process,
+                        preproc_shared,
+                        t1w_preproc_path,
+                        app.ARGS.output_verbosity,
+                        output_app_path)
 
-    # Running group level
+    if app.ARGS.analysis_level == 'participant':
+
+        participant_shared = \
+            ParticipantShared(getattr(app.ARGS, 'atlas_path', None),
+                              app.ARGS.parcellation,
+                              app.ARGS.streamlines,
+                              app.ARGS.template_reg)
+
+        for session_to_process in sessions_to_analyze:
+            app.console('Commencing execution for session: \''
+                        + '_'.join(session_to_process) + '\'')
+            run_participant(os.path.abspath(app.ARGS.bids_dir),
+                            session_to_process,
+                            participant_shared,
+                            t1w_preproc_path,
+                            app.ARGS.output_verbosity,
+                            output_app_path)
+
     elif app.ARGS.analysis_level == 'group':
 
         if app.ARGS.participant_label:
             raise MRtrixError('Cannot use '
                               + OPTION_PREFIX + 'participant_label option '
-                              + 'when performing group analysis')
+                              + 'when performing group-level analysis')
         if app.ARGS.session_label:
             raise MRtrixError('Cannot use '
                               + OPTION_PREFIX + 'session_label option '
-                              + 'when performing group analysis')
+                              + 'when performing group-level analysis')
 
         run_group(os.path.abspath(app.ARGS.bids_dir),
                   app.ARGS.output_verbosity,
-                  os.path.abspath(app.ARGS.output_dir))
+                  output_app_path)
 
 
 
