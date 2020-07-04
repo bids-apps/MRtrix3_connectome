@@ -2076,13 +2076,15 @@ def run_participant(bids_dir, session, shared,
                    os.path.join(output_subdir,
                                 'anat',
                                 session_label + '_desc-preproc_T1w.nii.gz'))
+    T1_json_data = {"SkullStripped": T1_is_premasked}
     T1_json_path = os.path.splitext(T1_image)[0] + '.json'
+    with open(T1_json_path, 'w') as T1_json_file:
+        json.dump(T1_json_data, T1_json_file)
     output_items[T1_json_path] = \
         OutputItem(False, 1, False, None,
                    os.path.join(output_subdir,
                                 'anat',
                                 session_label + '_desc-preproc_T1w.json'))
-    T1_json_data = {"SkullStripped": T1_is_premasked}
 
     # Before we can begin: Are there any data we require
     #   that were not imported from the output directory?
@@ -2114,7 +2116,7 @@ def run_participant(bids_dir, session, shared,
     #     bad masking
 
     app.console('Estimating '
-                + (' multi-tissue ODF images'
+                + ('multi-tissue ODF images'
                    if multishell
                    else 'Fibre Orientation Distribution image'))
     # TODO Update to use similar code to preproc?
@@ -2705,9 +2707,6 @@ def run_participant(bids_dir, session, shared,
                 run.function(shutil.copyfile,
                              scratch_file,
                              full_output_path)
-
-    with open(T1_json_path, 'w') as T1_json_file:
-        json.dump(T1_json_data, T1_json_file)
 
     # Manually wipe and zero the scratch directory
     #   (since we might be processing more than one subject)
