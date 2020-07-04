@@ -3245,6 +3245,7 @@ def get_sessions(root_dir, **kwargs):
         if 'anat' in subdir_list and 'dwi' in subdir_list:
             all_sessions.append(os.path.relpath(dir_name, start=root_dir))
             del subdir_list
+    all_sessions = sorted(all_sessions)
     app.debug(str(all_sessions))
 
     result = []
