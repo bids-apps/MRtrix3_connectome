@@ -3915,7 +3915,7 @@ def execute(): #pylint: disable=unused-variable
         output_app_path = output_dirname
     # Basename of output path is unknown
     else:
-        output_app_path = os.path.join(output_abspath, 'mrtrix3_connectome')
+        output_app_path = os.path.join(output_abspath, 'MRtrix3_connectome')
     if not os.path.isdir(output_app_path):
         run.function(os.makedirs, output_app_path)
 
