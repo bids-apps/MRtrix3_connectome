@@ -39,14 +39,17 @@ jobs:
           name: Download test data
           command: mkdir -p ${HOME}/downloads && wget -c -O ${HOME}/downloads/preproc.tar.gz "https://osf.io/d9gx7/download" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/preproc.tar.gz -C ${HOME}/data
       - run:
+          name: Make scratch directory
+          command: mkdir ${HOME}/scratch
+      - run:
           name: Load Docker image
           command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp bids/${CIRCLE_PROJECT_REPONAME,,} --version
       - run:
           name: Run preproc-level analysis for all subjects
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs preproc
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs preproc --scratch /scratch
           no_output_timeout: 6h
 
 
@@ -62,14 +65,17 @@ jobs:
           name: Download test data
           command: mkdir -p ${HOME}/downloads && wget -c -O ${HOME}/downloads/participant.tar.gz "https://osf.io/skc5x/download" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/participant.tar.gz -C ${HOME}/data
       - run:
+          name: Make scratch directory
+          command: mkdir ${HOME}/scratch
+      - run:
           name: Load Docker image
           command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset bids/${CIRCLE_PROJECT_REPONAME,,} --version
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp bids/${CIRCLE_PROJECT_REPONAME,,} --version
       - run:
           name: Run participant-level analysis for solitary subject
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --parcellation aal --streamlines 100000
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --scratch /scratch --parcellation aal --streamlines 100000
           no_output_timeout: 6h
 
  
