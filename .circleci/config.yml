@@ -101,7 +101,7 @@ jobs:
           command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp bids/${CIRCLE_PROJECT_REPONAME,,} --version
       - run:
           name: Run group-level analysis
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group
+          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group --scratch /scratch
           no_output_timeout: 6h
 
  
