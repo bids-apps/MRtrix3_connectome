@@ -1547,7 +1547,6 @@ def run_preproc(bids_dir, session, shared,
                     + ' '.join(tissue.fod_init + ' ' + tissue.fod_norm
                                for tissue in tissues))
         app.cleanup([tissue.fod_init for tissue in tissues])
-        app.cleanup([tissue.fod_norm for tissue in tissues])
 
         # Apply both estimated bias field, and appropiate
         #   scaling factor, to DWIs
@@ -1593,6 +1592,7 @@ def run_preproc(bids_dir, session, shared,
                     + ' -mult '
                     + new_dwi_mask_image
                     + ' -datatype bit')
+        app.cleanup([tissue.fod_norm for tissue in tissues])
 
         # Compare input and output masks
         step = 'mrcalc_mask'
