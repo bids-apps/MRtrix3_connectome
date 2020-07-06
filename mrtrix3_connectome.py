@@ -2870,8 +2870,6 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
             self.dwiintensitynorm_factor = 1.0
             self.RF_multiplier = 1.0
             self.volume_multiplier = 1.0
-            for spacing in image.Header(self.in_dwi).spacing()[0:3]:
-                self.volume_multiplier *= spacing
             self.global_multiplier = 1.0
             self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
                                                 session_label + '.csv')
@@ -3073,9 +3071,9 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     if len(sessions) == 1:
         app.console('Calculating N=1 intensity normalisation factor')
         run.command('mrthreshold template.mif voxels.mif -abs 0.4')
-        sessions[0].median_bzero = image.statistics(s.temp_bzero,
+        sessions[0].median_bzero = image.statistics(sessions[0].temp_bzero,
                                                     mask='voxels.mif').median
-        app.cleanup(s.temp_bzero)
+        app.cleanup(sessions[0].temp_bzero)
         sum_median_bzero = sessions[0].median_bzero
         app.cleanup('voxels.mif')
     else:
@@ -3133,6 +3131,10 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         s.RF_multiplier = math.pow(s.RF_multiplier, 1.0 / len(mean_RF_lzero))
 
         s.bzero_multiplier = mean_median_bzero / s.median_bzero
+
+        # Calculate voxel volume
+        for spacing in image.Header(s.in_dwi).spacing()[0:3]:
+            s.volume_multiplier *= spacing
 
         s.global_multiplier = s.mu \
                               * s.bzero_multiplier \
