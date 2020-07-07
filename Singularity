@@ -55,7 +55,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     apt-get update && apt-get upgrade -y
 
 # Base requirements
-    apt-get update && apt-get install -y bc=1.07.1-2 build-essential=12.4ubuntu1 curl=7.58.0-2ubuntu3 dc=1.07.1-2 git=1:2.17.0-1ubuntu1 libegl1-mesa-dev=18.0.0~rc5-1ubuntu1 libopenblas-dev=0.2.20+ds-4 nano=2.9.3-2 perl-modules-5.26=5.26.1-6 python=2.7.15~rc1-1 python3=3.6.5-3 python3-pip=9.0.1-2 tar=1.29b-2 tcsh=6.20.00-7 tzdata=2018d-1 unzip=6.0-21ubuntu1 wget=1.19.4-1ubuntu2
+    apt-get update && apt-get install -y bc=1.07.1-2 build-essential=12.4ubuntu1 curl=7.58.0-2ubuntu3 dc=1.07.1-2 git=1:2.17.0-1ubuntu1 libegl1-mesa-dev=18.0.0~rc5-1ubuntu1 libopenblas-dev=0.2.20+ds-4 nano=2.9.3-2 perl-modules-5.26=5.26.1-6 python=2.7.15~rc1-1 python3=3.6.5-3 tar=1.29b-2 tcsh=6.20.00-7 tzdata=2018d-1 unzip=6.0-21ubuntu1 wget=1.19.4-1ubuntu2
 
 # PPA for newer version of nodejs, which is required for bids-validator
     curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && bash nodesource_setup.sh && rm -f nodesource_setup.sh
@@ -64,10 +64,6 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 # NeuroDebian setup
     wget -qO- http://neuro.debian.net/lists/bionic.au.full | tee -a /etc/apt/sources.list
     apt-key add /neurodebian.gpg && apt-get update
-
-# Python3 dependencies for eddyqc
-    pip3 install --upgrade pip==20.1.1
-    pip3 install cycler==0.10.0 kiwisolver==1.2.0 matplotlib==3.3.0rc1 nibabel==2.5.2 numpy==1.16 pandas==1.0.5 Pillow==7.2.0 pyparsing==2.4.7 PyPDF2==1.26.0 python-dateutil==2.8.1 pytz==2020.1 scipy==1.5.0 seaborn==0.10.1 setuptools==39.0.1 six==1.11.0
 
     # Additional dependencies for MRtrix3 compilation
     apt-get install -y libeigen3-dev=3.3.4-4 libfftw3-dev=3.3.7-1 libpng-dev=1.6.34-1 libtiff5-dev=4.0.9-5 zlib1g-dev=1:1.2.11.dfsg-0ubuntu2
@@ -83,7 +79,6 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm /fslinstaller.py
     which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
-    git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     npm install -gq bids-validator@1.5.3
 

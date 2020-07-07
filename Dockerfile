@@ -14,7 +14,6 @@ RUN apt-get update && apt-get install -y \
     perl-modules-5.26=5.26.1-6ubuntu0.3 \
     python2.7=2.7.17-1~18.04ubuntu1 \
     python3=3.6.7-1~18.04 \
-    python3-pip=9.0.1-2.3~ubuntu1.18.04.1 \
     tar=1.29b-2ubuntu0.1 \
     tcsh=6.20.00-7 \
     unzip=6.0-21ubuntu1 \
@@ -45,25 +44,6 @@ RUN apt-get update && apt-get install -y \
     libtiff5-dev=4.0.9-5ubuntu0.3 \
     zlib1g-dev=1:1.2.11.dfsg-0ubuntu2
 
-# Python dependencies for eddyqc
-RUN pip3 install --upgrade pip==20.1.1
-RUN pip3 install \
-    cycler==0.10.0 \
-    kiwisolver==1.2.0 \
-    matplotlib==3.3.0rc1 \
-    nibabel==2.5.2 \
-    numpy==1.16 \
-    pandas==1.0.5 \
-    Pillow==7.2.0 \
-    pyparsing==2.4.7 \
-    PyPDF2==1.26.0 \
-    python-dateutil==2.8.1 \
-    pytz==2020.1 \
-    scipy==1.5.0 \
-    seaborn==0.10.1 \
-    setuptools==39.0.1 \
-    six==1.11.0
-
 # Neuroimaging software / data dependencies
 RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | \
     tar zx -C /opt \
@@ -89,8 +69,6 @@ RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
 RUN python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
 RUN rm -f /fslinstaller.py
 RUN which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
-RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && \
-    cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator@1.5.3
