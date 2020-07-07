@@ -3222,6 +3222,40 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         app.warn('EddyQC command "eddy_squad" not available; skipped')
 
 
+    # Construct JSON data to be written to indicate what information is
+    #   provided for each session in participants.tsv
+    NORMALISATION_JSON_DATA = {
+        'rf': {
+            'Description': 'Multiplication term based on the difference in '
+                           'magnitude between the white matter response '
+                           'function used during independent participant-'
+                           'level analysis, and the group average white '
+                           'matter response function generated during group-'
+                           'level analysis'
+        },
+        'mu': {
+            'Description': 'Value of the "proportionality coefficient" '
+                           'within the SIFT model',
+            'Units': 'FD/mm'
+        },
+        'vol': {
+            'Description': 'Volume of DWI voxels',
+            'Units': 'mm^3'
+        },
+        'wmb0': {
+            'Description': 'Multiplication term based on the median '
+                           'intensity of the b=0 image within white matter, '
+                           'compared to the mean of this value across '
+                           'subjects'
+        },
+        'norm': {
+            'Description': 'Normalisation factor applied to session '
+                           'connectome data, calculated as the product of '
+                           'the "rf", "mu", "vol" and "wmb0" terms'
+        }
+    }
+
+
     # Write results of interest back to the output directory;
     #     both per-subject and group information
     progress = app.ProgressBar('Writing results to output directory',
@@ -3239,7 +3273,7 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                         'RFMagnitude': s.RF_multiplier,
                         'SIFTMu': s.mu,
                         'VoxelVolume': s.volume_multiplier,
-                        'WMIntensity': s.out_scale_intensity},
+                        'WMIntensity': s.dwiintensitynorm_factor},
                      'Multiplier': s.global_multiplier}
         with open(s.out_connectome_json, 'w') as json_file:
             json.dump(json_data, json_file)
@@ -3254,6 +3288,19 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         matrix.save_matrix(out_connectome_path,
                            mean_connectome,
                            force=IS_CONTAINER)
+        with open(os.path.join(group_dir, 'normalisation.tsv'),
+                  'w') as tsv_file:
+            tsv_file.write('session_id\trf\tmu\tvol\twmb0\tnorm\n')
+            for s in sessions:
+                tsv_file.write(s.session_label + '\t'
+                               + str(s.RF_multiplier) + '\t'
+                               + str(s.mu) + '\t'
+                               + str(s.volume_multiplier) + '\t'
+                               + str(s.dwiintensitynorm_factor) + '\t'
+                               + str(s.global_multiplier) + '\n')
+        with open(os.path.join(group_dir, 'normalisation.json'),
+                  'w') as json_file:
+            json.dump(NORMALISATION_JSON_DATA, json_file)
     progress.increment()
     if do_squad:
         run.function(os.makedirs,
