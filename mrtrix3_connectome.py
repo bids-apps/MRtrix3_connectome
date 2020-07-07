@@ -2894,28 +2894,12 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
             self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
                                                 session_label + '.csv')
             self.out_dir = group_root
-            self.out_scale_intensity = \
-                os.path.join(group_root,
-                             'connectome',
-                             session_label
-                             + '_factor-intensity'
-                             + '_multiplier.txt')
-            self.out_scale_RF = \
-                os.path.join(group_root,
-                             'connectome',
-                             session_label
-                             + '_factor-response'
-                             + '_multiplier.txt')
-            self.out_scale_volume = \
-                os.path.join(group_root,
-                             'connectome',
-                             session_label
-                             + '_factor-volume'
-                             + '_multiplier.txt')
-            self.out_connectome = \
+            self.out_connectome_data = \
                 os.path.join(group_root,
                              'connectome',
                              os.path.basename(self.in_connectome))
+            self.out_connectome_json = \
+                os.path.splitext(self.out_connectome_data)[0] + '.json'
 
             self.session_label = session_label
 
@@ -3129,17 +3113,19 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     mean_median_bzero = sum_median_bzero / len(sessions)
 
     # Third pass through session data in group analysis:
-    # - Scale the connectome strengths:
+    # - Scaling factors for connectome strengths:
     #   - Multiply by SIFT proportionality coefficient mu
     #   - Multiply by (mean median b=0) / (subject median b=0)
     #   - Multiply by (subject RF size) / (mean RF size)
     #     (needs to account for multi-shell data)
     #   - Multiply by voxel volume
-    # - Write the result to file
-    progress = app.ProgressBar('Applying normalisation scaling to '
+    progress = app.ProgressBar('Computing normalisation scaling factors for '
                                'subject connectomes',
                                len(sessions))
     run.function(os.makedirs, GROUP_CONNECTOMES_DIR)
+    # Determine, from the minimum connectivity value that can be represented
+    #   in a streamlines-based representation, the maximum across sessions
+    min_connectivity = 0.0
     for s in sessions:
         RF_lzero = [line[0] for line in s.RF]
         s.RF_multiplier = 1.0
@@ -3161,40 +3147,58 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                               * s.RF_multiplier \
                               * s.volume_multiplier
 
-        connectome = matrix.load_matrix(s.in_connectome)
-        temp_connectome = [[v*s.global_multiplier for v in line]
-                           for line in connectome]
-        matrix.save_matrix(s.temp_connectome, temp_connectome)
+        # Minimum connectivity value that can be reasonably represented is
+        #   1 streamline prior to scaling
+        min_connectivity = max(min_connectivity, s.global_multiplier)
+
         progress.increment()
     progress.done()
 
-    # Third group-level calculation: Generate the group mean connectome
+    # Third group-level calculation:
+    # Compute normalised connectomes, and generate the group mean connectome
     # Can only do this if the parcellation is identical across subjects;
     #     this needs to be explicitly checked
+    # Use geometric mean for averaging across subjects, since variance
+    #   across sessions is closer to multiplicative than additive
     if consistent_parcellation:
-        progress = app.ProgressBar('Calculating group mean connectome',
+        progress = app.ProgressBar('Normalising subject connectomes, '
+                                   'applying group-wise minimum connectivity, '
+                                   'and calculating group mean connectome',
                                    len(sessions)+1)
-        # TODO Calculate geometric rather than arithmetic mean
-        # Requires setting a minimum connectivity value per edge;
-        #   this should be equivalent to 1 streamline prior to
-        #   application of the multiplier
         mean_connectome = []
         for s in sessions:
-            connectome = matrix.load_matrix(s.temp_connectome)
+            connectome_prenorm = matrix.load_matrix(s.in_connectome)
+            connectome_postnorm = [[max(v*s.global_multiplier,
+                                        min_connectivity)
+                                    for v in line]
+                                   for line in connectome_prenorm]
+            matrix.save_matrix(s.temp_connectome, connectome_postnorm)
+
             if mean_connectome:
-                mean_connectome = [[c1+c2 for c1, c2 in zip(r1, r2)]
+                mean_connectome = [[c1+math.log(c2)
+                                    for c1, c2 in zip(r1, r2)]
                                    for r1, r2 in zip(mean_connectome,
-                                                     connectome)]
+                                                     connectome_postnorm)]
             else:
-                mean_connectome = connectome
+                mean_connectome = [[math.log(v)
+                                    for v in row]
+                                   for row in connectome_postnorm]
             progress.increment()
 
-        mean_connectome = [[v/len(sessions) for v in row]
+        mean_connectome = [[math.exp(v/len(sessions))
+                            for v in row]
                            for row in mean_connectome]
         progress.done()
     else:
-        app.warn('Different parcellations across sessions; '
-                 'cannot calculate a group mean connectome')
+        app.warn('Different parcellations across sessions, '
+                 'cannot calculate a group mean connectome; '
+                 'normalising and applying minimum connectivity '
+                 'independently for each session')
+        connectome_prenorm = matrix.load_matrix(s.in_connectome)
+        connectome_postnorm = [[max(v, 1.0)*s.global_multiplier
+                                for v in line]
+                               for line in connectome_prenorm]
+        matrix.save_matrix(s.temp_connectome, connectome_postnorm)
 
 
     # Run EddyQC group-level analysis if available
@@ -3231,15 +3235,14 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         run.function(shutil.copyfile,
                      s.temp_connectome,
                      s.out_connectome)
-        matrix.save_vector(s.out_scale_intensity,
-                           [s.bzero_multiplier],
-                           force=IS_CONTAINER)
-        matrix.save_vector(s.out_scale_RF,
-                           [s.RF_multiplier],
-                           force=IS_CONTAINER)
-        matrix.save_vector(s.out_scale_volume,
-                           [s.volume_multiplier],
-                           force=IS_CONTAINER)
+        json_data = {'Contributions': {
+                        'RFMagnitude': s.RF_multiplier,
+                        'SIFTMu': s.mu,
+                        'VoxelVolume': s.volume_multiplier,
+                        'WMIntensity': s.out_scale_intensity},
+                     'Multiplier': s.global_multiplier}
+        with open(s.out_connectome_json, 'w') as json_file:
+            json.dump(json_data, json_file)
         progress.increment()
     app.cleanup(GROUP_CONNECTOMES_DIR)
 
