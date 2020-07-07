@@ -2761,9 +2761,12 @@ GROUP_WARPS_DIR = 'warps'
 
 def run_group(bids_dir, output_verbosity, output_app_dir):
 
-    preproc_dir = os.path.join(output_app_dir, 'MRtrix3_connectome-preproc')
-    participant_dir = os.path.join(output_app_dir, 'MRtrix3_connectome-participant')
-    group_dir = os.path.join(output_app_dir, 'MRtrix3_connectome-group')
+    preproc_dir = os.path.join(output_app_dir,
+                               'MRtrix3_connectome-preproc')
+    participant_dir = os.path.join(output_app_dir,
+                                   'MRtrix3_connectome-participant')
+    group_dir = os.path.join(output_app_dir,
+                             'MRtrix3_connectome-group')
 
     # Participant-level analysis no longer generates FA and mean b=0 images
     # These really should not be that expensive to compute in series,
@@ -2862,8 +2865,8 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
             #   installed, that directory will still be constructed, it
             #   just will only contain contents from "eddy" itself)
             self.in_eddyqc_dir = os.path.join(preproc_root,
-                                             'dwi',
-                                             'eddyqc')
+                                              'dwi',
+                                              'eddyqc')
             in_eddyqc_file = os.path.join(self.in_eddyqc_dir, 'qc.json')
             if not os.path.isfile(in_eddyqc_file):
                 self.in_eddyqc_dir = None
