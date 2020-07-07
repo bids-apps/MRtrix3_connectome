@@ -920,7 +920,9 @@ def run_preproc(bids_dir, session, shared,
                 t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_subdir = os.path.join(output_app_dir, 'preproc', *session)
+    output_subdir = os.path.join(output_app_dir,
+                                 'MRtrix3_connectome-preproc',
+                                 *session)
     if os.path.exists(output_subdir):
         app.warn('Output directory for session "' + session_label + '" '
                  'already exists; all contents will be erased when this '
@@ -1159,8 +1161,7 @@ def run_preproc(bids_dir, session, shared,
 
     # Get T1-weighted image data
     #   (could be generated from raw data, or grabbed from a
-    #   user-specified path source;
-    #   don't look in output directory for preproc)
+    #   user-specified path source)
     get_t1w_preproc_images(bids_dir,
                            session,
                            shared.t1w_shared,
@@ -1801,7 +1802,9 @@ def run_participant(bids_dir, session, shared,
                     t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_analysis_level_path = os.path.join(output_app_dir, 'participant')
+    output_analysis_level_path = \
+        os.path.join(output_app_dir,
+                     'MRtrix3_connectome-participant')
     output_subdir = os.path.join(output_analysis_level_path, *session)
 
     if os.path.exists(output_subdir):
@@ -2053,14 +2056,16 @@ def run_participant(bids_dir, session, shared,
         for item in os.listdir(app.SCRATCH_DIR):
             os.remove(os.path.join(app.SCRATCH_DIR, item))
         try:
-            do_import(os.path.join(output_app_dir, 'preproc'))
+            preproc_dir = os.path.join(output_app_dir,
+                                       'MRtrix3_connectome-preproc')
+            do_import(preproc_dir)
         except MRtrixError as e_fromoutput:
             err = 'Unable to import requisite pre-processed data from ' \
                   'either specified input directory or MRtrix3_connectome ' \
                   'output directory\n'
             err += 'Error when attempting load from "' + bids_dir + '":\n'
             err += str(e_frombids) + '\n'
-            err += 'Error when attempting load from "' + output_app_dir + '":\n'
+            err += 'Error when attempting load from "' + preproc_dir + '":\n'
             err += str(e_fromoutput)
             raise MRtrixError(err)
 
@@ -2756,9 +2761,9 @@ GROUP_WARPS_DIR = 'warps'
 
 def run_group(bids_dir, output_verbosity, output_app_dir):
 
-    preproc_dir = os.path.join(output_app_dir, 'preproc')
-    participant_dir = os.path.join(output_app_dir, 'participant')
-    group_dir = os.path.join(output_app_dir, 'group')
+    preproc_dir = os.path.join(output_app_dir, 'MRtrix3_connectome-preproc')
+    participant_dir = os.path.join(output_app_dir, 'MRtrix3_connectome-participant')
+    group_dir = os.path.join(output_app_dir, 'MRtrix3_connectome-group')
 
     # Participant-level analysis no longer generates FA and mean b=0 images
     # These really should not be that expensive to compute in series,
@@ -2860,7 +2865,7 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                                              'dwi',
                                              'eddyqc')
             in_eddyqc_file = os.path.join(self.in_eddyqc_dir, 'qc.json')
-            if not os.path.isfile(self.in_eddyqc_file):
+            if not os.path.isfile(in_eddyqc_file):
                 self.in_eddyqc_dir = None
 
             self.mu = matrix.load_vector(self.in_mu)[0]
@@ -3956,27 +3961,15 @@ def execute(): #pylint: disable=unused-variable
     if app.ARGS.output_verbosity == 4:
         app.DO_CLEANUP = False
 
-    # Locate root directory of BIDS App output based on user input
-    #   (i.e. location of directory "mrtrix3_connectome", which itself
-    #   contains sub-directories for each analysis level)
-    # Note: abspath() removes any trailing path separator
     output_abspath = os.path.abspath(app.ARGS.output_dir)
     output_basename = os.path.basename(output_abspath)
-    output_dirname = os.path.dirname(output_abspath)
-    # Basename of output path is the analysis level being requested
-    if output_basename.lower() == app.ARGS.analysis_level:
-        output_app_path = os.path.dirname(output_dirname)
-        if os.path.basename(os.path.dirname(output_app_path)) \
-                           .lower() != 'mrtrix3_connectome':
-            raise MRtrixError('Output directory structure malformed')
-    # Basename of output path is "mrtrix3_connectome"
-    elif output_basename.lower() == 'mrtrix3_connectome':
-        output_app_path = output_dirname
-    # Basename of output path is unknown
+    if output_basename.lower() == 'mrtrix3_connectome-' \
+                                  + app.ARGS.analysis_level:
+        output_app_path = os.path.dirname(output_abspath)
     else:
-        output_app_path = os.path.join(output_abspath, 'MRtrix3_connectome')
-    if not os.path.isdir(output_app_path):
-        run.function(os.makedirs, output_app_path)
+        output_app_path = output_abspath
+        if os.path.isfile(output_app_path):
+            raise MRtrixError('Output path cannot be an existing file')
 
 
     if app.ARGS.analysis_level in ['preproc', 'participant']:
