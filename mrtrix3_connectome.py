@@ -2851,6 +2851,18 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                                             session_label
                                             + '_desc-brain_mask.nii.gz')
 
+            # Not guaranteed to exist
+            # Also needs to not just be a directory present, but also
+            #   have the "eddy_quad" contents present (if EddyQC is not
+            #   installed, that directory will still be constructed, it
+            #   just will only contain contents from "eddy" itself)
+            self.in_eddyqc_dir = os.path.join(preproc_root,
+                                             'dwi',
+                                             'eddyqc')
+            in_eddyqc_file = os.path.join(self.in_eddyqc_dir, 'qc.json')
+            if not os.path.isfile(self.in_eddyqc_file):
+                self.in_eddyqc_dir = None
+
             self.mu = matrix.load_vector(self.in_mu)[0]
             self.RF = matrix.load_matrix(self.in_rf)
 
@@ -3176,10 +3188,32 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         app.warn('Different parcellations across sessions; '
                  'cannot calculate a group mean connectome')
 
+
+    # Run EddyQC group-level analysis if available
+    # Do this LAST, as it writes back to the preproc EddyQC directories
+    #   if successful
+    do_squad = bool(find_executable('eddy_squad'))
+    if do_squad:
+        quad_dirs = [s.in_eddyqc_dir for s in sessions if s.in_eddyqc_dir]
+        missing_sessions = [s.session_label for s in sessions \
+                            if not s.in_eddyqc_dir]
+        if quad_dirs:
+            if missing_sessions:
+                app.warn('Some sessions do not contain EddyQC subject data, '
+                         'and will be omitted from the group-level analysis: '
+                         + str(missing_sessions))
+            run.command(['eddy_squad', quad_dirs])
+        else:
+            app.warn('No pre-processed sessions contain EddyQC data; '
+                     '"eddy_squad" skipped')
+    else:
+        app.warn('EddyQC command "eddy_squad" not available; skipped')
+
+
     # Write results of interest back to the output directory;
     #     both per-subject and group information
     progress = app.ProgressBar('Writing results to output directory',
-                               len(sessions)+2)
+                               len(sessions)+3)
     if os.path.exists(group_dir):
         run.function(shutil.rmtree, group_dir)
     run.function(os.makedirs, group_dir)
@@ -3209,6 +3243,16 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         matrix.save_matrix(out_connectome_path,
                            mean_connectome,
                            force=IS_CONTAINER)
+    progress.increment()
+    if do_squad:
+        run.function(os.makedirs,
+                     os.path.join(group_dir, 'eddyqc'))
+        for filename in ['group_db.json', 'group_qc.pdf']:
+            run.function(shutil.copyfile,
+                         filename,
+                         os.path.join(group_dir,
+                                      'eddyqc',
+                                      filename))
     progress.done()
 
     # For group-level analysis, function is only executed once, so
