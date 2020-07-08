@@ -3268,7 +3268,7 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                      os.path.join(s.out_dir, 'connectome'))
         run.function(shutil.copyfile,
                      s.temp_connectome,
-                     s.out_connectome)
+                     s.out_connectome_data)
         json_data = {'Contributions': {
                         'RFMagnitude': s.RF_multiplier,
                         'SIFTMu': s.mu,
