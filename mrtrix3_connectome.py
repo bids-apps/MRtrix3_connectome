@@ -24,6 +24,11 @@ OPTION_PREFIX = '--' if IS_CONTAINER else '-'
 OUT_DWI_JSON_DATA = {'SkullStripped': False}
 OUT_5TT_JSON_DATA = {'LabelMap': ['CGM', 'SGM', 'WM', 'CSF', 'Path']}
 
+# Use a threshold on the balanced tissue sum image
+#   as a replacement of dwi2mask within the iterative
+#   bias field correction / brain masking loop in preprpoc
+TISSUESUM_THRESHOLD = 0.5 / math.sqrt(4.0 * math.pi)
+
 # Seem that for problematic data, running more than two iterations may
 #   cause divergence from the ideal mask; therefore cap at two iterations
 DWIBIASCORRECT_MAX_ITERS = 2
@@ -1439,26 +1444,12 @@ def run_preproc(bids_dir, session, shared,
     app.cleanup(dwifslpreproc_input)
     app.cleanup(dwifslpreproc_se_epi)
 
-    # # Step 4: b=0-based bias field correction
-    # dwi_image = 'dwi_init.mif'
-    # if shared.dwibiascorrect_algo:
-    #     app.console('Performing initial B1 bias field correction of DWIs')
-    #     run.command('dwibiascorrect '
-    #                 + shared.dwibiascorrect_algo
-    #                 + ' '
-    #                 + dwifslpreproc_output
-    #                 + ' '
-    #                 + dwi_image)
-    #     app.cleanup(dwifslpreproc_output)
-    # else:
-    #     run.function(shutil.move, dwifslpreproc_output, dwi_image)
-
     # Step 4: Generate an image containing all voxels where the
     #   DWI contains valid data
-    dwi_valid_image = 'dwi_validity_mask.mif'
+    dwi_validdata_image = 'dwi_validdata_mask.mif'
     run.command('mrmath ' + dwifslpreproc_output + ' max -axis 3 - |'
                 + ' mrthreshold - '
-                + dwi_valid_image
+                + dwi_validdata_image
                 + ' -abs 0.0 -comparison gt')
 
     # Determine whether we are working with single-shell or multi-shell data
@@ -1481,10 +1472,6 @@ def run_preproc(bids_dir, session, shared,
     #     - Mtnormalise to remove any bias field;
     #     - Re-calculation of brain mask;
     #   in an iterative fashion, as all steps may influence the others.
-    #
-    # Use a threshold of 0.5/sqrt(4pi) on the tissue sum image
-    #   as a replacement of dwi2mask within this loop
-    TISSUESUM_THRESHOLD = 0.5 / math.sqrt(4.0 * math.pi)
     class Tissue(object): #pylint: disable=useless-object-inheritance
         def __init__(self, name, index):
             self.name = name
@@ -1581,14 +1568,13 @@ def run_preproc(bids_dir, session, shared,
                     + ' mrthreshold - -abs '
                     + str(TISSUESUM_THRESHOLD)
                     + ' - |'
-                    + ' maskfilter - median - |'
                     + ' maskfilter - connect -largest - |'
                     + ' mrcalc 1 - -sub - -datatype bit |'
                     + ' maskfilter - connect -largest - |'
                     + ' mrcalc 1 - -sub - -datatype bit |'
                     + ' maskfilter - clean - |'
                     + ' mrcalc - '
-                    + dwi_valid_image
+                    + dwi_validdata_image
                     + ' -mult '
                     + new_dwi_mask_image
                     + ' -datatype bit')
@@ -1624,7 +1610,7 @@ def run_preproc(bids_dir, session, shared,
     progress.done()
 
     app.cleanup(dwifslpreproc_output)
-    app.cleanup(dwi_valid_image)
+    app.cleanup(dwi_validdata_image)
 
     # Step 7: Crop images to reduce storage space
     #   (but leave some padding on the sides)
