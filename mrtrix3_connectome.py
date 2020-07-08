@@ -3218,6 +3218,7 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         else:
             app.warn('No pre-processed sessions contain EddyQC data; '
                      '"eddy_squad" skipped')
+            do_squad = False
     else:
         app.warn('EddyQC command "eddy_squad" not available; skipped')
 
