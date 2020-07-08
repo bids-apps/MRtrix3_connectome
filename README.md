@@ -164,7 +164,8 @@ parcellation (((Avants et al., 2008 OR Andersson et al., 2010) AND (Tzourio-Mazo
 2002 OR Yeo et al., 2011 OR Craddock et al., 2012 OR Fan et al., 2016 OR (Zalesky et al.,
 2010 AND Perry et al., 2017))) OR (Dale et al., 1999 AND (Desikan et al., 2006 OR
 Destrieux et al., 2010 OR Glasser et al., 2016))); robust structural connectome
-construction Smith et al., 2015a; Yeh et al., 2016).
+construction Smith et al., 2015a; Yeh et al., 2016); inter-subject connection density
+normalisation (Smith et al., 2020).
 
 ```
 Smith, R. E.; Connelly, A. MRtrix3_connectome: A BIDS Application for quantitative structural connectome construction. In Proc OHBM, 2019, W610
@@ -191,8 +192,10 @@ Smith, S. M. Fast robust automated brain extraction. Human Brain Mapping, 2002, 
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. Anatomically-constrained tractography: Improved diffusion MRI streamlines tractography through effective use of anatomical information. NeuroImage, 2012, 62, 1924-1938
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. The effects of SIFT on the reproducibility and biological accuracy of the structural connectome. NeuroImage, 2015a, 104, 253-265
 Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dense quantitative assessment of brain white matter connectivity using streamlines tractography. NeuroImage, 2015b, 119, 338-351
+Smith, R. E.; Calamante, F.; Connelly, A. Mapping connectomes with diffusion MRI: Deterministic or probabilistic tractography? Magnetic Resonance in Medicine, 2020, 83(3), 787-790
 Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. Direct estimation of the fiber orientation density function from diffusion-weighted MRI data using spherical deconvolution. NeuroImage, 2004, 23, 1176-1185
 Tournier, J.-D.; Calamante, F. & Connelly, A. Improved probabilistic streamlines tractography by 2nd order integration over fibre orientation distributions. Proceedings of the International Society for Magnetic Resonance in Medicine, 2010, 1670
+Tournier, J.-D.; Smith, R. E.; Raffelt, D. A.; Tabbara, R.; Dhollander, T.; Pietsch, M; Christiaens, D.; Jeurissen, B.; Y, C.-H.; Connelly, A. MRtrix3: A fast, flexible and open software framework for medical image processing and visualisation. NeuroImage, 2019, 202, 116137
 Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J. N4ITK: Improved N3 Bias Correction. IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320
 Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. Automated Anatomical Labeling of activations in SPM using a Macroscopic Anatomical Parcellation of the MNI MRI single-subject brain. NeuroImage, 15(1), 273–289
 Veraart, J.; Novikov, D. S.; Christiaens, D.; Ades-aron, B.; Sijbers, J. & Fieremans, E. Denoising of diffusion MRI using random matrix theory. NeuroImage, 2016, 142, 394-406
@@ -201,6 +204,9 @@ Yeo, B.T.; Krienen, F.M.; Sepulcre, J.; Sabuncu, M.R.; Lashkari, D.; Hollinshead
 Zalesky, A.; Fornito, A.; Harding, I. H.; Cocchi, L.; Yücel, M.; Pantelis, C. & Bullmore, E. T. Whole-brain anatomical networks: Does the choice of nodes matter? NeuroImage, 2010, 50, 970-983
 Zhang, Y.; Brady, M. & Smith, S. Segmentation of brain MR images through a hidden Markov random field model and the expectation-maximization algorithm. IEEE Transactions on Medical Imaging, 2001, 20, 45-57
 ```
+
+
+
 
 ## Help page
 
@@ -212,7 +218,7 @@ is slightly different if run natively).
 
 ## Synopsis
 
-Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in MRtrix3
+Generate structural connectomes based on diffusion-weighted and T1-weighted image data using state-of-the-art reconstruction tools, particularly those provided in *MRtrix3*
 
 ### Usage
 
@@ -222,41 +228,43 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 -  *output_dir*: The directory where the output files should be stored.
 
--  *analysis_level*: Level of analysis that will be performed; options are: participant1, participant2, group.
+-  *analysis_level*: Level of analysis that will be performed; options are: preproc, participant, group.
 
 ### Description
 
-While participant1-level analysis only requires data within the BIDS directory, participant2-level analysis requires that the output directory be pre-populated with the results from participant1-level processing; similarly, group-level analysis requires that the output directory be pre-populated with the results from participant2-level analysis.
+While preproc-level analysis only requires data within the BIDS directory, participant-level analysis requires that the output directory be pre-populated with the results from preproc-level processing; similarly, group-level analysis requires that the output directory be pre-populated with the results from participant-level analysis.
 
 The operations performed by each of the three levels of analysis are as follows:
 
-"participant1": DWI: Denoising; Gibbs ringing removal; motion, eddy current and EPI distortion correction and outlier detection & replacement; brain masking, bias field correction and intensity normalisation; rigid-body registration & transformation to T1-weighted image. T1-weighted image: bias field correction; brain masking.
+"preproc": DWI: Denoising; Gibbs ringing removal; motion, eddy current and EPI distortion correction and outlier detection & replacement; brain masking, bias field correction and intensity normalisation; rigid-body registration & transformation to T1-weighted image. T1-weighted image: bias field correction; brain masking.
 
-"participant2": DWI: Response function estimation; FOD estimation. T1-weighted image (if -parcellation is not none): Tissue segmentation; grey matter parcellation. Combined (if -parcellation is not none, or -streamlines is provided): Whole-brain streamlines tractography; SIFT2; connectome construction.
+"participant": DWI: Response function estimation; FOD estimation. T1-weighted image (if -parcellation is not none): Tissue segmentation; grey matter parcellation. Combined (if -parcellation is not none, or -streamlines is provided): Whole-brain streamlines tractography; SIFT2; connectome construction.
 
-"group": Generation of FA-based population template; warping of template-based white matter mask to subject spaces; calculation of group mean white matter response function; scaling of connectomes based on white matter b=0 intensity, response function used during participant2-level analysis, and SIFT model proportioinality coefficient; generation of group mean connectome.
+"group": Generation of FA-based population template; warping of template-based white matter mask to subject spaces; calculation of group mean white matter response function; scaling of connectomes based on white matter b=0 intensity, response function used during participant-level analysis, and SIFT model proportioinality coefficient; generation of group mean connectome.
 
 The label(s) provided to the -participant_label and -session_label options correspond(s) to sub-<participant_label> and ses-<session_label> from the BIDS spec (so they do _not_ include "sub-" or "ses-"). Multiple participants / sessions can be specified with a space-separated list.
 
-For both participant-level analyses, if no specific participants or sessions are nominated by the user (or the user explicitly specifies multiple participants / sessions), the script will process each of these in series. It is additionally possible for the user to invoke multiple instances of this script in order to process multiple subjects at once in parallel, ensuring that no single participant / session is being processed in parallel, and that participant1-level output data are written fully before commencing participant2-level analysis.
+For both preproc-level and participant-level analyses, if no specific participants or sessions are nominated by the user (or the user explicitly specifies multiple participants / sessions), the script will process each of these in series. It is additionally possible for the user to invoke multiple instances of this script in order to process multiple subjects at once in parallel, ensuring that no single participant / session is being processed in parallel, and that preproc-level output data are written fully before commencing participant-level analysis.
 
-The -output_verbosity option principally affects the participant2-level analysis, modulating how many derivative files are written to the output directory. Permitted values are from 1 to 4: 1 writes only those files requisite for group-level analysis; 2 additionally writes files typically useful for post-hoc analysis (the default); 3 additionally generates files for enhanced connectome visualisation and copies the entire whole-brain tractogram; 4 additionally generates a full copy of the script scratch directory (with all intermediate files retained) to the output directory (and this applies to all analysis levels)
+The -output_verbosity option principally affects the participant-level analysis, modulating how many derivative files are written to the output directory. Permitted values are from 1 to 4: 1 writes only those files requisite for group-level analysis; 2 additionally writes files typically useful for post-hoc analysis (the default); 3 additionally generates files for enhanced connectome visualisation and copies the entire whole-brain tractogram; 4 additionally generates a full copy of the script scratch directory (with all intermediate files retained) to the output directory (and this applies to all analysis levels)
 
-If running participant2-level analysis using the script as a standalone tool rather than inside the provided container, data pertaining to atlas parcellations can no longer be guaranteed to be stored at a specific location on the filesystem. In this case, the user will most likely need to manually specify the location where the corresponding parcellation is stored using the -atlas_path option.
+If running participant-level analysis using the script as a standalone tool rather than inside the provided container, data pertaining to atlas parcellations can no longer be guaranteed to be stored at a specific location on the filesystem. In this case, the user will most likely need to manually specify the location where the corresponding parcellation is stored using the -atlas_path option.
 
 ### Options
 
 + **--output_verbosity**<br>The verbosity of script output (number from 1 to 4).
 
-#### Options that are relevant to participant2-level analysis
+#### Options that are relevant to participant-level analysis
 
-+ **--atlas_path path**<br>The filesystem path in which to search for atlas parcellation files.
-
-+ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant2-level analysis); options are: aal, aal2, brainnetome246fs, brainnetome246mni, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512, yeo7fs, yeo7mni, yeo17fs, yeo17mni.
++ **--parcellation**<br>The choice of connectome parcellation scheme (compulsory for participant-level analysis); options are: aal, aal2, brainnetome246fs, brainnetome246mni, craddock200, craddock400, desikan, destrieux, hcpmmp1, none, perry512, yeo7fs, yeo7mni, yeo17fs, yeo17mni.
 
 + **--streamlines**<br>The number of streamlines to generate for each subject (will be determined heuristically if not explicitly set).
 
 + **--template_reg software**<br>The choice of registration software for mapping subject to template space; options are: ants, fsl.
+
+#### Options that are relevant to both preproc-level and participant-level analyses
+
++ **--t1w_preproc path**<br>Provide a path by which pre-processed T1-weighted image data may be found for the processed participant(s) / session(s)
 
 #### Options specific to the batch processing of participant data
 
@@ -271,6 +279,10 @@ If running participant2-level analysis using the script as a standalone tool rat
 + **-h/--help**<br>display this information page and exit.
 
 + **-n/--n_cpus number**<br>use this number of threads in multi-threaded applications (set to 0 to disable multi-threading).
+
++ **--scratch /path/to/scratch/**<br>manually specify the path in which to generate the scratch directory.
+
++ **--skip-bids-validator**<br>Skip BIDS validation
 
 + **-v/--version**<br>display version information and exit.
 

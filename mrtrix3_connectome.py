@@ -3884,6 +3884,12 @@ See the Mozilla Public License v. 2.0 for more details.''')
         condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
+        'Smith, R. E.; Calamante, F.; Connelly, A. '
+        'Mapping connectomes with diffusion MRI: Deterministic or '
+        'probabilistic tractography? '
+        'Magnetic Resonance in Medicine, 2020, 83(3), 787-790',
+        condition='If performing group-level analysis')
+    cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'SIFT2: Enabling dense quantitative assessment of brain white matter '
         'connectivity using streamlines tractography. '
@@ -3906,14 +3912,6 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'Resonance in Medicine, 2010, 1670',
         condition='If performing participant-level analysis and '
         + OPTION_PREFIX + 'streamlines 0 is not set',
-        is_external=False)
-    cmdline.add_citation(
-        'Tournier, J.-D.; Smith, R. E.; Raffelt, D. A.; Tabbara, '
-        'R.; Dhollander, T.; Pietsch, M; Christiaens, D.; Jeurissen, '
-        'B.; Y, C.-H.; Connelly, A.;'
-        'MRtrix3: A fast, flexible and open software framework for '
-        'medical image processing and visualisation. '
-        'NeuroImage, 2019, 202, 116137',
         is_external=False)
     cmdline.add_citation(
         'Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; '
