@@ -1,7 +1,7 @@
 Bootstrap: debootstrap
 MirrorURL: http://us.archive.ubuntu.com/ubuntu/
 OSVersion: bionic
-Include: apt bc build-essential dc file git gnupg libegl1-mesa-dev libfftw3-dev libpng-dev libtiff5-dev nano python python3 python3-numpy python3-setuptools tar tzdata unzip wget zlib1g-dev
+Include: apt file gnupg
 
 %labels
 MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
@@ -10,8 +10,6 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     mrtrix3_connectome.py /mrtrix3_connectome.py
     neurodebian.gpg /neurodebian.gpg
     version /version
-    Yeo2011_7N_split.txt /tmp/labelconvert/Yeo2011_7N_split.txt
-    Yeo2011_17N_split.txt /tmp/labelconvert/Yeo2011_17N_split.txt
 
 %environment
 
@@ -54,36 +52,39 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Grab additional repositories
     sed -i 's/main/main restricted universe multiverse/g' /etc/apt/sources.list
-    apt update
-    apt upgrade -y
+    apt-get update && apt-get upgrade -y
+
+# Base requirements
+    apt-get update && apt-get install -y bc=1.07.1-2 build-essential=12.4ubuntu1 curl=7.58.0-2ubuntu3 dc=1.07.1-2 git=1:2.17.0-1ubuntu1 libegl1-mesa-dev=18.0.0~rc5-1ubuntu1 libopenblas-dev=0.2.20+ds-4 nano=2.9.3-2 perl-modules-5.26=5.26.1-6 python=2.7.15~rc1-1 python3=3.6.5-3 tar=1.29b-2 tcsh=6.20.00-7 tzdata=2018d-1 unzip=6.0-21ubuntu1 wget=1.19.4-1ubuntu2
+
+# PPA for newer version of nodejs, which is required for bids-validator
+    curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && bash nodesource_setup.sh && rm -f nodesource_setup.sh
+    apt-get update && apt-get install -y nodejs=12.18.2-1nodesource1
 
 # NeuroDebian setup
     wget -qO- http://neuro.debian.net/lists/bionic.au.full | tee -a /etc/apt/sources.list
-    apt-key add /neurodebian.gpg
-    apt update
-    apt upgrade -y
+    apt-key add /neurodebian.gpg && apt-get update
 
-# Packages that coulnd't be installed upfront
-    apt install -y clang libeigen3-dev libopenblas-dev nodejs npm perl-modules tcsh
+    # Additional dependencies for MRtrix3 compilation
+    apt-get install -y libeigen3-dev=3.3.4-4 libfftw3-dev=3.3.7-1 libpng-dev=1.6.34-1 libtiff5-dev=4.0.9-5 zlib1g-dev=1:1.2.11.dfsg-0ubuntu2
 
 # Neuroimaging software / data dependencies
     wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | tar zx -C /opt --exclude='freesurfer/trctrain' --exclude='freesurfer/subjects/fsaverage_sym' --exclude='freesurfer/subjects/fsaverage3' --exclude='freesurfer/subjects/fsaverage4' --exclude='freesurfer/subjects/fsaverage6' --exclude='freesurfer/subjects/cvs_avg35' --exclude='freesurfer/subjects/cvs_avg35_inMNI152' --exclude='freesurfer/subjects/bert' --exclude='freesurfer/subjects/V1_average' --exclude='freesurfer/average/mult-comp-cor' --exclude='freesurfer/lib/qt'
     echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
     FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
-    apt install -y ants
+    apt-get install -y ants=2.2.0-1ubuntu1
     wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
     chmod 775 fslinstaller.py
     python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
     rm /fslinstaller.py
-    which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl )
+    which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
-    git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
-    npm install -gq bids-validator
+    npm install -gq bids-validator@1.5.3
 
 # apt cleanup to recover as much space as possible
-    apt remove libegl1-mesa-dev -y && apt autoremove -y
-    apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    apt-get remove libegl1-mesa-dev -y && apt-get autoremove -y
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
     wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | tar zx -C /opt
@@ -107,15 +108,10 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-    git clone -b 3.0.0 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/ && cd /
-    mv /tmp/labelconvert/* /mrtrix3/share/mrtrix3/labelconvert && rm -rf /tmp/labelconvert
+    git clone -b 3.0.1 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/
 
 # MRtrix3_connectome script
     chmod 775 /mrtrix3_connectome.py
-
-# Mount points
-    mkdir /bids_dataset
-    mkdir /output
 
 %runscript
     exec /usr/bin/python /mrtrix3_connectome.py "$@"

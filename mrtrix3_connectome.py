@@ -922,7 +922,9 @@ def run_preproc(bids_dir, session, shared,
                 t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_subdir = os.path.join(output_app_dir, 'preproc', *session)
+    output_subdir = os.path.join(output_app_dir,
+                                 'MRtrix3_connectome-preproc',
+                                 *session)
     if os.path.exists(output_subdir):
         app.warn('Output directory for session "' + session_label + '" '
                  'already exists; all contents will be erased when this '
@@ -1161,8 +1163,7 @@ def run_preproc(bids_dir, session, shared,
 
     # Get T1-weighted image data
     #   (could be generated from raw data, or grabbed from a
-    #   user-specified path source;
-    #   don't look in output directory for preproc)
+    #   user-specified path source)
     get_t1w_preproc_images(bids_dir,
                            session,
                            shared.t1w_shared,
@@ -1484,7 +1485,6 @@ def run_preproc(bids_dir, session, shared,
     # Use a threshold of 0.5/sqrt(4pi) on the tissue sum image
     #   as a replacement of dwi2mask within this loop
     TISSUESUM_THRESHOLD = 0.5 / math.sqrt(4.0 * math.pi)
-
     class Tissue(object): #pylint: disable=useless-object-inheritance
         def __init__(self, name, index):
             self.name = name
@@ -1834,7 +1834,9 @@ def run_participant(bids_dir, session, shared,
                     t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
-    output_analysis_level_path = os.path.join(output_app_dir, 'participant')
+    output_analysis_level_path = \
+        os.path.join(output_app_dir,
+                     'MRtrix3_connectome-participant')
     output_subdir = os.path.join(output_analysis_level_path, *session)
 
     if os.path.exists(output_subdir):
@@ -2086,14 +2088,16 @@ def run_participant(bids_dir, session, shared,
         for item in os.listdir(app.SCRATCH_DIR):
             os.remove(os.path.join(app.SCRATCH_DIR, item))
         try:
-            do_import(os.path.join(output_app_dir, 'preproc'))
+            preproc_dir = os.path.join(output_app_dir,
+                                       'MRtrix3_connectome-preproc')
+            do_import(preproc_dir)
         except MRtrixError as e_fromoutput:
             err = 'Unable to import requisite pre-processed data from ' \
                   'either specified input directory or MRtrix3_connectome ' \
                   'output directory\n'
             err += 'Error when attempting load from "' + bids_dir + '":\n'
             err += str(e_frombids) + '\n'
-            err += 'Error when attempting load from "' + output_app_dir + '":\n'
+            err += 'Error when attempting load from "' + preproc_dir + '":\n'
             err += str(e_fromoutput)
             raise MRtrixError(err)
 
@@ -2789,9 +2793,12 @@ GROUP_WARPS_DIR = 'warps'
 
 def run_group(bids_dir, output_verbosity, output_app_dir):
 
-    preproc_dir = os.path.join(output_app_dir, 'preproc')
-    participant_dir = os.path.join(output_app_dir, 'participant')
-    group_dir = os.path.join(output_app_dir, 'group')
+    preproc_dir = os.path.join(output_app_dir,
+                               'MRtrix3_connectome-preproc')
+    participant_dir = os.path.join(output_app_dir,
+                                   'MRtrix3_connectome-participant')
+    group_dir = os.path.join(output_app_dir,
+                             'MRtrix3_connectome-group')
 
     # Participant-level analysis no longer generates FA and mean b=0 images
     # These really should not be that expensive to compute in series,
@@ -2884,6 +2891,18 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                                             session_label
                                             + '_desc-brain_mask.nii.gz')
 
+            # Not guaranteed to exist
+            # Also needs to not just be a directory present, but also
+            #   have the "eddy_quad" contents present (if EddyQC is not
+            #   installed, that directory will still be constructed, it
+            #   just will only contain contents from "eddy" itself)
+            self.in_eddyqc_dir = os.path.join(preproc_root,
+                                              'dwi',
+                                              'eddyqc')
+            in_eddyqc_file = os.path.join(self.in_eddyqc_dir, 'qc.json')
+            if not os.path.isfile(in_eddyqc_file):
+                self.in_eddyqc_dir = None
+
             self.mu = matrix.load_vector(self.in_mu)[0]
             self.RF = matrix.load_matrix(self.in_rf)
 
@@ -2903,34 +2922,16 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
             self.dwiintensitynorm_factor = 1.0
             self.RF_multiplier = 1.0
             self.volume_multiplier = 1.0
-            for spacing in image.Header(self.in_dwi).spacing()[0:3]:
-                self.volume_multiplier *= spacing
             self.global_multiplier = 1.0
             self.temp_connectome = os.path.join(GROUP_CONNECTOMES_DIR,
                                                 session_label + '.csv')
             self.out_dir = group_root
-            self.out_scale_intensity = \
-                os.path.join(group_root,
-                             'connectome',
-                             session_label
-                             + '_factor-intensity'
-                             + '_multiplier.txt')
-            self.out_scale_RF = \
-                os.path.join(group_root,
-                             'connectome',
-                             session_label
-                             + '_factor-response'
-                             + '_multiplier.txt')
-            self.out_scale_volume = \
-                os.path.join(group_root,
-                             'connectome',
-                             session_label
-                             + '_factor-volume'
-                             + '_multiplier.txt')
-            self.out_connectome = \
+            self.out_connectome_data = \
                 os.path.join(group_root,
                              'connectome',
                              os.path.basename(self.in_connectome))
+            self.out_connectome_json = \
+                os.path.splitext(self.out_connectome_data)[0] + '.json'
 
             self.session_label = session_label
 
@@ -3106,9 +3107,9 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     if len(sessions) == 1:
         app.console('Calculating N=1 intensity normalisation factor')
         run.command('mrthreshold template.mif voxels.mif -abs 0.4')
-        sessions[0].median_bzero = image.statistics(s.temp_bzero,
+        sessions[0].median_bzero = image.statistics(sessions[0].temp_bzero,
                                                     mask='voxels.mif').median
-        app.cleanup(s.temp_bzero)
+        app.cleanup(sessions[0].temp_bzero)
         sum_median_bzero = sessions[0].median_bzero
         app.cleanup('voxels.mif')
     else:
@@ -3144,17 +3145,19 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
     mean_median_bzero = sum_median_bzero / len(sessions)
 
     # Third pass through session data in group analysis:
-    # - Scale the connectome strengths:
+    # - Scaling factors for connectome strengths:
     #   - Multiply by SIFT proportionality coefficient mu
     #   - Multiply by (mean median b=0) / (subject median b=0)
     #   - Multiply by (subject RF size) / (mean RF size)
     #     (needs to account for multi-shell data)
     #   - Multiply by voxel volume
-    # - Write the result to file
-    progress = app.ProgressBar('Applying normalisation scaling to '
+    progress = app.ProgressBar('Computing normalisation scaling factors for '
                                'subject connectomes',
                                len(sessions))
     run.function(os.makedirs, GROUP_CONNECTOMES_DIR)
+    # Determine, from the minimum connectivity value that can be represented
+    #   in a streamlines-based representation, the maximum across sessions
+    min_connectivity = 0.0
     for s in sessions:
         RF_lzero = [line[0] for line in s.RF]
         s.RF_multiplier = 1.0
@@ -3167,50 +3170,129 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
 
         s.bzero_multiplier = mean_median_bzero / s.median_bzero
 
+        # Calculate voxel volume
+        for spacing in image.Header(s.in_dwi).spacing()[0:3]:
+            s.volume_multiplier *= spacing
+
         s.global_multiplier = s.mu \
                               * s.bzero_multiplier \
                               * s.RF_multiplier \
                               * s.volume_multiplier
 
-        connectome = matrix.load_matrix(s.in_connectome)
-        temp_connectome = [[v*s.global_multiplier for v in line]
-                           for line in connectome]
-        matrix.save_matrix(s.temp_connectome, temp_connectome)
+        # Minimum connectivity value that can be reasonably represented is
+        #   1 streamline prior to scaling
+        min_connectivity = max(min_connectivity, s.global_multiplier)
+
         progress.increment()
     progress.done()
 
-    # Third group-level calculation: Generate the group mean connectome
+    # Third group-level calculation:
+    # Compute normalised connectomes, and generate the group mean connectome
     # Can only do this if the parcellation is identical across subjects;
     #     this needs to be explicitly checked
+    # Use geometric mean for averaging across subjects, since variance
+    #   across sessions is closer to multiplicative than additive
     if consistent_parcellation:
-        progress = app.ProgressBar('Calculating group mean connectome',
+        progress = app.ProgressBar('Normalising subject connectomes, '
+                                   'applying group-wise minimum connectivity, '
+                                   'and calculating group mean connectome',
                                    len(sessions)+1)
-        # TODO Calculate geometric rather than arithmetic mean
-        # Requires setting a minimum connectivity value per edge;
-        #   this should be equivalent to 1 streamline prior to
-        #   application of the multiplier
         mean_connectome = []
         for s in sessions:
-            connectome = matrix.load_matrix(s.temp_connectome)
+            connectome_prenorm = matrix.load_matrix(s.in_connectome)
+            connectome_postnorm = [[max(v*s.global_multiplier,
+                                        min_connectivity)
+                                    for v in line]
+                                   for line in connectome_prenorm]
+            matrix.save_matrix(s.temp_connectome, connectome_postnorm)
+
             if mean_connectome:
-                mean_connectome = [[c1+c2 for c1, c2 in zip(r1, r2)]
+                mean_connectome = [[c1+math.log(c2)
+                                    for c1, c2 in zip(r1, r2)]
                                    for r1, r2 in zip(mean_connectome,
-                                                     connectome)]
+                                                     connectome_postnorm)]
             else:
-                mean_connectome = connectome
+                mean_connectome = [[math.log(v)
+                                    for v in row]
+                                   for row in connectome_postnorm]
             progress.increment()
 
-        mean_connectome = [[v/len(sessions) for v in row]
+        mean_connectome = [[math.exp(v/len(sessions))
+                            for v in row]
                            for row in mean_connectome]
         progress.done()
     else:
-        app.warn('Different parcellations across sessions; '
-                 'cannot calculate a group mean connectome')
+        app.warn('Different parcellations across sessions, '
+                 'cannot calculate a group mean connectome; '
+                 'normalising and applying minimum connectivity '
+                 'independently for each session')
+        connectome_prenorm = matrix.load_matrix(s.in_connectome)
+        connectome_postnorm = [[max(v, 1.0)*s.global_multiplier
+                                for v in line]
+                               for line in connectome_prenorm]
+        matrix.save_matrix(s.temp_connectome, connectome_postnorm)
+
+
+    # Run EddyQC group-level analysis if available
+    # Do this LAST, as it writes back to the preproc EddyQC directories
+    #   if successful
+    do_squad = bool(find_executable('eddy_squad'))
+    if do_squad:
+        quad_dirs = [s.in_eddyqc_dir for s in sessions if s.in_eddyqc_dir]
+        missing_sessions = [s.session_label for s in sessions \
+                            if not s.in_eddyqc_dir]
+        if quad_dirs:
+            if missing_sessions:
+                app.warn('Some sessions do not contain EddyQC subject data, '
+                         'and will be omitted from the group-level analysis: '
+                         + str(missing_sessions))
+            run.command(['eddy_squad', quad_dirs])
+        else:
+            app.warn('No pre-processed sessions contain EddyQC data; '
+                     '"eddy_squad" skipped')
+            do_squad = False
+    else:
+        app.warn('EddyQC command "eddy_squad" not available; skipped')
+
+
+    # Construct JSON data to be written to indicate what information is
+    #   provided for each session in participants.tsv
+    NORMALISATION_JSON_DATA = {
+        'rf': {
+            'Description': 'Multiplication term based on the difference in '
+                           'magnitude between the white matter response '
+                           'function used during independent participant-'
+                           'level analysis, and the group average white '
+                           'matter response function generated during group-'
+                           'level analysis'
+        },
+        'mu': {
+            'Description': 'Value of the "proportionality coefficient" '
+                           'within the SIFT model',
+            'Units': 'FD/mm'
+        },
+        'vol': {
+            'Description': 'Volume of DWI voxels',
+            'Units': 'mm^3'
+        },
+        'wmb0': {
+            'Description': 'Multiplication term based on the median '
+                           'intensity of the b=0 image within white matter, '
+                           'compared to the mean of this value across '
+                           'subjects'
+        },
+        'norm': {
+            'Description': 'Normalisation factor applied to session '
+                           'connectome data, calculated as the product of '
+                           'the "rf", "mu", "vol" and "wmb0" terms'
+        }
+    }
+
 
     # Write results of interest back to the output directory;
     #     both per-subject and group information
     progress = app.ProgressBar('Writing results to output directory',
-                               len(sessions)+2)
+                               len(sessions)+3)
     if os.path.exists(group_dir):
         run.function(shutil.rmtree, group_dir)
     run.function(os.makedirs, group_dir)
@@ -3219,16 +3301,15 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
                      os.path.join(s.out_dir, 'connectome'))
         run.function(shutil.copyfile,
                      s.temp_connectome,
-                     s.out_connectome)
-        matrix.save_vector(s.out_scale_intensity,
-                           [s.bzero_multiplier],
-                           force=IS_CONTAINER)
-        matrix.save_vector(s.out_scale_RF,
-                           [s.RF_multiplier],
-                           force=IS_CONTAINER)
-        matrix.save_vector(s.out_scale_volume,
-                           [s.volume_multiplier],
-                           force=IS_CONTAINER)
+                     s.out_connectome_data)
+        json_data = {'Contributions': {
+                        'RFMagnitude': s.RF_multiplier,
+                        'SIFTMu': s.mu,
+                        'VoxelVolume': s.volume_multiplier,
+                        'WMIntensity': s.dwiintensitynorm_factor},
+                     'Multiplier': s.global_multiplier}
+        with open(s.out_connectome_json, 'w') as json_file:
+            json.dump(json_data, json_file)
         progress.increment()
     app.cleanup(GROUP_CONNECTOMES_DIR)
 
@@ -3240,6 +3321,29 @@ def run_group(bids_dir, output_verbosity, output_app_dir):
         matrix.save_matrix(out_connectome_path,
                            mean_connectome,
                            force=IS_CONTAINER)
+        with open(os.path.join(group_dir, 'normalisation.tsv'),
+                  'w') as tsv_file:
+            tsv_file.write('session_id\trf\tmu\tvol\twmb0\tnorm\n')
+            for s in sessions:
+                tsv_file.write(s.session_label + '\t'
+                               + str(s.RF_multiplier) + '\t'
+                               + str(s.mu) + '\t'
+                               + str(s.volume_multiplier) + '\t'
+                               + str(s.dwiintensitynorm_factor) + '\t'
+                               + str(s.global_multiplier) + '\n')
+        with open(os.path.join(group_dir, 'normalisation.json'),
+                  'w') as json_file:
+            json.dump(NORMALISATION_JSON_DATA, json_file)
+    progress.increment()
+    if do_squad:
+        run.function(os.makedirs,
+                     os.path.join(group_dir, 'eddyqc'))
+        for filename in ['group_db.json', 'group_qc.pdf']:
+            run.function(shutil.copyfile,
+                         filename,
+                         os.path.join(group_dir,
+                                      'eddyqc',
+                                      filename))
     progress.done()
 
     # For group-level analysis, function is only executed once, so
@@ -3943,27 +4047,15 @@ def execute(): #pylint: disable=unused-variable
     if app.ARGS.output_verbosity == 4:
         app.DO_CLEANUP = False
 
-    # Locate root directory of BIDS App output based on user input
-    #   (i.e. location of directory "mrtrix3_connectome", which itself
-    #   contains sub-directories for each analysis level)
-    # Note: abspath() removes any trailing path separator
     output_abspath = os.path.abspath(app.ARGS.output_dir)
     output_basename = os.path.basename(output_abspath)
-    output_dirname = os.path.dirname(output_abspath)
-    # Basename of output path is the analysis level being requested
-    if output_basename.lower() == app.ARGS.analysis_level:
-        output_app_path = os.path.dirname(output_dirname)
-        if os.path.basename(os.path.dirname(output_app_path)) \
-                           .lower() != 'mrtrix3_connectome':
-            raise MRtrixError('Output directory structure malformed')
-    # Basename of output path is "mrtrix3_connectome"
-    elif output_basename.lower() == 'mrtrix3_connectome':
-        output_app_path = output_dirname
-    # Basename of output path is unknown
+    if output_basename.lower() == 'mrtrix3_connectome-' \
+                                  + app.ARGS.analysis_level:
+        output_app_path = os.path.dirname(output_abspath)
     else:
-        output_app_path = os.path.join(output_abspath, 'MRtrix3_connectome')
-    if not os.path.isdir(output_app_path):
-        run.function(os.makedirs, output_app_path)
+        output_app_path = output_abspath
+        if os.path.isfile(output_app_path):
+            raise MRtrixError('Output path cannot be an existing file')
 
 
     if app.ARGS.analysis_level in ['preproc', 'participant']:

@@ -3,27 +3,31 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Core system capabilities required
 RUN apt-get update && apt-get install -y \
-    bc \
-    build-essential \
-    dc \
-    git \
-    libegl1-mesa-dev \
-    libopenblas-dev \
-    nano \
-    nodejs \
-    npm \
-    perl-modules \
-    python3 \
-    python3-numpy \
-    python3-setuptools \
-    tar \
-    tcsh \
-    unzip \
-    wget
+    bc=1.07.1-2 \
+    build-essential=12.4ubuntu1 \
+    curl=7.58.0-2ubuntu3.9 \
+    dc=1.07.1-2 \
+    git=1:2.17.1-1ubuntu0.7 \
+    libegl1-mesa-dev=19.2.8-0ubuntu0~18.04.3 \
+    libopenblas-dev=0.2.20+ds-4 \
+    nano=2.9.3-2 \
+    perl-modules-5.26=5.26.1-6ubuntu0.3 \
+    python2.7=2.7.17-1~18.04ubuntu1 \
+    python3=3.6.7-1~18.04 \
+    tar=1.29b-2ubuntu0.1 \
+    tcsh=6.20.00-7 \
+    unzip=6.0-21ubuntu1 \
+    wget=1.19.4-1ubuntu2.2
 
 
 RUN DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y tzdata
+    apt-get install -y tzdata=2020a-0ubuntu0.18.04
+
+# PPA for newer version of nodejs, which is required for bids-validator
+RUN curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && \
+    bash nodesource_setup.sh && \
+    rm -f nodesource_setup.sh
+RUN apt-get install -y nodejs=12.18.2-1nodesource1
 
 # NeuroDebian setup
 RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
@@ -34,11 +38,11 @@ RUN apt-key add /neurodebian.gpg && \
 
 # Additional dependencies for MRtrix3 compilation
 RUN apt-get update && apt-get install -y \
-    libeigen3-dev \
-    libfftw3-dev \
-    libpng-dev \
-    libtiff5-dev \
-    zlib1g-dev
+    libeigen3-dev=3.3.4-4 \
+    libfftw3-dev=3.3.7-1 \
+    libpng-dev=1.6.34-1ubuntu0.18.04.2 \
+    libtiff5-dev=4.0.9-5ubuntu0.3 \
+    zlib1g-dev=1:1.2.11.dfsg-0ubuntu2
 
 # Neuroimaging software / data dependencies
 RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | \
@@ -57,22 +61,20 @@ RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/frees
     --exclude='freesurfer/lib/qt'
 RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
 RUN FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
-RUN apt-get install -y ants
+RUN apt-get install -y ants=2.2.0-1ubuntu1
 # FSL installer appears to now be ready for use with version 6.0.0
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py
 RUN python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
 RUN rm -f /fslinstaller.py
-RUN which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl )
-RUN git clone https://git.fmrib.ox.ac.uk/matteob/eddy_qc_release.git /opt/eddyqc && \
-    cd /opt/eddyqc && git checkout v1.0.2 && python3 ./setup.py install && cd /
+RUN which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
-RUN npm install -gq bids-validator
+RUN npm install -gq bids-validator@1.5.3
 
 # apt cleanup to recover as much space as possible
-RUN apt remove -y libegl1-mesa-dev && apt autoremove -y
+RUN apt-get remove -y libegl1-mesa-dev && apt-get autoremove -y
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
@@ -147,7 +149,7 @@ ENV FSLOUTPUTTYPE NIFTI
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-RUN git clone -b 3.0.0 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
+RUN git clone -b 3.0.1 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
@@ -158,10 +160,6 @@ RUN git clone -b 3.0.0 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 
 # Setup environment variables for MRtrix3
 ENV PATH /mrtrix3/bin:$PATH
 ENV PYTHONPATH /mrtrix3/lib:$PYTHONPATH
-
-# Acquire extra MRtrix3 data
-COPY Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
-COPY Yeo2011_17N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
 # Acquire script to be executed
 COPY mrtrix3_connectome.py /mrtrix3_connectome.py
