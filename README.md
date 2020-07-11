@@ -232,8 +232,6 @@ Generate structural connectomes based on diffusion-weighted and T1-weighted imag
 
 ### Description
 
-While preproc-level analysis only requires data within the BIDS directory, participant-level analysis requires that the output directory be pre-populated with the results from preproc-level processing; similarly, group-level analysis requires that the output directory be pre-populated with the results from participant-level analysis.
-
 The operations performed by each of the three levels of analysis are as follows:
 
 "preproc": DWI: Denoising; Gibbs ringing removal; motion, eddy current and EPI distortion correction and outlier detection & replacement; brain masking, bias field correction and intensity normalisation; rigid-body registration & transformation to T1-weighted image. T1-weighted image: bias field correction; brain masking.

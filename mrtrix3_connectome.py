@@ -25,6 +25,36 @@ OUT_DWI_JSON_DATA = {'SkullStripped': False}
 OUT_5TT_JSON_DATA = {'LabelMap': ['CGM', 'SGM', 'WM', 'CSF', 'Path']}
 
 
+ANALYSIS_CHOICES = ['preproc', 'participant', 'group']
+
+PARCELLATION_CHOICES = ['aal',
+                        'aal2',
+                        'brainnetome246fs',
+                        'brainnetome246mni',
+                        'craddock200',
+                        'craddock400',
+                        'desikan',
+                        'destrieux',
+                        'hcpmmp1',
+                        'none',
+                        'perry512',
+                        'yeo7fs',
+                        'yeo7mni',
+                        'yeo17fs',
+                        'yeo17mni']
+
+REGISTRATION_CHOICES = ['ants', 'fsl']
+
+
+FREESURFER_PARC2FILE = {
+    'brainnetome246fs': os.path.join('mri', 'aparc.BN_Atlas+aseg.mgz'),
+    'desikan': os.path.join('mri', 'aparc+aseg.mgz'),
+    'destrieux': os.path.join('mri', 'aparc.a2009s+aseg.mgz'),
+    'hcpmmp1': os.path.join('mri', 'aparc.HCPMMP1+aseg.mgz'),
+    'yeo7fs': os.path.join('mri', 'aparc.Yeo7+aseg.mgz'),
+    'yeo17fs': os.path.join('mri', 'aparc.Yeo17+aseg.mgz')
+}
+
 
 
 class T1wShared(object): #pylint: disable=useless-object-inheritance
@@ -111,7 +141,7 @@ class PreprocShared(object): #pylint: disable=useless-object-inheritance
 
 
 class ParticipantShared(object): #pylint: disable=useless-object-inheritance
-    def __init__(self, atlas_path, parcellation,
+    def __init__(self, atlas_path, freesurfer_path, parcellation,
                  streamlines, template_reg):
 
         if not parcellation:
@@ -196,90 +226,167 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                 'mrtrix3',
                 'labelconvert'))
 
+
         if self.do_freesurfer:
+
+            # Split based on whether or not -freesurfer was specified
+            # Multiple possibilities, which may depend on input data:
+            # - All requisite data for parcellation already exist, since
+            #   they were provided via -freesurfer option
+            # - Path is provided via -freesurfer option, but there is still
+            #   some processing required to get the requested parcellation;
+            #   in that case, will need to create a copy of those data in
+            #   the scratch directory so that the additional data can be
+            #   generated
+            # - No path provided; all data need to be generated in the
+            #   scratch directory
+
             self.freesurfer_home = os.environ.get('FREESURFER_HOME', None)
-            if not self.freesurfer_home:
-                raise MRtrixError(
-                    'Environment variable FREESURFER_HOME not set; '
-                    'please verify FreeSurfer installation')
-            if not find_executable('recon-all'):
-                raise MRtrixError(
-                    'Could not find FreeSurfer script "recon-all"; '
-                    'please verify FreeSurfer installation')
-            self.freesurfer_subjects_dir = os.environ['SUBJECTS_DIR'] \
-                                           if 'SUBJECTS_DIR' in os.environ \
-                                           else os.path.join(
-                                               self.freesurfer_home,
-                                               'subjects')
-            if not os.path.isdir(self.freesurfer_subjects_dir):
-                raise MRtrixError(
-                    'Could not find FreeSurfer subjects directory '
-                    '(expected location: '
-                    + self.freesurfer_subjects_dir + ')')
-            for subdir in ['fsaverage',
-                           'fsaverage5',
-                           'lh.EC_average',
-                           'rh.EC_average']:
-                if not os.path.isdir(os.path.join(self.freesurfer_subjects_dir,
-                                                  subdir)):
-                    raise MRtrixError(
-                        'Could not find requisite FreeSurfer subject '
-                        'directory \'' + subdir + '\' '
-                        '(expected location: '
-                        + os.path.join(self.freesurfer_subjects_dir,
-                                       subdir) + ')')
-            self.reconall_path = find_executable('recon-all')
-            if not self.reconall_path:
+            # if not self.freesurfer_home:
+            #     raise MRtrixError(
+            #         'Environment variable FREESURFER_HOME not set; '
+            #         'please verify FreeSurfer installation')
+            if not find_executable('recon-all') and not freesurfer_path:
                 raise MRtrixError(
                     'Could not find FreeSurfer script "recon-all"; '
                     'please verify FreeSurfer installation')
-            if parcellation in ['hcpmmp1', 'yeo7fs', 'yeo17fs']:
-                if parcellation == 'hcpmmp1':
+            # if not find_executable('recon-all'):
+            #     raise MRtrixError(
+            #         'Could not find FreeSurfer script "recon-all"; '
+            #         'please verify FreeSurfer installation')
+            candidate_subjects_dir = []
+            if 'SUBJECTS_DIR' in os.environ:
+                candidate_subjects_dir.append(
+                    os.environ['SUBJECTS_DIR'])
+            if self.freesurfer_home:
+                candidate_subjects_dir.append(
+                    os.path.join(self.freesurfer_home, 'subjects'))
+            self.freesurfer_subjects_dir = None
+            for candidate in candidate_subjects_dir:
+                if os.path.isdir(candidate):
+                    self.freesurfer_subjects_dir = candidate
+                    break
+            # if not os.path.isdir(self.freesurfer_subjects_dir):
+            #     raise MRtrixError(
+            #         'Could not find FreeSurfer subjects directory '
+            #         '(expected location: '
+            #         + self.freesurfer_subjects_dir + ')')
+            if self.freesurfer_subjects_dir:
+                for subdir in ['fsaverage',
+                               'fsaverage5',
+                               'lh.EC_average',
+                               'rh.EC_average']:
+                    if not os.path.isdir(
+                            os.path.join(self.freesurfer_subjects_dir,
+                                         subdir)):
+                        raise MRtrixError(
+                            'Could not find requisite FreeSurfer subject '
+                            'directory \'' + subdir + '\' '
+                            '(expected location: '
+                            + os.path.join(self.freesurfer_subjects_dir,
+                                           subdir) + ')')
+            # self.reconall_path = find_executable('recon-all')
+            # if not self.reconall_path:
+            #     raise MRtrixError(
+            #         'Could not find FreeSurfer script "recon-all"; '
+            #         'please verify FreeSurfer installation')
+            if parcellation == 'hcpmmp1':
 
-                    def hcpmmp_annot_path(hemi):
-                        return os.path.join(self.freesurfer_subjects_dir,
-                                            'fsaverage',
-                                            'label',
-                                            hemi + 'h.HCPMMP1.annot')
+                def hcpmmp_annot_path(root, hemi):
+                    return os.path.join(root,
+                                        'fsaverage',
+                                        'label',
+                                        hemi + 'h.HCPMMP1.annot')
 
-                    self.hcpmmp1_annot_paths = [hcpmmp_annot_path(hemi)
-                                                for hemi in ['l', 'r']]
+                self.hcpmmp1_annot_paths = None
+                if freesurfer_path:
+                    self.hcpmmp1_annot_paths = [
+                        hcpmmp_annot_path(freesurfer_path, hemi)
+                        for hemi in ['l', 'r']]
+                    if not all([os.path.isfile(path) \
+                            for path in self.hcpmmp1_annot_paths]):
+                        self.hcpmmp1_annot_paths = None
+                if not self.hcpmmp1_annot_paths:
+                    self.hcpmmp1_annot_paths = [
+                        hcpmmp_annot_path(self.freesurfer_subjects_dir,
+                                          hemi)
+                        for hemi in ['l', 'r']]
                     if not all([os.path.isfile(path) \
                                 for path in self.hcpmmp1_annot_paths]):
                         raise MRtrixError(
                             'Could not find necessary annotation labels '
                             'for applying HCPMMP1 parcellation '
-                            '(expected location: '
-                            + hcpmmp_annot_path('?') + ')')
-                else: # yeo7fs, yeo17fs
+                            + (('(searched locations: ['
+                                + hcpmmp_annot_path(freesurfer_path, '?')
+                                + ', '
+                                + hcpmmp_annot_path(
+                                    self.freesurfer_subjects_dir,
+                                    '?')
+                                + '])')
+                               if freesurfer_path
+                               else
+                               ('(expected location: '
+                                + hcpmmp_annot_path(
+                                    self.freesurfer_subjects_dir,
+                                    '?')
+                                + ')')))
 
-                    def yeo_annot_path(hemi):
-                        return os.path.join(
-                            self.freesurfer_subjects_dir,
-                            'fsaverage5',
-                            'label',
-                            hemi + 'h.Yeo2011_'
-                            + ('7' if parcellation == 'yeo7fs' else '17')
-                            + 'Networks_N1000.split_components.annot')
+            elif parcellation in ['yeo7fs', 'yeo17fs']:
 
-                    self.yeo_annot_paths = [yeo_annot_path(hemi) \
+                def yeo_annot_path(root, hemi):
+                    return os.path.join(
+                        root,
+                        'fsaverage5',
+                        'label',
+                        hemi + 'h.Yeo2011_'
+                        + ('7' if parcellation == 'yeo7fs' else '17')
+                        + 'Networks_N1000.split_components.annot')
+
+                self.yeo_annot_paths = None
+                if freesurfer_path:
+                    self.yeo_annot_paths = [yeo_annot_path(freesurfer_path,
+                                                           hemi)
                                             for hemi in ['l', 'r']]
                     if not all([os.path.isfile(path) \
-                               for path in self.yeo_annot_paths]):
+                                for path in self.yeo_annot_paths]):
+                        self.yeo_annot_paths = None
+                if not self.yeo_annot_paths:
+                    self.yeo_annot_paths = [yeo_annot_path(
+                                                self.freesurfer_subjects_dir,
+                                                hemi)
+                                            for hemi in ['l', 'r']]
+                    if not all([os.path.isfile(path) \
+                                for path in self.yeo_annot_paths]):
                         raise MRtrixError(
                             'Could not find necessary annotation labels '
                             'for applying Yeo2011 parcellation '
-                            '(expected location: '
-                            + yeo_annot_path('?') + ')')
-                for cmd in ['mri_surf2surf', 'mri_aparc2aseg']:
-                    if not find_executable(cmd):
-                        raise MRtrixError(
-                            'Could not find FreeSurfer command '
-                            + cmd + ' '
-                            '(necessary for applying '
-                            'HCPMMP1 parcellation); '
-                            'please verify FreeSurfer installation')
+                            + (('(searched locations: ['
+                                + yeo_annot_path(freesurfer_path, '?')
+                                + ', '
+                                + yeo_annot_path(
+                                    self.freesurfer_subjects_dir,
+                                    '?')
+                                + '])')
+                               if freesurfer_path
+                               else
+                               ('(expected location: '
+                                + yeo_annot_path(
+                                    self.freesurfer_subjects_dir,
+                                    '?')
+                                + ')')))
+                # for cmd in ['mri_surf2surf', 'mri_aparc2aseg']:
+                #     if not find_executable(cmd):
+                #         raise MRtrixError(
+                #             'Could not find FreeSurfer command '
+                #             + cmd + ' '
+                #             '(necessary for applying '
+                #             'HCPMMP1 parcellation); '
+                #             'please verify FreeSurfer installation')
             elif parcellation == 'brainnetome246fs':
+
+                if not self.freesurfer_home:
+                    raise MRtrixError('Cannot apply Brainnetome parcellation '
+                                      'without valid FreeSurfer installation')
 
                 def brainnetome_gcs_path(hemi):
                     return os.path.join(self.freesurfer_home,
@@ -306,16 +413,16 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                         'Brainnetome sub-cortical parcellation '
                         'via FreeSurfer (expected location: '
                         + self.brainnetome_sgm_gca_path + ')')
-                for cmd in ['mri_label2vol',
-                            'mri_ca_label',
-                            'mris_ca_label']:
-                    if not find_executable(cmd):
-                        raise MRtrixError(
-                            'Could not find FreeSurfer command '
-                            + cmd + ' '
-                            '(necessary for applying '
-                            'Brainnetome parcellation); '
-                            'please verify FreeSurfer installation')
+                # for cmd in ['mri_label2vol',
+                #             'mri_ca_label',
+                #             'mris_ca_label']:
+                #     if not find_executable(cmd):
+                #         raise MRtrixError(
+                #             'Could not find FreeSurfer command '
+                #             + cmd + ' '
+                #             '(necessary for applying '
+                #             'Brainnetome parcellation); '
+                #             'please verify FreeSurfer installation')
 
             # Query contents of recon-all script,
             #   looking for "-openmp" and "-parallel" occurences
@@ -324,8 +431,10 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
             #   as well as the value of app.numThreads
             # - In 5.3.0, just the -openmp option is available
             # - In 6.0.0, -openmp needs to be preceded by -parallel
+            self.reconall_path = find_executable('recon-all')
             self.reconall_multithread_options = []
-            if app.NUM_THREADS is None or app.NUM_THREADS > 1:
+            if self.reconall_path \
+                and (app.NUM_THREADS is None or app.NUM_THREADS > 1):
                 with open(self.reconall_path, 'r') as f:
                     reconall_text = f.read().splitlines()
                 for line in reconall_text:
@@ -346,6 +455,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
             else:
                 self.reconall_multithread_options = ''
             app.debug(self.reconall_multithread_options)
+
 
             if parcellation == 'brainnetome246fs':
                 self.parc_lut_file = os.path.join(self.freesurfer_home,
@@ -1799,7 +1909,8 @@ def run_preproc(bids_dir, session, shared,
 
 
 def run_participant(bids_dir, session, shared,
-                    t1w_preproc_path, output_verbosity, output_app_dir):
+                    t1w_preproc_path, freesurfer_path,
+                    output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
     output_analysis_level_path = \
@@ -1811,6 +1922,35 @@ def run_participant(bids_dir, session, shared,
         app.warn('Output directory for session "' + session_label + '" '
                  'already exists; all contents will be erased when this '
                  'execution completes')
+
+
+    # If -freesurfer was provided on the command-line, make sure that
+    #   a valid FreeSurfer directory can be found
+    freesurfer_subject_dir = None
+    if freesurfer_path:
+        for candidate in [freesurfer_path,
+                          os.path.join(freesurfer_path, *session),
+                          os.path.join(freesurfer_path, session_label)]:
+            if all(subdir in os.listdir(candidate)
+                   for subdir in ['label', 'mri', 'surf']):
+                freesurfer_subject_dir = candidate
+                break
+        if not freesurfer_subject_dir:
+            raise MRtrixError('Unable to find pre-populated FreeSurfer data '
+                              'from path "'
+                              + freesurfer_path
+                              + '" for session "'
+                              + session_label
+                              + '"')
+
+    if shared.do_freesurfer \
+        and not shared.freesurfer_subjects_dir \
+        and not freesurfer_path:
+        raise MRtrixError('-freesurfer option not specified, and no '
+                          + 'functional FreeSurfer installation; cannot '
+                          + 'utilise FreeSurfer-based parcellation "'
+                          + shared.parcellation
+                          + '"')
 
 
     # Check paths of individual output files before script completion
@@ -2168,38 +2308,79 @@ def run_participant(bids_dir, session, shared,
     #   The necessary steps here will vary significantly depending on
     #   the parcellation scheme selected
     if shared.do_freesurfer:
-        app.console('Getting grey matter parcellation in '
-                    'subject space using FreeSurfer')
 
-        # Since we're instructing recon-all to use a different subject
-        #   directory, we need to construct softlinks to a number of
-        #   directories provided by FreeSurfer that recon-all will
-        #   expect to find in the same directory as the overridden
-        #   subject path
-        subdirs = ['fsaverage', 'lh.EC_average', 'rh.EC_average']
-        if shared.parcellation in ['yeo7fs', 'yeo17fs']:
-            subdirs.append('fsaverage5')
-        for subdir in subdirs:
-            run.function(shared.freesurfer_template_link_function,
-                         os.path.join(shared.freesurfer_subjects_dir, subdir),
-                         subdir)
+        # Modifications to reflect the introduction of -freesurfer option
+        # - It's entirely possible that the requisite subject-specific files
+        #   may already exist within the provided FreeSurfer directory, and no
+        #   FreeSurfer-specific commands even need to be run
+        # - FreeSurfer may have already been run for this subject, but
+        #   it doesn't have the specific files necessary for obtaining the
+        #   parcellation in subject space. In this case, since we don't want
+        #   to write anything into the existing FreeSurfer output directory,
+        #   it will be necessary to duplicate the FreeSurfer data into the
+        #   scratch directory, then run the necessary commands
+        # - No -freesurfer option specified; need to run everything in the
+        #   scratch directory, including recon-all
 
-        # Run FreeSurfer pipeline on this subject's T1 image
-        run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
-                    '-i T1_raw.nii')
-        run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
-                    '-all' + shared.reconall_multithread_options)
+        parc_image_path = None
+        if freesurfer_subject_dir:
 
-        # Grab the relevant parcellation image and
-        #   target lookup table for conversion
-        parc_image_path = os.path.join('freesurfer', 'mri')
-        if shared.parcellation == 'desikan':
-            parc_image_path = os.path.join(parc_image_path,
-                                           'aparc+aseg.mgz')
-        elif shared.parcellation == 'destrieux':
-            parc_image_path = os.path.join(parc_image_path,
-                                           'aparc.a2009s+aseg.mgz')
-        else:
+            # Need to check the path provided via the -freesurfer option
+            #   to see if the requested parcellation is already present, or
+            #   whether further processing within the scratch directory is
+            #   required
+            parc_image_path = \
+                os.path.join(freesurfer_subject_dir,
+                             FREESURFER_PARC2FILE[shared.parcellation])
+            if not os.path.isfile(parc_image_path):
+                parc_image_path = None
+
+        if not parc_image_path:
+
+            # Since we're instructing recon-all to use a different subject
+            #   directory, we need to construct softlinks to a number of
+            #   directories provided by FreeSurfer that recon-all will
+            #   expect to find in the same directory as the overridden
+            #   subject path
+            subdirs = ['fsaverage', 'lh.EC_average', 'rh.EC_average']
+            if shared.parcellation in ['yeo7fs', 'yeo17fs']:
+                subdirs.append('fsaverage5')
+            for subdir in subdirs:
+                run.function(shared.freesurfer_template_link_function,
+                             os.path.join(shared.freesurfer_subjects_dir,
+                                          subdir),
+                             subdir)
+            # This needs to be a copy, since we'll be making modifications
+            if freesurfer_subject_dir:
+                run.function(shutil.copytree,
+                             freesurfer_subject_dir,
+                             os.path.join(app.SCRATCH_DIR, 'freesurfer'))
+                freesurfer_subject_dir = os.path.join(app.SCRATCH_DIR,
+                                                      'freesurfer')
+
+            if not freesurfer_subject_dir:
+
+                app.console('-freesurfer option not utilised; '
+                            'running full FreeSurfer reconstruction')
+
+                run.command('recon-all -sd '
+                            + app.SCRATCH_DIR
+                            + ' -subjid freesurfer'
+                            + ' -i T1.nii')
+                run.command('recon-all -sd '
+                            + app.SCRATCH_DIR
+                            + ' -subjid freesurfer'
+                            + ' -all'
+                            + shared.reconall_multithread_options)
+
+                freesurfer_subject_dir = os.path.join(app.SCRATCH_DIR,
+                                                      'freesurfer')
+
+
+            app.console('Getting parcellation "'
+                        + shared.parcellation
+                        + '" into subject space using FreeSurfer commands')
+
             # Non-standard parcellations are not applied as part of
             #   the recon-all command; need to explicitly map them to
             #   the subject
@@ -2211,29 +2392,29 @@ def run_participant(bids_dir, session, shared,
                 for index, hemi in enumerate(['l', 'r']):
                     run.command(
                         'mris_ca_label'
-                        + ' -l ' + os.path.join('freesurfer',
+                        + ' -l ' + os.path.join(freesurfer_subject_dir,
                                                 'label',
                                                 hemi + 'h.cortex.label')
                         + ' freesurfer ' + hemi + 'h '
-                        + os.path.join('freesurfer',
+                        + os.path.join(freesurfer_subject_dir,
                                        'surf',
                                        hemi + 'h.sphere.reg')
                         + ' '
                         + shared.brainnetome_cortex_gcs_paths[index]
                         + ' '
-                        + os.path.join('freesurfer',
+                        + os.path.join(freesurfer_subject_dir,
                                        'label',
                                        hemi + 'h.BN_Atlas.annot'),
                         env=env)
                     run.command(
                         'mri_label2vol'
-                        + ' --annot ' + os.path.join('freesurfer',
+                        + ' --annot ' + os.path.join(freesurfer_subject_dir,
                                                      'label',
                                                      hemi + 'h.BN_Atlas.annot')
-                        + ' --temp ' + os.path.join('freesurfer',
+                        + ' --temp ' + os.path.join(freesurfer_subject_dir,
                                                     'mri',
                                                     'brain.mgz')
-                        + ' --o ' + os.path.join('freesurfer',
+                        + ' --o ' + os.path.join(freesurfer_subject_dir,
                                                  'mri',
                                                  hemi + 'h.BN_Atlas.mgz')
                         + ' --subject freesurfer'
@@ -2243,22 +2424,23 @@ def run_participant(bids_dir, session, shared,
                         env=env)
                 run.command(
                     'mri_ca_label '
-                    + os.path.join('freesurfer',
+                    + os.path.join(freesurfer_subject_dir,
                                    'mri',
                                    'brain.mgz')
                     + ' '
-                    + os.path.join('freesurfer',
+                    + os.path.join(freesurfer_subject_dir,
                                    'mri',
                                    'transforms',
                                    'talairach.m3z')
                     + ' '
                     + shared.brainnetome_sgm_gca_path
                     + ' '
-                    + os.path.join('freesurfer',
+                    + os.path.join(freesurfer_subject_dir,
                                    'mri',
                                    'BN_Atlas_subcortex.mgz'),
                     env=env)
-                parc_image_path = os.path.join(parc_image_path,
+                parc_image_path = os.path.join('freesurfer',
+                                               'mri',
                                                'aparc.BN_Atlas+aseg.mgz')
                 # Need to deal with prospect of overlapping mask labels
                 # - Any overlap between the two hemisphere ribbons
@@ -2266,30 +2448,30 @@ def run_participant(bids_dir, session, shared,
                 # - Any overlap between cortex and sub-cortical
                 #   = retain cortex
                 run.command('mrcalc '
-                            + ' '.join([os.path.join('freesurfer',
+                            + ' '.join([os.path.join(freesurfer_subject_dir,
                                                      'mri',
                                                      hemi + 'h.BN_Atlas.mgz')
                                         for hemi in ['l', 'r']])
                             + ' -mult cortex_overlap.mif'
                             + ' -datatype bit')
                 run.command('mrcalc '
-                            + ' '.join([os.path.join('freesurfer',
+                            + ' '.join([os.path.join(freesurfer_subject_dir,
                                                      'mri',
                                                      hemi + 'h.BN_Atlas.mgz')
                                         for hemi in ['l', 'r']])
                             + ' -add '
-                            + os.path.join('freesurfer',
+                            + os.path.join(freesurfer_subject_dir,
                                            'mri',
                                            'BN_Atlas_subcortex.mgz')
                             + ' -mult sgm_overlap.mif'
                             + ' -datatype bit')
                 run.command('mrcalc '
-                            + ' '.join([os.path.join('freesurfer',
+                            + ' '.join([os.path.join(freesurfer_subject_dir,
                                                      'mri',
                                                      hemi + 'h.BN_Atlas.mgz')
                                         for hemi in ['l', 'r']])
                             + ' -add 1.0 cortex_overlap.mif -sub -mult '
-                            + os.path.join('freesurfer',
+                            + os.path.join(freesurfer_subject_dir,
                                            'mri',
                                            'BN_Atlas_subcortex.mgz')
                             + ' 1.0 sgm_overlap.mif -sub -mult -add '
@@ -2298,7 +2480,8 @@ def run_participant(bids_dir, session, shared,
                 app.cleanup('sgm_overlap.mif')
 
             elif shared.parcellation == 'hcpmmp1':
-                parc_image_path = os.path.join(parc_image_path,
+                parc_image_path = os.path.join('freesurfer',
+                                               'mri',
                                                'aparc.HCPMMP1+aseg.mgz')
                 for index, hemi in enumerate(['l', 'r']):
                     run.command('mri_surf2surf '
@@ -2308,7 +2491,7 @@ def run_participant(bids_dir, session, shared,
                                 '--sval-annot '
                                 + shared.hcpmmp1_annot_paths[index]
                                 + ' --tval '
-                                + os.path.join('freesurfer',
+                                + os.path.join(freesurfer_subject_dir,
                                                'label',
                                                hemi + 'h.HCPMMP1.annot'),
                                 env=env)
@@ -2320,7 +2503,8 @@ def run_participant(bids_dir, session, shared,
                             env=env)
             elif shared.parcellation in ['yeo7fs', 'yeo17fs']:
                 num = '7' if shared.parcellation == 'yeo7fs' else '17'
-                parc_image_path = os.path.join(parc_image_path,
+                parc_image_path = os.path.join('freesurfer',
+                                               'mri',
                                                'aparc.Yeo' + num + '+aseg.mgz')
                 for index, hemi in enumerate(['l', 'r']):
                     run.command('mri_surf2surf '
@@ -2329,7 +2513,7 @@ def run_participant(bids_dir, session, shared,
                                 '--hemi ' + hemi + 'h '
                                 '--sval-annot ' + shared.yeo_annot_paths[index]
                                 + ' --tval '
-                                + os.path.join('freesurfer',
+                                + os.path.join(freesurfer_subject_dir,
                                                'label',
                                                hemi + 'h.Yeo'
                                                + num + '.annot'),
@@ -3449,25 +3633,7 @@ def get_sessions(root_dir, **kwargs):
 
 
 
-ANALYSIS_CHOICES = ['preproc', 'participant', 'group']
 
-PARCELLATION_CHOICES = ['aal',
-                        'aal2',
-                        'brainnetome246fs',
-                        'brainnetome246mni',
-                        'craddock200',
-                        'craddock400',
-                        'desikan',
-                        'destrieux',
-                        'hcpmmp1',
-                        'none',
-                        'perry512',
-                        'yeo7fs',
-                        'yeo7mni',
-                        'yeo17fs',
-                        'yeo17mni']
-
-REGISTRATION_CHOICES = ['ants', 'fsl']
 
 
 
@@ -3542,13 +3708,6 @@ See the Mozilla Public License v. 2.0 for more details.''')
             action='store_true',
             help='Skip BIDS validation')
 
-    cmdline.add_description(
-        'While preproc-level analysis only requires data within the '
-        'BIDS directory, participant-level analysis requires that the '
-        'output directory be pre-populated with the results from '
-        'preproc-level processing; similarly, group-level analysis '
-        'requires that the output directory be pre-populated with the '
-        'results from participant-level analysis.')
     cmdline.add_description(
         'The operations performed by each of the three levels of analysis '
         'are as follows:')
@@ -3669,6 +3828,9 @@ See the Mozilla Public License v. 2.0 for more details.''')
             metavar='path',
             help='The filesystem path in which to search for atlas '
                  'parcellation files.')
+    participant_options.add_argument(
+        OPTION_PREFIX + 'freesurfer',
+        help='Provide the path to processed FreeSurfer output data')
     participant_options.add_argument(
         OPTION_PREFIX + 'parcellation',
         help='The choice of connectome parcellation scheme '
@@ -4049,8 +4211,23 @@ def execute(): #pylint: disable=unused-variable
 
     if app.ARGS.analysis_level == 'participant':
 
+        freesurfer_path = os.path.abspath(app.ARGS.freesurfer) \
+                          if app.ARGS.freesurfer \
+                          else None
+
+        if freesurfer_path and \
+            len(sessions_to_analyze) > 1 and \
+            all(dir_name in os.listdir(freesurfer_path)
+                    for dir_name in ['label', 'mri', 'surf']):
+            raise MRtrixError('If processing mulitple sessions, input to '
+                              + OPTION_PREFIX
+                              + 'freesurfer option must be the FreeSurfer '
+                              + 'subjects directory, not the output '
+                              + 'directory of an individual session')
+
         participant_shared = \
             ParticipantShared(getattr(app.ARGS, 'atlas_path', None),
+                              freesurfer_path,
                               app.ARGS.parcellation,
                               app.ARGS.streamlines,
                               app.ARGS.template_reg)
@@ -4062,6 +4239,7 @@ def execute(): #pylint: disable=unused-variable
                             session_to_process,
                             participant_shared,
                             t1w_preproc_path,
+                            freesurfer_path,
                             app.ARGS.output_verbosity,
                             output_app_path)
 
