@@ -556,7 +556,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                         os.path.join(os.sep,
                                      'opt',
                                      'brainnetome',
-                                     'BN_Atlas_246_1mm.nii.gz'))
+                                     'BNA_MPM_thr25_1.25mm.nii.gz'))
                 self.parc_lut_file = \
                     os.path.abspath(
                         os.path.join(os.sep,
