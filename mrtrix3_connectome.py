@@ -400,7 +400,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                 self.freesurfer_template_link_function(
                     self.freesurfer_subjects_dir,
                     'test_softlink')
-                app.cleanup('test_softlink')
+                os.remove('test_softlink')
                 app.debug('Using softlinks to FreeSurfer template directories')
             except OSError:
                 app.debug('Unable to create softlinks; '
