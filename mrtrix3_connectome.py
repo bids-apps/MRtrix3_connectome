@@ -2362,7 +2362,11 @@ def run_participant(bids_dir, session, shared,
 
                 app.console('-freesurfer option not utilised; '
                             'running full FreeSurfer reconstruction')
+                assert not T1_is_premasked
 
+                run.command('mrconvert '
+                            + T1_image
+                            + ' T1.nii -strides +1,+2,+3')
                 run.command('recon-all -sd '
                             + app.SCRATCH_DIR
                             + ' -subjid freesurfer'
