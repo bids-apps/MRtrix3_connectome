@@ -3957,6 +3957,17 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'analysis, and N4 is used for either DWI or T1 bias field correction',
         is_external=True)
     cmdline.add_citation(
+        'Tustison, N.; Avants, B. '
+        'Explicit B-spline regularization in diffeomorphic image '
+        'registration. '
+        'Frontiers in Neuroinformatics, 2013, 7, 39',
+        condition='If performing participant-level analysis, '
+        + 'using ' + OPTION_PREFIX + 'parcellation [ aal, aal2, '
+        + 'brainnetome246mni, craddock200, craddock400, perry512, '
+        + 'yeo7mni or yeo17mni ], '
+        + 'and not using ' + OPTION_PREFIX + 'template_reg fsl',
+        is_external=True)
+    cmdline.add_citation(
         'Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; '
         'Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. '
         'Automated Anatomical Labeling of activations in SPM using a '
