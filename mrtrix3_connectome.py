@@ -2433,7 +2433,8 @@ def run_participant(bids_dir, session, shared,
                         + shared.template_image_path
                         + ' '
                         + shared.template_mask_path
-                        + ' -mult '
+                        + ' -mult - |'
+                        + ' mrconvert - '
                         + flirt_ref_path
                         + ' -strides -1,+2,+3')
             # Now have data required to run flirt
@@ -2471,7 +2472,7 @@ def run_participant(bids_dir, session, shared,
                             + shared.template_mask_path
                             + ' dilate '
                             + fnirt_ref_mask_path
-                            + '-npass 3')
+                            + ' -npass 3')
 
             run.command(shared.fnirt_cmd
                         + ' --config=' + shared.fnirt_config_basename
