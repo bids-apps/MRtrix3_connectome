@@ -2406,7 +2406,7 @@ def run_participant(bids_dir, session, shared,
                         + ' --metric MI['
                         + T1_histmatched_path
                         + ','
-                        + shared.template_iamge_path
+                        + shared.template_image_path
                         + ',1,32,Regular,0.25]'
                         + ' --convergence 1000x500x250x100'
                         + ' --smoothing-sigmas 3x2x1x0'
@@ -2424,7 +2424,7 @@ def run_participant(bids_dir, session, shared,
                         + ' --metric CC['
                         + T1_histmatched_path
                         + ','
-                        + shared.template_iamge_path
+                        + shared.template_image_path
                         + ',1,4]'
                         + ' --convergence 100x70x50x20'
                         + ' --smoothing-sigmas 3x2x1x0'
