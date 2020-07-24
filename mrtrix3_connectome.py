@@ -2389,30 +2389,64 @@ def run_participant(bids_dir, session, shared,
         if shared.template_registration_software == 'ants':
 
             # Use ANTs SyN for registration to template
-            # From Klein et al., NeuroImage 2009:
-            run.command('ANTS 3 '
-                        + '-m PR['
+            # From Klein and Avants, Frontiers in Neuroinformatics 2013:
+            ants_prefix = 'template_to_t1'
+            run.command('ANTSRegistration'
+                        + ' --dimensionality 3'
+                        + ' --output '
+                        + ants_prefix
+                        + '.nii'
+                        + ' --use-histogram-matching 1'
+                        + ' --initial-moving-transform ['
+                        + T1_histmatched_path
+                        + ','
                         + shared.template_image_path
-                        + ', '
+                        + ',1]'
+                        + ' --transform Rigid[0.1]'
+                        + ' --metric MI['
                         + T1_histmatched_path
-                        + ', 1, 2]'
-                        + ' -o ANTS'
-                        + ' -r Gauss[2,0]'
-                        + ' -t SyN[0.5]'
-                        + ' -i 30x99x11'
-                        + ' --use-Histogram-Matching')
+                        + ','
+                        + shared.template_iamge_path
+                        + ',1,32,Regular,0.25]'
+                        + ' --convergence 1000x500x250x100'
+                        + ' --smoothing-sigmas 3x2x1x0'
+                        + ' --shrink-factors 8x4x2x1'
+                        + ' --transform Affine[0.1]'
+                        + ' --metric MI['
+                        + T1_histmatched_path
+                        + ','
+                        + shared.template_image_path
+                        + ',1,32,Regular,0.25]'
+                        + ' --convergence 1000x500x250x100'
+                        + ' --smoothing-sigmas 3x2x1x0'
+                        + ' --shrink-factors 8x4x2x1'
+                        + ' --transform BSplineSyN[0.1,26,0,3]'
+                        + ' --metric CC['
+                        + T1_histmatched_path
+                        + ','
+                        + shared.template_iamge_path
+                        + ',1,4]'
+                        + ' --convergence 100x70x50x20'
+                        + ' --smoothing-sigmas 3x2x1x0'
+                        + ' --shrink-factors 6x4x2x1')
             transformed_atlas_path = 'atlas_transformed.nii'
-            run.command('WarpImageMultiTransform 3 '
+            run.command('antsApplyTransforms'
+                        + ' --dimensionality 3'
+                        + ' --input '
                         + shared.parc_image_path
-                        + ' '
-                        + transformed_atlas_path
-                        + ' -R '
+                        + ' --reference-image '
                         + T1_histmatched_path
-                        + ' -i ANTSAffine.txt ANTSInverseWarp.nii'
-                        + ' --use-NN')
-            app.cleanup(glob.glob('ANTSWarp.nii*'))
-            app.cleanup(glob.glob('ANTSInverseWarp.nii*'))
-            app.cleanup('ANTSAffine.txt')
+                        + ' --output '
+                        + transformed_atlas_path
+                        + ' --n NearestNeighbor'
+                        + ' --transform '
+                        + ants_prefix
+                        + '1Warp.nii.gz'
+                        + ' --transform '
+                        + ants_prefix
+                        + '0GenericAffine.mat'
+                        + ' --default-value 0')
+            app.cleanup(glob.glob(ants_prefix))
 
         elif shared.template_registration_software == 'fsl':
 
