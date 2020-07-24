@@ -2391,7 +2391,7 @@ def run_participant(bids_dir, session, shared,
             # Use ANTs SyN for registration to template
             # From Klein and Avants, Frontiers in Neuroinformatics 2013:
             ants_prefix = 'template_to_t1'
-            run.command('ANTSRegistration'
+            run.command('antsRegistration'
                         + ' --dimensionality 3'
                         + ' --output '
                         + ants_prefix
