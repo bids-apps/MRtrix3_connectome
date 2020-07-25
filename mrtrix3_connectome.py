@@ -2390,12 +2390,11 @@ def run_participant(bids_dir, session, shared,
 
             # Use ANTs SyN for registration to template
             # From Klein and Avants, Frontiers in Neuroinformatics 2013:
-            ants_prefix = 'template_to_t1'
+            ants_prefix = 'template_to_t1_'
             run.command('antsRegistration'
                         + ' --dimensionality 3'
                         + ' --output '
                         + ants_prefix
-                        + '.nii'
                         + ' --use-histogram-matching 1'
                         + ' --initial-moving-transform ['
                         + T1_histmatched_path
@@ -2446,7 +2445,7 @@ def run_participant(bids_dir, session, shared,
                         + ants_prefix
                         + '0GenericAffine.mat'
                         + ' --default-value 0')
-            app.cleanup(glob.glob(ants_prefix))
+            app.cleanup(glob.glob(ants_prefix + '*'))
 
         elif shared.template_registration_software == 'fsl':
 
