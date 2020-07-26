@@ -3,31 +3,31 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Core system capabilities required
 RUN apt-get update && apt-get install -y \
-    bc=1.07.1-2 \
-    build-essential=12.4ubuntu1 \
-    curl=7.58.0-2ubuntu3.9 \
-    dc=1.07.1-2 \
-    git=1:2.17.1-1ubuntu0.7 \
-    libegl1-mesa-dev=19.2.8-0ubuntu0~18.04.3 \
-    libopenblas-dev=0.2.20+ds-4 \
-    nano=2.9.3-2 \
-    perl-modules-5.26=5.26.1-6ubuntu0.3 \
-    python2.7=2.7.17-1~18.04ubuntu1 \
-    python3=3.6.7-1~18.04 \
-    tar=1.29b-2ubuntu0.1 \
-    tcsh=6.20.00-7 \
-    unzip=6.0-21ubuntu1 \
-    wget=1.19.4-1ubuntu2.2
+    bc \
+    build-essential \
+    curl \
+    dc \
+    git \
+    libegl1-mesa-dev \
+    libopenblas-dev \
+    nano \
+    perl-modules-5.26 \
+    python2.7 \
+    python3 \
+    tar \
+    tcsh \
+    unzip \
+    wget
 
 
 RUN DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y tzdata=2020a-0ubuntu0.18.04
+    apt-get install -y tzdata
 
 # PPA for newer version of nodejs, which is required for bids-validator
 RUN curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && \
     bash nodesource_setup.sh && \
     rm -f nodesource_setup.sh
-RUN apt-get install -y nodejs=12.18.2-1nodesource1
+RUN apt-get install -y nodejs
 
 # NeuroDebian setup
 RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
@@ -38,11 +38,11 @@ RUN apt-key add /neurodebian.gpg && \
 
 # Additional dependencies for MRtrix3 compilation
 RUN apt-get update && apt-get install -y \
-    libeigen3-dev=3.3.4-4 \
-    libfftw3-dev=3.3.7-1 \
-    libpng-dev=1.6.34-1ubuntu0.18.04.2 \
-    libtiff5-dev=4.0.9-5ubuntu0.3 \
-    zlib1g-dev=1:1.2.11.dfsg-0ubuntu2
+    libeigen3-dev \
+    libfftw3-dev \
+    libpng-dev \
+    libtiff5-dev \
+    zlib1g-dev
 
 # Neuroimaging software / data dependencies
 RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | \
