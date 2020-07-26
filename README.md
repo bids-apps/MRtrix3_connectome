@@ -160,12 +160,13 @@ et al., 2016; (IF USING EDDY_CUDA: Andersson et al., 2017)); and bias field corr
 deconvolution (Tournier et al., 2004; Jeurissen et al., 2014); probabilistic tractography
 (Tournier et al., 2010) utilizing Anatomically-Constrained Tractography (Smith et al.,
 2012) and dynamic seeding (Smith et al., 2015b); SIFT2 (Smith et al., 2015b); T1
-parcellation (((Avants et al., 2008 OR Andersson et al., 2010) AND (Tzourio-Mazoyer et al.,
-2002 OR Yeo et al., 2011 OR Craddock et al., 2012 OR Fan et al., 2016 OR (Zalesky et al.,
-2010 AND Perry et al., 2017))) OR (Dale et al., 1999 AND (Desikan et al., 2006 OR
-Destrieux et al., 2010 OR Glasser et al., 2016))); robust structural connectome
-construction Smith et al., 2015a; Yeh et al., 2016); inter-subject connection density
-normalisation (Smith et al., 2020).
+parcellation ((((Avants et al., 2008 AND Tustison et al., 2013) OR Andersson et al.,
+2010) AND (Tzourio-Mazoyer et al., 2002 OR Yeo et al., 2011 OR Craddock et al., 2012
+2011) OR Fan et al., 2016 OR (Zalesky et al., 2010 AND Perry et al., 2017))) OR
+2012) (Dale et al., 1999 AND (Desikan et al., 2006 OR Destrieux et al., 2010 OR
+2013) Glasser et al., 2016))); robust structural connectome construction (Smith et al.,
+2014) 2015a; Yeh et al., 2016); inter-subject connection density normalisation
+2015) (Smith et al., 2020).
 
 ```
 Smith, R. E.; Connelly, A. MRtrix3_connectome: A BIDS Application for quantitative structural connectome construction. In Proc OHBM, 2019, W610
@@ -197,6 +198,7 @@ Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. Direct estimation of
 Tournier, J.-D.; Calamante, F. & Connelly, A. Improved probabilistic streamlines tractography by 2nd order integration over fibre orientation distributions. Proceedings of the International Society for Magnetic Resonance in Medicine, 2010, 1670
 Tournier, J.-D.; Smith, R. E.; Raffelt, D. A.; Tabbara, R.; Dhollander, T.; Pietsch, M; Christiaens, D.; Jeurissen, B.; Y, C.-H.; Connelly, A. MRtrix3: A fast, flexible and open software framework for medical image processing and visualisation. NeuroImage, 2019, 202, 116137
 Tustison, N.; Avants, B.; Cook, P.; Zheng, Y.; Egan, A.; Yushkevich, P. & Gee, J. N4ITK: Improved N3 Bias Correction. IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320
+Tustison, N.; Avants, B. Explicit B-spline regularization in diffeomorphic image registration. Frontiers in Neuroinformatics, 2013, 7, 39
 Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; Etard, O.; Delcroix, N.; Mazoyer, B. & Joliot, M. Automated Anatomical Labeling of activations in SPM using a Macroscopic Anatomical Parcellation of the MNI MRI single-subject brain. NeuroImage, 15(1), 273–289
 Veraart, J.; Novikov, D. S.; Christiaens, D.; Ades-aron, B.; Sijbers, J. & Fieremans, E. Denoising of diffusion MRI using random matrix theory. NeuroImage, 2016, 142, 394-406
 Yeh, C.-H.; Smith, R. E.; Liang, X.; Calamante, F. & Connelly, A. Correction for diffusion MRI fibre tracking biases: The consequences for structural connectomic metrics. NeuroImage, 2016, 142, 150-162
