@@ -2389,30 +2389,63 @@ def run_participant(bids_dir, session, shared,
         if shared.template_registration_software == 'ants':
 
             # Use ANTs SyN for registration to template
-            # From Klein et al., NeuroImage 2009:
-            run.command('ANTS 3 '
-                        + '-m PR['
+            # From Klein and Avants, Frontiers in Neuroinformatics 2013:
+            ants_prefix = 'template_to_t1_'
+            run.command('antsRegistration'
+                        + ' --dimensionality 3'
+                        + ' --output '
+                        + ants_prefix
+                        + ' --use-histogram-matching 1'
+                        + ' --initial-moving-transform ['
+                        + T1_histmatched_path
+                        + ','
                         + shared.template_image_path
-                        + ', '
+                        + ',1]'
+                        + ' --transform Rigid[0.1]'
+                        + ' --metric MI['
                         + T1_histmatched_path
-                        + ', 1, 2]'
-                        + ' -o ANTS'
-                        + ' -r Gauss[2,0]'
-                        + ' -t SyN[0.5]'
-                        + ' -i 30x99x11'
-                        + ' --use-Histogram-Matching')
+                        + ','
+                        + shared.template_image_path
+                        + ',1,32,Regular,0.25]'
+                        + ' --convergence 1000x500x250x100'
+                        + ' --smoothing-sigmas 3x2x1x0'
+                        + ' --shrink-factors 8x4x2x1'
+                        + ' --transform Affine[0.1]'
+                        + ' --metric MI['
+                        + T1_histmatched_path
+                        + ','
+                        + shared.template_image_path
+                        + ',1,32,Regular,0.25]'
+                        + ' --convergence 1000x500x250x100'
+                        + ' --smoothing-sigmas 3x2x1x0'
+                        + ' --shrink-factors 8x4x2x1'
+                        + ' --transform BSplineSyN[0.1,26,0,3]'
+                        + ' --metric CC['
+                        + T1_histmatched_path
+                        + ','
+                        + shared.template_image_path
+                        + ',1,4]'
+                        + ' --convergence 100x70x50x20'
+                        + ' --smoothing-sigmas 3x2x1x0'
+                        + ' --shrink-factors 6x4x2x1')
             transformed_atlas_path = 'atlas_transformed.nii'
-            run.command('WarpImageMultiTransform 3 '
+            run.command('antsApplyTransforms'
+                        + ' --dimensionality 3'
+                        + ' --input '
                         + shared.parc_image_path
-                        + ' '
-                        + transformed_atlas_path
-                        + ' -R '
+                        + ' --reference-image '
                         + T1_histmatched_path
-                        + ' -i ANTSAffine.txt ANTSInverseWarp.nii'
-                        + ' --use-NN')
-            app.cleanup(glob.glob('ANTSWarp.nii*'))
-            app.cleanup(glob.glob('ANTSInverseWarp.nii*'))
-            app.cleanup('ANTSAffine.txt')
+                        + ' --output '
+                        + transformed_atlas_path
+                        + ' --n NearestNeighbor'
+                        + ' --transform '
+                        + ants_prefix
+                        + '1Warp.nii.gz'
+                        + ' --transform '
+                        + ants_prefix
+                        + '0GenericAffine.mat'
+                        + ' --default-value 0')
+            app.cleanup(glob.glob(ants_prefix + '*'))
 
         elif shared.template_registration_software == 'fsl':
 
@@ -3921,6 +3954,17 @@ See the Mozilla Public License v. 2.0 for more details.''')
         'IEEE Transactions on Medical Imaging, 2010, 29, 1310-1320',
         condition='If performing either preproc-level or participant-level '
         'analysis, and N4 is used for either DWI or T1 bias field correction',
+        is_external=True)
+    cmdline.add_citation(
+        'Tustison, N.; Avants, B. '
+        'Explicit B-spline regularization in diffeomorphic image '
+        'registration. '
+        'Frontiers in Neuroinformatics, 2013, 7, 39',
+        condition='If performing participant-level analysis, '
+        + 'using ' + OPTION_PREFIX + 'parcellation [ aal, aal2, '
+        + 'brainnetome246mni, craddock200, craddock400, perry512, '
+        + 'yeo7mni or yeo17mni ], '
+        + 'and not using ' + OPTION_PREFIX + 'template_reg fsl',
         is_external=True)
     cmdline.add_citation(
         'Tzourio-Mazoyer, N.; Landeau, B.; Papathanassiou, D.; Crivello, F.; '
