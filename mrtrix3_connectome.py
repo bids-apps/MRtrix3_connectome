@@ -45,6 +45,9 @@ PARCELLATION_CHOICES = ['aal',
 
 REGISTRATION_CHOICES = ['ants', 'fsl']
 
+#SEGMENTATION_CHOICES = ['freesurfer', 'fsl', 'hsvs']
+SEGMENTATION_CHOICES = ['fsl']
+
 
 FREESURFER_PARC2FILE = {
     'brainnetome246fs': os.path.join('mri', 'aparc.BN_Atlas+aseg.mgz'),
@@ -142,7 +145,7 @@ class PreprocShared(object): #pylint: disable=useless-object-inheritance
 
 class ParticipantShared(object): #pylint: disable=useless-object-inheritance
     def __init__(self, atlas_path, freesurfer_path, parcellation,
-                 streamlines, template_reg):
+                 segmentation, streamlines, template_reg):
 
         if not parcellation:
             raise MRtrixError(
@@ -150,6 +153,8 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                 'desired parcellation must be provided using the '
                 + OPTION_PREFIX + 'parcellation option')
         self.parcellation = parcellation
+
+        self.segmentation = segmentation
 
         self.streamlines = streamlines
 
@@ -177,6 +182,16 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                                        'yeo17mni']
         if parcellation != 'none':
             assert self.do_freesurfer or self.do_mni
+
+        if segmentation == 'freesurfer':
+            # TODO
+            assert False
+        elif segmentation == 'fsl':
+            # TODO
+            pass
+        elif segmentation == 'hsvs':
+            # TODO
+            assert False
 
         if template_reg:
             if self.do_mni:
@@ -2287,26 +2302,9 @@ def run_participant(bids_dir, session, shared,
                     '-lmax 10,0')
         app.cleanup('FOD_CSF.mif')
 
-    # Step 3: Generate 5TT image for ACT
-    # Use T1 brain mask generated from elsewhere:
-    #   don't particularly trust the raw "bet" call inside
-    #   5ttgen fsl
-    app.console('Generating five-tissue-type (5TT) image for '
-                'Anatomically-Constrained Tractography (ACT)')
-    run.command('5ttgen fsl '
-                + T1_image
-                + ' 5TT.mif'
-                + (' -premasked' \
-                   if T1_is_premasked \
-                   else (' -mask T1_mask.mif')))
-    if output_verbosity > 1:
-        with open('5TT.json', 'w') as out_5tt_json_file:
-            json.dump(OUT_5TT_JSON_DATA, out_5tt_json_file)
-        run.command('5tt2vis 5TT.mif vis.mif')
-
-    # Step 4: Generate the grey matter parcellation
-    #   The necessary steps here will vary significantly depending on
-    #   the parcellation scheme selected
+    # Step 3: Run FreeSurfer if necessary
+    # This could be due to wanting the segmentation data for 5ttgen hsvs,
+    #   and/or wanting a parcellation derived from such
     if shared.do_freesurfer:
 
         # Modifications to reflect the introduction of -freesurfer option
@@ -2528,34 +2526,38 @@ def run_participant(bids_dir, session, shared,
                             '--annot Yeo' + num + ' '
                             '--o ' + parc_image_path,
                             env=env)
+
+        if parc_image_path:
+            if shared.mrtrix_lut_file:
+                # If necessary:
+                # Perform the index conversion
+                run.command('labelconvert ' + parc_image_path + ' '
+                            + shared.parc_lut_file + ' '
+                            + shared.mrtrix_lut_file
+                            + ' parc_init.mif')
+                # Fix the sub-cortical grey matter parcellations using FSL FIRST
+                run.command('labelsgmfix parc_init.mif '
+                            + T1_image
+                            + ' '
+                            + shared.mrtrix_lut_file
+                            + ' parc.mif')
+                app.cleanup('parc_init.mif')
             else:
-                assert False
-
-        if shared.mrtrix_lut_file:
-            # If necessary:
-            # Perform the index conversion
-            run.command('labelconvert ' + parc_image_path + ' '
-                        + shared.parc_lut_file + ' '
-                        + shared.mrtrix_lut_file
-                        + ' parc_init.mif')
-            # Fix the sub-cortical grey matter parcellations using FSL FIRST
-            run.command('labelsgmfix parc_init.mif '
-                        + T1_image
-                        + ' '
-                        + shared.mrtrix_lut_file
-                        + ' parc.mif')
-            app.cleanup('parc_init.mif')
-        else:
-            # Non-standard sub-cortical parcellation;
-            #   labelsgmfix not applicable
-            run.command('mrconvert ' + parc_image_path + ' parc.mif '
-                        '-datatype uint32')
-        app.cleanup('freesurfer')
+                # Non-standard sub-cortical parcellation;
+                #   labelsgmfix not applicable
+                run.command('mrconvert ' + parc_image_path + ' parc.mif '
+                            '-datatype uint32')
 
 
-    elif shared.do_mni:
+    # Step 4: Perform registration to MNI template and warp parcellation image
+    #   back to subject space
+    if shared.do_mni:
         app.console('Registering to MNI template and transforming grey '
                     'matter parcellation back to subject space')
+
+        # TODO Yeo*MNI do not contain sub-cortical grey matter structures
+        # TODO Brainnetome246 is not as smooth as Yeo;
+        #   trace FreeSurfer commands used
 
         # Use non-dilated brain masks for performing
         #   histogram matching & linear registration
@@ -2758,6 +2760,32 @@ def run_participant(bids_dir, session, shared,
         run.command('label2colour parc.mif parcRGB.mif'
                     + label2colour_lut_option)
 
+    # TODO Brainnetome parcellation needs to have cerebellar hemispheres
+    #   inserted here, and then removed at the completion of processing,
+    #   so that streamlines going there are not erroneously assigned
+    #   to whatever cortex is closest
+
+
+    # Step 5: Generate 5TT image for ACT
+    # Use T1 brain mask generated from elsewhere:
+    #   don't particularly trust the raw "bet" call inside
+    #   5ttgen fsl
+    app.console('Generating five-tissue-type (5TT) image for '
+                'Anatomically-Constrained Tractography (ACT)')
+    if shared.segmentation == 'fsl':
+        run.command('5ttgen fsl '
+                    + T1_image
+                    + ' 5TT.mif'
+                    + (' -premasked' \
+                    if T1_is_premasked \
+                    else (' -mask T1_mask.mif')))
+    else:
+        assert False
+    if output_verbosity > 1:
+        with open('5TT.json', 'w') as out_5tt_json_file:
+            json.dump(OUT_5TT_JSON_DATA, out_5tt_json_file)
+        run.command('5tt2vis 5TT.mif vis.mif')
+
     # If no parcellation is requested, it is still possible to
     #   generate a whole-brain tractogram by explicitly providing
     #   the -streamlines option
@@ -2773,7 +2801,7 @@ def run_participant(bids_dir, session, shared,
         num_streamlines = 500 * num_nodes * (num_nodes-1)
     if num_streamlines:
 
-        # Step 5: Generate the tractogram
+        # Step 6: Generate the tractogram
         app.console('Performing whole-brain fibre-tracking')
         tractogram_filepath = 'tractogram_' + str(num_streamlines) + '.tck'
         run.command('tckgen FOD_WM.mif ' + tractogram_filepath + ' '
@@ -2783,7 +2811,7 @@ def run_participant(bids_dir, session, shared,
                     '-select ' + str(num_streamlines) + ' '
                     '-seed_dynamic FOD_WM.mif')
 
-        # Step 6: Use SIFT2 to determine streamline weights
+        # Step 7: Use SIFT2 to determine streamline weights
         app.console('Running the SIFT2 algorithm to assign '
                     'weights to individual streamlines')
         fd_scale_gm_option = ''
@@ -2850,7 +2878,7 @@ def run_participant(bids_dir, session, shared,
 
 
     if shared.parcellation != 'none':
-        # Step 7: Generate the connectome
+        # Step 8: Generate the connectome
         #   Also get the mean length for each edge;
         #   this is the most likely alternative contrast to be useful
         app.console('Combining whole-brain tractogram with grey matter '
@@ -3861,6 +3889,14 @@ See the Mozilla Public License v. 2.0 for more details.''')
     participant_options = \
         cmdline.add_argument_group(
             'Options that are relevant to participant-level analysis')
+    participant_options.add_argument(
+        OPTION_PREFIX + 'act_seg',
+        help='Specify the 5ttgen algorithm to be used to provide a tissue '
+        + 'segmentation image for ACT; options are: '
+        + ', '.join(SEGMENTATION_CHOICES)
+        + ' (default: fsl)',
+        choices=SEGMENTATION_CHOICES,
+        default='fsl')
     if not IS_CONTAINER:
         participant_options.add_argument(
             OPTION_PREFIX + 'atlas_path',
@@ -4279,6 +4315,7 @@ def execute(): #pylint: disable=unused-variable
             ParticipantShared(getattr(app.ARGS, 'atlas_path', None),
                               freesurfer_path,
                               app.ARGS.parcellation,
+                              app.ARGS.segmentation,
                               app.ARGS.streamlines,
                               app.ARGS.template_reg)
 
