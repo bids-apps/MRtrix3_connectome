@@ -121,6 +121,8 @@ RUN wget -qO- "https://github.com/ThomasYeoLab/CBIG/archive/v0.11.1-Wu2017_Regis
     cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/MNI152/Yeo2011_*Networks_N1000.split_components.FSL_MNI152_*mm.nii.gz /opt/Yeo2011/ && \
     cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/MNI152/*Networks_ColorLUT_freeview.txt /opt/Yeo2011/ && \
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
+RUN wget -q "https://osf.io/v8n5g/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
+RUN wget -q "https://osf.io/ug2ef/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
 
 # Make ANTS happy
