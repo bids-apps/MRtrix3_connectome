@@ -159,10 +159,10 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
         else:
             self.template_registration_software = 'ants' if self.do_mni else ''
         if self.template_registration_software == 'ants':
-            if not find_executable('ANTS') \
-                    or not find_executable('WarpImageMultiTransform'):
+            if not find_executable('antsRegistration') \
+                    or not find_executable('antsApplyTransforms'):
                 raise MRtrixError(
-                    'Commands \'ANTS\' and \'WarpImageMultiTransform\' '
+                    'Commands \'antsRegistration\' and \'antsApplyTransforms\' '
                     'must be present in PATH to use '
                     'ANTs software for template registration')
         elif self.template_registration_software == 'fsl':
