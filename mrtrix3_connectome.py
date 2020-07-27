@@ -166,35 +166,36 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
         self.t1w_shared = T1wShared()
 
-        self.do_freesurfer = parcellation in ['brainnetome246fs',
-                                              'desikan',
-                                              'destrieux',
-                                              'hcpmmp1',
-                                              'yeo7fs',
-                                              'yeo17fs']
-        self.do_mni = parcellation in ['aal',
-                                       'aal2',
-                                       'brainnetome246mni',
-                                       'craddock200',
-                                       'craddock400',
-                                       'perry512',
-                                       'yeo7mni',
-                                       'yeo17mni']
+        self.parc_from_freesurfer = parcellation in ['brainnetome246fs',
+                                                     'desikan',
+                                                     'destrieux',
+                                                     'hcpmmp1',
+                                                     'yeo7fs',
+                                                     'yeo17fs']
+        self.parc_from_mni = parcellation in ['aal',
+                                              'aal2',
+                                              'brainnetome246mni',
+                                              'craddock200',
+                                              'craddock400',
+                                              'perry512',
+                                              'yeo7mni',
+                                              'yeo17mni']
         if parcellation != 'none':
-            assert self.do_freesurfer or self.do_mni
+            assert self.parc_from_freesurfer or self.parc_from_mni
 
         if segmentation == 'freesurfer':
             # TODO
             assert False
         elif segmentation == 'fsl':
             # TODO
+
             pass
         elif segmentation == 'hsvs':
             # TODO
             assert False
 
         if template_reg:
-            if self.do_mni:
+            if self.parc_from_mni:
                 self.template_registration_software = template_reg
             else:
                 app.warn('Volumetric template registration '
@@ -202,7 +203,9 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                          + OPTION_PREFIX + 'template_reg option ignored')
                 self.template_registration_software = ''
         else:
-            self.template_registration_software = 'ants' if self.do_mni else ''
+            self.template_registration_software = 'ants' \
+                if self.parc_from_mni \
+                else ''
         if self.template_registration_software == 'ants':
             if not find_executable('ANTS') \
                     or not find_executable('WarpImageMultiTransform'):
@@ -242,7 +245,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                 'labelconvert'))
 
 
-        if self.do_freesurfer:
+        if self.parc_from_freesurfer:
 
             # Split based on whether or not -freesurfer was specified
             # Multiple possibilities, which may depend on input data:
@@ -526,7 +529,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                           'template directories')
                 self.freesurfer_template_link_function = shutil.copytree
 
-        elif self.do_mni:
+        elif self.parc_from_mni:
             self.template_image_path = \
                 os.path.join(fsl_path,
                              'data',
@@ -684,6 +687,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 
 # Regardless of the source of T1-weighted image information,
 #   scratch directory will contain at completion of this function:
+# - T1_raw.mif
 # - Either:
 #   - T1.mif
 #     or
@@ -694,10 +698,10 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
 #
 # TODO Think after all that this does need to export a greater
 #   amount of information with respect to what was done & how it was derived
-def get_t1w_preproc_images(import_path,
-                           session,
-                           t1w_shared,
-                           t1w_preproc):
+def get_t1w_images(import_path,
+                   session,
+                   t1w_shared,
+                   t1w_preproc):
 
     session_label = '_'.join(session)
     preproc_image_path = None
@@ -854,28 +858,39 @@ def get_t1w_preproc_images(import_path,
                         + '"; will generate one manually')
             preproc_mask_path = None
 
-    else:
+    # Check input path for raw un-processed T1w image
+    glob_result = glob.glob(os.path.join(os.path.join(import_path,
+                                                      *session),
+                                         'anat',
+                                         session_label + '*_T1w.nii*'))
+    if not glob_result and not preproc_image_path:
+        raise MRtrixError('No raw or pre-processed T1-weighted images '
+                          + 'could be found in input directory "'
+                          + import_path
+                          + '" for session '
+                          + session_label)
+    if len(glob_result) > 1 and not preproc_image_path:
+        raise MRtrixError('Multiple raw T1w images found in '
+                          + 'input directory "'
+                          + import_path
+                          + '" for session '
+                          + session_label
+                          + ': '
+                          + ';'.join(glob_result))
 
-        # Check input path for raw un-processed T1w image
-        glob_result = glob.glob(os.path.join(os.path.join(import_path,
-                                                          *session),
-                                             'anat',
-                                             session_label + '*_T1w.nii*'))
-        if not glob_result:
-            raise MRtrixError('No raw or pre-processed T1-weighted images '
-                              + 'could be found in input directory "'
-                              + import_path
-                              + '" for session '
-                              + session_label)
-        if len(glob_result) > 1:
-            raise MRtrixError('Multiple raw T1w images found in '
-                              + 'input directory "'
-                              + import_path
-                              + '" for session '
-                              + session_label
-                              + ': '
-                              + ';'.join(glob_result))
+    if glob_result and not '_desc-preproc' in glob_result[0]:
         raw_image_path = glob_result[0]
+        raw_json_path = raw_image_path.rstrip('.gz').rstrip('.nii') + '.json'
+        raw_json_import_option = ' -json_import ' + raw_json_path \
+                                 if os.path.isfile(raw_json_path) \
+                                 else ''
+        run.command('mrconvert '
+                    + raw_image_path
+                    + ' '
+                    + path.to_scratch('T1_raw.mif')
+                    + raw_json_import_option
+                    + ' -datatype bit')
+
 
     # Do we need to do any pre-processing of our own at all?
     if preproc_mask_path is None:
@@ -1285,12 +1300,10 @@ def run_preproc(bids_dir, session, shared,
                           'so EPI distortion correction cannot be performed')
 
     # Get T1-weighted image data
-    #   (could be generated from raw data, or grabbed from a
-    #   user-specified path source)
-    get_t1w_preproc_images(bids_dir,
-                           session,
-                           shared.t1w_shared,
-                           t1w_preproc_path)
+    get_t1w_images(bids_dir,
+                   session,
+                   shared.t1w_shared,
+                   t1w_preproc_path)
     T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
                                                      False))
     T1_image = 'T1_premasked.mif' if T1_is_premasked else 'T1.mif'
@@ -1958,7 +1971,7 @@ def run_participant(bids_dir, session, shared,
                               + session_label
                               + '"')
 
-    if shared.do_freesurfer \
+    if shared.parc_from_freesurfer \
         and not shared.freesurfer_subjects_dir \
         and not freesurfer_path:
         raise MRtrixError('-freesurfer option not specified, and no '
@@ -2186,16 +2199,21 @@ def run_participant(bids_dir, session, shared,
                         + path.to_scratch('dwi_mask.mif')
                         + ' -datatype bit')
 
-        get_t1w_preproc_images(import_path,
-                               session,
-                               shared.t1w_shared,
-                               t1w_preproc_path)
+        get_t1w_images(import_path,
+                       session,
+                       shared.t1w_shared,
+                       t1w_preproc_path)
+        have_T1w_raw = os.path.isfile(path.to_scratch('T1_raw.mif',
+                                                      False))
         T1_is_premasked = os.path.isfile(path.to_scratch('T1_premasked.mif',
                                                          False))
-        if shared.do_freesurfer and T1_is_premasked:
+        if shared.parc_from_freesurfer \
+                and T1_is_premasked \
+                and not have_T1w_raw:
             raise MRtrixError('Cannot execute FreeSurfer for obtaining '
-                              'parcellation: input T1-weighted image is '
-                              'already skull-stripped')
+                              'parcellation: input pre-processed T1-weighted '
+                              'image is already skull-stripped, and raw '
+                              'T1-weighted image is not available')
     # End of do_import() function
 
 
@@ -2305,7 +2323,7 @@ def run_participant(bids_dir, session, shared,
     # Step 3: Run FreeSurfer if necessary
     # This could be due to wanting the segmentation data for 5ttgen hsvs,
     #   and/or wanting a parcellation derived from such
-    if shared.do_freesurfer:
+    if shared.parc_from_freesurfer:
 
         # Modifications to reflect the introduction of -freesurfer option
         # - It's entirely possible that the requisite subject-specific files
@@ -2360,10 +2378,16 @@ def run_participant(bids_dir, session, shared,
 
                 app.console('-freesurfer option not utilised; '
                             'running full FreeSurfer reconstruction')
-                assert not T1_is_premasked
 
+                if T1_is_premasked:
+                    app.warn('As pre-processed T1-weighted image is '
+                             'premasked, FreeSurfer is being run on raw '
+                             'T1-weighted image')
+                    T1w_freesurfer_import = 'T1_raw.mif'
+                else:
+                    T1w_freesurfer_import = T1_image
                 run.command('mrconvert '
-                            + T1_image
+                            + T1w_freesurfer_import
                             + ' T1.nii -strides +1,+2,+3')
                 run.command('recon-all -sd '
                             + app.SCRATCH_DIR
@@ -2551,7 +2575,7 @@ def run_participant(bids_dir, session, shared,
 
     # Step 4: Perform registration to MNI template and warp parcellation image
     #   back to subject space
-    if shared.do_mni:
+    if shared.parc_from_mni:
         app.console('Registering to MNI template and transforming grey '
                     'matter parcellation back to subject space')
 
