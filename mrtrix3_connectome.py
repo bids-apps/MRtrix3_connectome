@@ -3914,7 +3914,7 @@ See the Mozilla Public License v. 2.0 for more details.''')
         cmdline.add_argument_group(
             'Options that are relevant to participant-level analysis')
     participant_options.add_argument(
-        OPTION_PREFIX + 'act_seg',
+        OPTION_PREFIX + 'segmentation',
         help='Specify the 5ttgen algorithm to be used to provide a tissue '
         + 'segmentation image for ACT; options are: '
         + ', '.join(SEGMENTATION_CHOICES)
