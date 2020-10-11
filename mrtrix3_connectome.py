@@ -2652,7 +2652,7 @@ def run_participant(bids_dir, session, shared,
                         + T1_histmatched_path
                         + ' --output '
                         + transformed_atlas_path
-                        + ' --n NearestNeighbor'
+                        + ' --n GenericLabel'
                         + ' --transform '
                         + ants_prefix
                         + '1Warp.nii.gz'
