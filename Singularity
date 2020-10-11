@@ -77,7 +77,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     chmod 775 fslinstaller.py
     python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
     rm /fslinstaller.py
-    which immv || ( rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
+    which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
     FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     npm install -gq bids-validator@1.5.3
