@@ -45,7 +45,7 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev
 
 # Neuroimaging software / data dependencies
-RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.0/freesurfer-linux-centos8_x86_64-7.1.0.tar.gz | \
+RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.1/freesurfer-linux-centos8_x86_64-7.1.1.tar.gz | \
     tar zx -C /opt \
     --exclude='freesurfer/trctrain' \
     --exclude='freesurfer/subjects/fsaverage_sym' \
