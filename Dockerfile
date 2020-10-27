@@ -77,7 +77,7 @@ RUN apt-get remove -y libegl1-mesa-dev && \
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
 RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | \
-    tar zx -C /opt &&
+    tar zx -C /opt && \
     wget -qO- http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | \
     tar zx -C /opt
 #RUN wget -q http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && \
@@ -96,7 +96,7 @@ RUN wget -q https://github.com/AlistairPerry/CCA/raw/master/parcellations/512inM
 RUN wget -qO- http://www.nitrc.org/frs/download.php/5906/ADHD200_parcellations.tar.gz | \
     tar zx -C /opt
 RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" \
-    -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot &&
+    -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot && \
     wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528819/rh.HCPMMP1.annot" \
     -O /opt/freesurfer/subjects/fsaverage/label/rh.HCPMMP1.annot
 RUN mkdir /opt/brainnetome && \
