@@ -10,8 +10,6 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     mrtrix3_connectome.py /mrtrix3_connectome.py
     neurodebian.gpg /neurodebian.gpg
     version /version
-    Yeo2011_7N_split.txt /Yeo2011_7N_split.txt
-    Yeo2011_17N_split.txt /Yeo2011_17N_split.txt
 
 %environment
 
@@ -36,14 +34,16 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     export OS SUBJECTS_DIR FSF_OUTPUT_FORMAT MNI_DIR LOCAL_DIR FREESURFER_HOME FSFAST_HOME MINC_BIN_DIR MINC_LIB_DIR MNI_DATAPATH FMRI_ANALYSIS_DIR PERL5LIB MNI_PERL5LIB
 # FSL
     FSLDIR=/opt/fsl
-    FSLMULTIFILEQUIT=TRUE
     FSLOUTPUTTYPE=NIFTI
-    export FSLDIR FSLMULTIFILEQUIT FSLOUTPUTTYPE
+    FSLMULTIFILEQUIT=TRUE
+    FSLTCLSH=/opt/fsl/bin/fsltclsh
+    FSLWISH=/opt/fsl/bin/fslwish
+    export FSLDIR FSLOUTPUTTYPE FSLMULTIFILEQUIT FSLTCLSH FSLWISH
 # MRtrix3
     PYTHONPATH=/mrtrix3/lib:$PYTHONPATH
     export PYTHONPATH
 # All
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/bin:/.singularity.d/libs:/usr/lib:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/bin:/.singularity.d/libs:/usr/lib:/opt/fsl/lib:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH
     PATH=/usr/local/cuda/bin:/usr/lib/ants:/opt/freesurfer/bin:/opt/freesurfer/mni/bin:$FSLDIR/bin:/opt/ROBEX:/mrtrix3/bin:$PATH
     export PATH
@@ -77,10 +77,9 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     apt-get install -y ants=2.2.0-1ubuntu1
     wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
     chmod 775 fslinstaller.py
-    python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
+    python2 /fslinstaller.py -d /opt/fsl -V 6.0.4 -q
     rm /fslinstaller.py
     which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
-    FSLDIR=/opt/fsl /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     npm install -gq bids-validator@1.5.3
 
@@ -112,8 +111,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     mv /Yeo2011_17N_split.txt /Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/
 
 # MRtrix3 setup
-    git clone -b 3.0.1 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/
-
+    git clone -b 3.0.2 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/
     wget -q "https://osf.io/v8n5g/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
     wget -q "https://osf.io/ug2ef/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
