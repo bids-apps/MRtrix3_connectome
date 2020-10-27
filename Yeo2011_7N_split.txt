@@ -1,0 +1,77 @@
+# Lookup table for extracting the relevant grey matter parcellations from the Yeo 2011 7-network split-components parcellation
+
+0       ???        Unknown                             0   0   0   0
+
+1       L.Vis      7Networks_LH_Vis                    120 18  134 0
+2       L.SM       7Networks_LH_SomMot                 70  130 180 0
+3       L.DA.Post  7Networks_LH_DorsAttn_Post          0   118 14  0
+4       L.DA.FEF   7Networks_LH_DorsAttn_FEF           0   118 15  0
+5       L.DA.PrCv  7Networks_LH_DorsAttn_PrCv          0   119 14  0
+6       L.SVA.PO   7Networks_LH_SalVentAttn_ParOper    196 58  250 0
+7       L.SVA.TO   7Networks_LH_SalVentAttn_TempOcc    196 58  251 0
+8       L.SVA.FO   7Networks_LH_SalVentAttn_FrOper     196 59  250 0
+9       L.SVA.PFCl 7Networks_LH_SalVentAttn_PFCl       196 59  251 0
+10      L.SVA.Med  7Networks_LH_SalVentAttn_Med        197 58  250 0
+11      L.L.OFC    7Networks_LH_Limbic_OFC             220 248 164 0
+12      L.L.TP     7Networks_LH_Limbic_TempPole        220 248 165 0
+13      L.C.Par    7Networks_LH_Cont_Par               230 148 34  0
+14      L.C.Temp   7Networks_LH_Cont_Temp              230 148 35  0
+15      L.C.PFCd   7Networks_LH_Cont_PFCd              230 149 34  0
+16      L.C.PFCl   7Networks_LH_Cont_PFCl              230 149 35  0
+17      L.C.OFC    7Networks_LH_Cont_OFC               231 148 34  0
+18      L.C.PFCv   7Networks_LH_Cont_PFCv              231 148 35  0
+19      L.C.pCun   7Networks_LH_Cont_pCun              231 149 34  0
+20      L.C.Cing   7Networks_LH_Cont_Cing              231 149 35  0
+21      L.C.PFCmp  7Networks_LH_Cont_PFCmp             230 148 33  0
+22      L.D.Par    7Networks_LH_Default_Par            205 62  78  0
+23      L.D.Temp   7Networks_LH_Default_Temp           205 62  79  0
+24      L.D.PFC    7Networks_LH_Default_PFC            205 63  78  0
+25      L.D.PCC    7Networks_LH_Default_PCC            205 63  79  0
+26      L.D.PHC    7Networks_LH_Default_PHC            206 62  78  0
+
+27      L.Cer      Left-Cerebellum-Cortex              230 148 34  255
+
+28      L.Th       Left-Thalamus-Proper                0   118 14  255
+29      L.Ca       Left-Caudate                        122 186 220 255
+30      L.Pu       Left-Putamen                        236 13  176 255
+31      L.Pa       Left-Pallidum                       12  48  255 255
+32      L.Hi       Left-Hippocampus                    220 216 20  255
+33      L.Am       Left-Amygdala                       103 255 255 255
+34      L.Ac       Left-Accumbens-area                 255 165 0   255
+
+35      R.Th       Right-Thalamus-Proper               0   118 14  255
+36      R.Ca       Right-Caudate                       122 186 220 255
+37      R.Pu       Right-Putamen                       236 13  176 255
+38      R.Pa       Right-Pallidum                      13  48  255 255
+39      R.Hi       Right-Hippocampus                   220 216 20  255
+40      R.Am       Right-Amygdala                      103 255 255 255
+41      R.Ac       Right-Accumbens-area                255 165 0   255
+
+42      R.Cer      Right-Cerebellum-Cortex             230 148 34  255
+
+43      R.Vis      7Networks_RH_Vis                    120 18  135 0
+44      R.SM       7Networks_RH_SomMot                 70  130 181 0
+45      R.DA.Post  7Networks_RH_DorsAttn_Post          0   119 15  0
+46      R.DA.FEF   7Networks_RH_DorsAttn_FEF           1   118 14  0
+47      R.DA.PrCv  7Networks_RH_DorsAttn_PrCv          1   118 15  0
+48      R.SVA.TOP  7Networks_RH_SalVentAttn_TempOccPar 197 58  251 0
+49      R.SVA.PrC  7Networks_RH_SalVentAttn_PrC        197 59  250 0
+50      R.SVA.FO   7Networks_RH_SalVentAttn_FrOper     197 59  251 0
+51      R.SVA.PFCv 7Networks_RH_SalVentAttn_PFCv       196 58  249 0
+52      R.SVA.PFCl 7Networks_RH_SalVentAttn_PFCl       196 57  250 0
+53      R.SVA.Med  7Networks_RH_SalVentAttn_Med        196 57  249 0
+54      R.L.OFC    7Networks_RH_Limbic_OFC             220 249 164 0
+55      R.L.TP     7Networks_RH_Limbic_TempPole        220 249 165 0
+56      R.C.Par    7Networks_RH_Cont_Par               230 147 34  0
+57      R.C.Temp   7Networks_RH_Cont_Temp              230 147 33  0
+58      R.C.PFCv   7Networks_RH_Cont_PFCv              229 148 34  0
+59      R.C.PFCl   7Networks_RH_Cont_PFCl              229 148 33  0
+60      R.C.pCun   7Networks_RH_Cont_pCun              229 147 34  0
+61      R.C.Cing   7Networks_RH_Cont_Cing              229 147 33  0
+62      R.C.PFCmp  7Networks_RH_Cont_PFCmp             230 148 36  0
+63      R.D.Par    7Networks_RH_Default_Par            205 62  77  0
+64      R.D.Temp   7Networks_RH_Default_Temp           205 61  78  0
+65      R.D.PFCv   7Networks_RH_Default_PFCv           205 61  77  0
+66      R.D.PFCm   7Networks_RH_Default_PFCm           204 62  78  0
+67      R.D.PCC    7Networks_RH_Default_PCC            204 62  77  0
+

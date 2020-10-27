@@ -169,6 +169,10 @@ RUN wget -q "https://osf.io/ug2ef/download" -O /mrtrix3/share/mrtrix3/labelconve
 ENV PATH /mrtrix3/bin:$PATH
 ENV PYTHONPATH /mrtrix3/lib:$PYTHONPATH
 
+# Acquire extra MRtrix3 data
+COPY Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
+COPY Yeo2011_17N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
+
 # Acquire script to be executed
 COPY mrtrix3_connectome.py /mrtrix3_connectome.py
 RUN chmod 775 /mrtrix3_connectome.py

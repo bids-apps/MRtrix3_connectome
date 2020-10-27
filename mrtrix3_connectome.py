@@ -400,7 +400,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                 self.freesurfer_template_link_function(
                     self.freesurfer_subjects_dir,
                     'test_softlink')
-                app.cleanup('test_softlink')
+                os.remove('test_softlink')
                 app.debug('Using softlinks to FreeSurfer template directories')
             except OSError:
                 app.debug('Unable to create softlinks; '
@@ -453,7 +453,7 @@ class ParticipantShared(object): #pylint: disable=useless-object-inheritance
                         os.path.join(os.sep,
                                      'opt',
                                      'brainnetome',
-                                     'BN_Atlas_246_1mm.nii.gz'))
+                                     'BNA_MPM_thr25_1.25mm.nii.gz'))
                 self.parc_lut_file = \
                     os.path.abspath(
                         os.path.join(os.sep,
@@ -2455,7 +2455,7 @@ def run_participant(bids_dir, session, shared,
                         + T1_histmatched_path
                         + ' --output '
                         + transformed_atlas_path
-                        + ' --n NearestNeighbor'
+                        + ' --n GenericLabel'
                         + ' --transform '
                         + ants_prefix
                         + '1Warp.nii.gz'
