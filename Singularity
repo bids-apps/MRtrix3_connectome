@@ -40,12 +40,12 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     FSLWISH=/opt/fsl/bin/fslwish
     export FSLDIR FSLOUTPUTTYPE FSLMULTIFILEQUIT FSLTCLSH FSLWISH
 # MRtrix3
-    PYTHONPATH=/mrtrix3/lib:$PYTHONPATH
+    PYTHONPATH=/opt/mrtrix3/lib:$PYTHONPATH
     export PYTHONPATH
 # All
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/bin:/.singularity.d/libs:/usr/lib:/opt/fsl/lib:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH
-    PATH=/usr/local/cuda/bin:/usr/lib/ants:/opt/freesurfer/bin:/opt/freesurfer/mni/bin:$FSLDIR/bin:/opt/ROBEX:/mrtrix3/bin:$PATH
+    PATH=/opt/mrtrix3/bin:/usr/local/cuda/bin:/usr/lib/ants:/opt/freesurfer/bin:/opt/freesurfer/mni/bin:/opt/fsl/bin:/opt/ROBEX:$PATH
     export PATH
 
 %post
@@ -111,9 +111,9 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     mv /Yeo2011_17N_split.txt /Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/
 
 # MRtrix3 setup
-    git clone -b 3.0.2 --depth 1 https://github.com/MRtrix3/mrtrix3.git && cd mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/
-    wget -q "https://osf.io/v8n5g/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
-    wget -q "https://osf.io/ug2ef/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
+    git clone -b 3.0.2 --depth 1 https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/ && cd ../../
+    wget -q "https://osf.io/v8n5g/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
+    wget -q "https://osf.io/ug2ef/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
 # MRtrix3_connectome script
     chmod 775 /mrtrix3_connectome.py
