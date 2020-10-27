@@ -24,7 +24,14 @@ OPTION_PREFIX = '--' if IS_CONTAINER else '-'
 OUT_DWI_JSON_DATA = {'SkullStripped': False}
 OUT_5TT_JSON_DATA = {'LabelMap': ['CGM', 'SGM', 'WM', 'CSF', 'Path']}
 
+# Use a threshold on the balanced tissue sum image
+#   as a replacement of dwi2mask within the iterative
+#   bias field correction / brain masking loop in preprpoc
+TISSUESUM_THRESHOLD = 0.5 / math.sqrt(4.0 * math.pi)
 
+# Seem that for problematic data, running more than two iterations may
+#   cause divergence from the ideal mask; therefore cap at two iterations
+DWIBIASCORRECT_MAX_ITERS = 2
 
 
 class T1wShared(object): #pylint: disable=useless-object-inheritance
@@ -1437,31 +1444,25 @@ def run_preproc(bids_dir, session, shared,
     app.cleanup(dwifslpreproc_input)
     app.cleanup(dwifslpreproc_se_epi)
 
-    # Step 4: b=0-based bias field correction
-    dwi_image = 'dwi_init.mif'
-    if shared.dwibiascorrect_algo:
-        app.console('Performing initial B1 bias field correction of DWIs')
-        run.command('dwibiascorrect '
-                    + shared.dwibiascorrect_algo
-                    + ' '
-                    + dwifslpreproc_output
-                    + ' '
-                    + dwi_image)
-        app.cleanup(dwifslpreproc_output)
-    else:
-        run.function(shutil.move, dwifslpreproc_output, dwi_image)
+    # Step 4: Generate an image containing all voxels where the
+    #   DWI contains valid data
+    dwi_validdata_image = 'dwi_validdata_mask.mif'
+    run.command('mrmath ' + dwifslpreproc_output + ' max -axis 3 - |'
+                + ' mrthreshold - '
+                + dwi_validdata_image
+                + ' -abs 0.0 -comparison gt')
 
     # Determine whether we are working with single-shell or multi-shell data
     bvalues = [
         int(round(float(value)))
-        for value in image.mrinfo(dwi_image, 'shell_bvalues') \
+        for value in image.mrinfo(dwifslpreproc_output, 'shell_bvalues') \
                                  .strip().split()]
     multishell = (len(bvalues) > 2)
 
     # Step 5: Initial DWI brain mask
     dwi_mask_image = 'dwi_mask_init.mif'
     app.console('Performing intial DWI brain masking')
-    run.command('dwi2mask ' + dwi_image + ' ' + dwi_mask_image)
+    run.command('dwi2mask ' + dwifslpreproc_output + ' ' + dwi_mask_image)
 
     # Step 6: Combined RF estimation / CSD / mtnormalise / mask revision
     # DWI brain masking may be inaccurate due to residual bias field.
@@ -1471,9 +1472,6 @@ def run_preproc(bids_dir, session, shared,
     #     - Mtnormalise to remove any bias field;
     #     - Re-calculation of brain mask;
     #   in an iterative fashion, as all steps may influence the others.
-    #
-    # TODO Consider using a threshold of 0.5/sqrt(4pi) on the tissue sum image
-    #   as a replacement of dwi2mask within this loop
     class Tissue(object): #pylint: disable=useless-object-inheritance
         def __init__(self, name, index):
             self.name = name
@@ -1491,7 +1489,8 @@ def run_preproc(bids_dir, session, shared,
         return 'Iteration {0}; {1} step; previous Dice coefficient {2}' \
                .format(iteration, step, dice_coefficient)
     progress = app.ProgressBar(msg)
-    for iteration in range(0, 10):
+    dwi_image = dwifslpreproc_output
+    for iteration in range(0, DWIBIASCORRECT_MAX_ITERS):
         iter_string = '_iter' + str(iteration+1)
 
         tissues = [Tissue('WM', iteration),
@@ -1507,7 +1506,6 @@ def run_preproc(bids_dir, session, shared,
                     + ' '
                     + ' '.join(tissue.rf for tissue in tissues))
 
-
         # Remove GM if we can't deal with it
         lmaxes = '4,0,0'
         if not multishell:
@@ -1519,7 +1517,6 @@ def run_preproc(bids_dir, session, shared,
         progress.increment()
         run.command('dwi2fod msmt_csd '
                     + dwi_image
-                    + ' -mask ' + dwi_mask_image
                     + ' -lmax ' + lmaxes
                     + ' '
                     + ' '.join(tissue.rf + ' ' + tissue.fod_init
@@ -1530,14 +1527,13 @@ def run_preproc(bids_dir, session, shared,
         field_path = 'field' + iter_string + '.mif'
         factors_path = 'factors' + iter_string + '.txt'
         run.command('maskfilter ' + dwi_mask_image + ' erode - |'
-                    + ' mtnormalise -mask -'
+                    + ' mtnormalise -mask - -balanced'
                     + ' -check_norm ' + field_path
                     + ' -check_factors ' + factors_path
                     + ' '
                     + ' '.join(tissue.fod_init + ' ' + tissue.fod_norm
                                for tissue in tissues))
         app.cleanup([tissue.fod_init for tissue in tissues])
-        app.cleanup([tissue.fod_norm for tissue in tissues])
 
         # Apply both estimated bias field, and appropiate
         #   scaling factor, to DWIs
@@ -1563,10 +1559,30 @@ def run_preproc(bids_dir, session, shared,
         step = 'dwi2mask'
         progress.increment()
         new_dwi_mask_image = 'dwi_mask' + iter_string + '.mif'
-        run.command('dwi2mask ' + dwi_image + ' ' + new_dwi_mask_image)
+        run.command('mrconvert '
+                    + tissues[0].fod_norm
+                    + ' -coord 3 0 - |'
+                    + ' mrmath - '
+                    + ' '.join(tissue.fod_norm for tissue in tissues[1:])
+                    + ' sum - |'
+                    + ' mrthreshold - -abs '
+                    + str(TISSUESUM_THRESHOLD)
+                    + ' - |'
+                    + ' maskfilter - connect -largest - |'
+                    + ' mrcalc 1 - -sub - -datatype bit |'
+                    + ' maskfilter - connect -largest - |'
+                    + ' mrcalc 1 - -sub - -datatype bit |'
+                    + ' maskfilter - clean - |'
+                    + ' mrcalc - '
+                    + dwi_validdata_image
+                    + ' -mult '
+                    + new_dwi_mask_image
+                    + ' -datatype bit')
+        app.cleanup([tissue.fod_norm for tissue in tissues])
 
         # Compare input and output masks
         step = 'mrcalc_mask'
+        progress.increment()
         dwi_old_mask_count = image.statistics(dwi_mask_image,
                                               mask=dwi_mask_image).count
         dwi_new_mask_count = image.statistics(new_dwi_mask_image,
@@ -1589,10 +1605,12 @@ def run_preproc(bids_dir, session, shared,
                            (dwi_old_mask_count + dwi_new_mask_count)
         app.debug('Dice coefficient: ' + str(dice_coefficient))
         if dice_coefficient > (1.0 - 1e-3):
-            progress.done()
-            app.console('Exiting iterative loop due to mask convergence')
+            app.debug('Exiting iterative loop due to mask convergence')
             break
+    progress.done()
 
+    app.cleanup(dwifslpreproc_output)
+    app.cleanup(dwi_validdata_image)
 
     # Step 7: Crop images to reduce storage space
     #   (but leave some padding on the sides)
