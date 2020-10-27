@@ -847,7 +847,7 @@ def get_t1w_preproc_images(import_path,
 
             run.command('mrconvert '
                         + raw_image_path
-                        + ' T1_raw.nii -strides +1,+2,+3')
+                        + ' T1.nii -strides +1,+2,+3')
 
             if t1w_shared.robex_cmd and t1w_shared.N4_cmd:
 
