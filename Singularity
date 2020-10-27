@@ -108,7 +108,6 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/MNI152/Yeo2011_*Networks_N1000.split_components.FSL_MNI152_*mm.nii.gz /opt/Yeo2011/
     cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/MNI152/*Networks_ColorLUT_freeview.txt /opt/Yeo2011/
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
-    mv /Yeo2011_17N_split.txt /Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/
 
 # MRtrix3 setup
     git clone -b 3.0.2 --depth 1 https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf cmd/ core/ src/ testing/ tmp/ && cd ../../
