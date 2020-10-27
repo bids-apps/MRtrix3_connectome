@@ -847,10 +847,7 @@ def get_t1w_preproc_images(import_path,
 
             run.command('mrconvert '
                         + raw_image_path
-                        + ' T1.nii -strides '
-                        + ('+1,+2,+3'
-                           if t1w_shared.robex_cmd and t1w_shared.N4_cmd
-                           else '-1,+2,+3'))
+                        + ' T1_raw.nii -strides +1,+2,+3')
 
             if t1w_shared.robex_cmd and t1w_shared.N4_cmd:
 
@@ -867,7 +864,6 @@ def get_t1w_preproc_images(import_path,
                             + ' -i T1.nii'
                             + ' -w T1_initial_mask.nii'
                             + ' -o T1_biascorr.nii')
-                app.cleanup('T1.nii')
                 app.cleanup('T1_initial_mask.nii')
                 run.command(t1w_shared.robex_cmd
                             + ' T1_biascorr.nii T1_biascorr_brain.nii'
@@ -885,7 +881,6 @@ def get_t1w_preproc_images(import_path,
 
                 run.command(t1w_shared.fsl_anat_cmd
                             + ' -i T1.nii --noseg --nosubcortseg')
-                app.cleanup('T1.nii')
                 run.command('mrconvert '
                             + fsl.find_image(
                                 os.path.join('T1.anat',
@@ -904,10 +899,12 @@ def get_t1w_preproc_images(import_path,
             else:
                 assert False
 
+            run.function(shutil.move, 'T1.nii', path.to_scratch('T1_raw.nii', False))
+
         run.function(os.chdir, cwd)
         app.cleanup(path.to_scratch('t1w_preproc'))
 
-# Completed function get_t1w_preproc()
+# Completed function get_t1w_preproc_images()
 
 
 
@@ -2203,10 +2200,28 @@ def run_participant(bids_dir, session, shared,
                          subdir)
 
         # Run FreeSurfer pipeline on this subject's T1 image
-        run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
-                    '-i T1_raw.nii')
-        run.command('recon-all -sd ' + app.SCRATCH_DIR + ' -subjid freesurfer '
-                    '-all' + shared.reconall_multithread_options)
+        # If the pre-processed T1-weighted image is not brain-extracted,
+        #   we'll use that here; but if it is, fingers crossed we have the
+        #   raw T1-weighted image that was used to generate it...
+        # TODO Improve on this
+        if T1_is_premasked:
+            freesurfer_T1w_input = 'T1_raw.nii'
+            if not os.path.isfile('T1_raw.nii'):
+                raise MRtrixError('Cannot run FreeSurfer: pre-processed '
+                                  'T1-weighted image is skull-stripped')
+        else:
+            freesurfer_T1w_input = 'T1.nii'
+            run.command('mrconvert T1.mif T1.nii -strides +1,+2,+3')
+        run.command('recon-all -sd '
+                    + app.SCRATCH_DIR
+                    + ' -subjid freesurfer '
+                    + '-i '
+                    + freesurfer_T1w_input)
+        run.command('recon-all -sd '
+                    + app.SCRATCH_DIR
+                    + ' -subjid freesurfer'
+                    + ' -all'
+                    + shared.reconall_multithread_options)
 
         # Grab the relevant parcellation image and
         #   target lookup table for conversion
