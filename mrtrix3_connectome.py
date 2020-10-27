@@ -2014,7 +2014,7 @@ def run_participant(bids_dir, session, shared,
                                     else ''
         # Is there a mask present?
         in_dwi_mask_image_list = \
-            glob.glob(os.path.join(output_subdir,
+            glob.glob(os.path.join(os.path.join(import_path, *session),
                                    'dwi',
                                    '*_desc-brain*_mask.nii*'))
         if len(in_dwi_mask_image_list) > 1:
@@ -2065,7 +2065,7 @@ def run_participant(bids_dir, session, shared,
     # We first make an attempt at loading all requisite data from
     #   "bids_dir" (since the user may have used that path to request
     #   that the pre-processed data be utilised from some path other than
-    #   "mrtrix3_connectome/preproc/"); if that doesn't work, we wipe the
+    #   "mrtrix3_connectome-preproc/"); if that doesn't work, we wipe the
     #   scratch directory and try again based on the latter
     app.make_scratch_dir()
     try:

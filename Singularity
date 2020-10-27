@@ -41,7 +41,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     PYTHONPATH=/mrtrix3/lib:$PYTHONPATH
     export PYTHONPATH
 # All
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/bin:/.singularity.d/libs:/usr/lib/$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/bin:/.singularity.d/libs:/usr/lib:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH
     PATH=/usr/local/cuda/bin:/usr/lib/ants:/opt/freesurfer/bin:/opt/freesurfer/mni/bin:$FSLDIR/bin:/opt/ROBEX:/mrtrix3/bin:$PATH
     export PATH
