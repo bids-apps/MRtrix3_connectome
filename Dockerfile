@@ -154,7 +154,8 @@ ENV FSLOUTPUTTYPE NIFTI
 ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
-RUN git clone -b 3.0.1 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
+# Commitish is 3.0.2 plus relevant hotfix
+RUN git clone -b 4ab54489f40997f7da1e1915c2adde3373cf6039 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
