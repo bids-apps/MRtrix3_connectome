@@ -2384,10 +2384,11 @@ def run_participant(bids_dir, session, shared,
                         + shared.mrtrix_lut_file
                         + ' parc_init.mif')
             # Fix the sub-cortical grey matter parcellations using FSL FIRST
-            run.command('labelsgmfix parc_init.mif T1_raw.nii '
+            run.command('labelsgmfix parc_init.mif '
+                        + freesurfer_T1w_input
+                        + ' '
                         + shared.mrtrix_lut_file
                         + ' parc.mif')
-            app.cleanup('T1_raw.nii')
             app.cleanup('parc_init.mif')
         else:
             # Non-standard sub-cortical parcellation;
