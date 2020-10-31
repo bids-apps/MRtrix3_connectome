@@ -155,12 +155,13 @@ ENV PATH /opt/ROBEX:$PATH
 
 # MRtrix3 setup
 # Commitish is 3.0.2 plus relevant hotfix
-RUN git clone -b 4ab54489f40997f7da1e1915c2adde3373cf6039 --depth 1 https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
+RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     cd mrtrix3 && \
+    git checkout 4ab54489f40997f7da1e1915c2adde3373cf6039 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version && \
-    rm -rf cmd/ core/ src/ testing/ tmp/ && \
+    rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && \
     cd /
 
 RUN wget -q "https://osf.io/v8n5g/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
