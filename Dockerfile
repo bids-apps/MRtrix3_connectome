@@ -2,7 +2,7 @@ FROM ubuntu:18.04
 MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Core system capabilities required
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     bc \
     build-essential \
     curl \
@@ -16,24 +16,21 @@ RUN apt-get update && apt-get install -y \
     python3 \
     tar \
     tcsh \
+    tzdata \
     unzip \
     wget
-
-
-RUN DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y tzdata
 
 # PPA for newer version of nodejs, which is required for bids-validator
 RUN curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && \
     bash nodesource_setup.sh && \
-    rm -f nodesource_setup.sh
-RUN apt-get install -y nodejs
+    rm -f nodesource_setup.sh && \
+    apt-get install -y nodejs
 
 # NeuroDebian setup
-RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
-    tee /etc/apt/sources.list.d/neurodebian.sources.list
 COPY neurodebian.gpg /neurodebian.gpg
-RUN apt-key add /neurodebian.gpg && \
+RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
+    tee /etc/apt/sources.list.d/neurodebian.sources.list && \
+    apt-key add /neurodebian.gpg && \
     apt-get update
 
 # Additional dependencies for MRtrix3 compilation
@@ -60,27 +57,28 @@ RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
-RUN FREESURFER_HOME=/opt/freesurfer /bin/bash -c 'source /opt/freesurfer/SetUpFreeSurfer.sh'
 RUN apt-get install -y ants=2.2.0-1ubuntu1
-# FSL installer appears to now be ready for use with version 6.0.0
+# FSL installer appears to now be ready for use with version 6
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
-    chmod 775 fslinstaller.py
-RUN python2 /fslinstaller.py -d /opt/fsl -V 6.0.3 -q
-RUN rm -f /fslinstaller.py
+    chmod 775 fslinstaller.py && \
+    python2 /fslinstaller.py -d /opt/fsl -V 6.0.4 -q && \
+    rm -f /fslinstaller.py
 RUN which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
     tar zx -C /opt
 RUN npm install -gq bids-validator@1.5.3
 
 # apt cleanup to recover as much space as possible
-RUN apt-get remove -y libegl1-mesa-dev && apt-get autoremove -y
-RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN apt-get remove -y libegl1-mesa-dev && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
 RUN wget -qO- http://www.gin.cnrs.fr/AAL_files/aal_for_SPM12.tar.gz | \
-    tar zx -C /opt
-RUN wget -qO- http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | \
+    tar zx -C /opt && \
+    wget -qO- http://www.gin.cnrs.fr/AAL2_files/aal2_for_SPM12.tar.gz | \
     tar zx -C /opt
 #RUN wget -q http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && \
 #    unzip -qq -o sri24_anatomy_nifti.zip -d /opt/ && \
@@ -98,21 +96,21 @@ RUN wget -q https://github.com/AlistairPerry/CCA/raw/master/parcellations/512inM
 RUN wget -qO- http://www.nitrc.org/frs/download.php/5906/ADHD200_parcellations.tar.gz | \
     tar zx -C /opt
 RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" \
-    -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot
-RUN wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528819/rh.HCPMMP1.annot" \
+    -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot && \
+    wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528819/rh.HCPMMP1.annot" \
     -O /opt/freesurfer/subjects/fsaverage/label/rh.HCPMMP1.annot
-RUN mkdir /opt/brainnetome
-RUN wget -q "http://ddl.escience.cn/f/IiyU?func=download&rid=8135438" -O /opt/freesurfer/average/rh.BN_Atlas.gcs || \
-    wget -q "https://osf.io/e6zkg/download" -O /opt/freesurfer/average/rh.BN_Atlas.gcs
-RUN wget -q "http://ddl.escience.cn/f/IiyP?func=download&rid=8135433" -O /opt/freesurfer/average/lh.BN_Atlas.gcs || \
-    wget -q "https://osf.io/af9ut/download" -O /opt/freesurfer/average/lh.BN_Atlas.gcs
-RUN wget -q "http://ddl.escience.cn/f/PC7Q?func=download&rid=9882718" -O /opt/freesurfer/average/BN_Atlas_subcortex.gca || \
-    wget -q "https://osf.io/k2cd8/download" -O /opt/freesurfer/average/BN_Atlas_subcortex.gca
-RUN wget -q "http://ddl.escience.cn/f/PC7O?func=download&rid=9882716" -O /opt/brainnetome/BN_Atlas_246_LUT.txt || \
-    wget -q "https://osf.io/eb7pm/download" -O /opt/brainnetome/BN_Atlas_246_LUT.txt
-RUN wget -q "http://ddl.escience.cn/f/Bvhg?func=download&rid=6516020" -O /opt/brainnetome/BNA_MPM_thr25_1.25mm.nii.gz || \
-    wget -q "https://osf.io/dbqep/download" -O /opt/brainnetome/BNA_MPM_thr25_1.25mm.nii.gz
-RUN cp /opt/brainnetome/BN_Atlas_246_LUT.txt /opt/freesurfer/
+RUN mkdir /opt/brainnetome && \
+    ( wget -q "http://ddl.escience.cn/f/IiyU?func=download&rid=8135438" -O /opt/freesurfer/average/rh.BN_Atlas.gcs || \
+    wget -q "https://osf.io/e6zkg/download" -O /opt/freesurfer/average/rh.BN_Atlas.gcs ) && \
+    ( wget -q "http://ddl.escience.cn/f/IiyP?func=download&rid=8135433" -O /opt/freesurfer/average/lh.BN_Atlas.gcs || \
+    wget -q "https://osf.io/af9ut/download" -O /opt/freesurfer/average/lh.BN_Atlas.gcs ) && \
+    ( wget -q "http://ddl.escience.cn/f/PC7Q?func=download&rid=9882718" -O /opt/freesurfer/average/BN_Atlas_subcortex.gca || \
+    wget -q "https://osf.io/k2cd8/download" -O /opt/freesurfer/average/BN_Atlas_subcortex.gca ) && \
+    ( wget -q "http://ddl.escience.cn/f/PC7O?func=download&rid=9882716" -O /opt/brainnetome/BN_Atlas_246_LUT.txt || \
+    wget -q "https://osf.io/eb7pm/download" -O /opt/brainnetome/BN_Atlas_246_LUT.txt ) && \
+    ( wget -q "http://ddl.escience.cn/f/Bvhg?func=download&rid=6516020" -O /opt/brainnetome/BNA_MPM_thr25_1.25mm.nii.gz || \
+    wget -q "https://osf.io/dbqep/download" -O /opt/brainnetome/BNA_MPM_thr25_1.25mm.nii.gz ) && \
+    cp /opt/brainnetome/BN_Atlas_246_LUT.txt /opt/freesurfer/
 RUN wget -qO- "https://github.com/ThomasYeoLab/CBIG/archive/v0.11.1-Wu2017_RegistrationFusion.tar.gz" | \
     tar zx -C /opt && \
     cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/fsaverage5/label/*h.Yeo2011_*Networks_N1000.split_components.annot /opt/freesurfer/subjects/fsaverage5/label/ && \
@@ -122,41 +120,34 @@ RUN wget -qO- "https://github.com/ThomasYeoLab/CBIG/archive/v0.11.1-Wu2017_Regis
     cp /opt/CBIG-0.11.1-Wu2017_RegistrationFusion/stable_projects/brain_parcellation/Yeo2011_fcMRI_clustering/1000subjects_reference/Yeo_JNeurophysiol11_SplitLabels/MNI152/*Networks_ColorLUT_freeview.txt /opt/Yeo2011/ && \
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
-
-# Make ANTS happy
-ENV ANTSPATH /usr/lib/ants
-ENV PATH /usr/lib/ants:$PATH
-
-# Make FreeSurfer happy
-ENV PATH /opt/freesurfer/bin:/opt/freesurfer/mni/bin:$PATH
-ENV OS Linux
-ENV SUBJECTS_DIR /opt/freesurfer/subjects
-ENV FSF_OUTPUT_FORMAT nii.gz
-ENV MNI_DIR /opt/freesurfer/mni
-ENV LOCAL_DIR /opt/freesurfer/local
-ENV FREESURFER_HOME /opt/freesurfer
-ENV FSFAST_HOME /opt/freesurfer/fsfast
-ENV MINC_BIN_DIR /opt/freesurfer/mni/bin
-ENV MINC_LIB_DIR /opt/freesurfer/mni/lib
-ENV MNI_DATAPATH /opt/freesurfer/mni/data
-ENV FMRI_ANALYSIS_DIR /opt/freesurfer/fsfast
-ENV PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
-ENV MNI_PERL5LIB /opt/freesurfer/mni/lib/perl5/5.8.5
-
-# Make FSL happy
-ENV FSLDIR /opt/fsl
-ENV PATH $FSLDIR/bin:$PATH
-RUN /bin/bash -c 'source /opt/fsl/etc/fslconf/fsl.sh'
-ENV FSLMULTIFILEQUIT TRUE
-ENV FSLOUTPUTTYPE NIFTI
-
-# Make ROBEX happy
-ENV PATH /opt/ROBEX:$PATH
+# Setup envvars
+ENV ANTSPATH=/usr/lib/ants \
+    FREESURFER_HOME=/opt/freesurfer \
+    FMRI_ANALYSIS_DIR=/opt/freesurfer/fsfast \
+    FSF_OUTPUT_FORMAT=nii.gz \
+    FSFAST_HOME=/opt/freesurfer/fsfast \
+    LOCAL_DIR=/opt/freesurfer/local \
+    MINC_BIN_DIR=/opt/freesurfer/mni/bin \
+    MINC_LIB_DIR=/opt/freesurfer/mni/lib \
+    MNI_DATAPATH=/opt/freesurfer/mni/data \
+    MNI_DIR=/opt/freesurfer/mni \
+    MNI_PERL5LIB=/opt/freesurfer/mni/lib/perl5/5.8.5 \
+    OS=Linux \
+    PERL5LIB=/opt/freesurfer/mni/lib/perl5/5.8.5 \
+    SUBJECTS_DIR=/opt/freesurfer/subjects \
+    FSLDIR=/opt/fsl \
+    FSLOUTPUTTYPE=NIFTI \
+    FSLMULTIFILEQUIT=TRUE \
+    FSLTCLSH=/opt/fsl/bin/fsltclsh \
+    FSLWISH=/opt/fsl/bin/fslwish \
+    LD_LIBRARY_PATH=/opt/fsl/lib:$LD_LIBRARY_PATH \
+    PATH=/opt/mrtrix3/bin:/usr/lib/ants:/opt/freesurfer/bin:/opt/freesurfer/mni/bin:/opt/fsl/bin:/opt/ROBEX:$PATH \
+    PYTHONPATH=/opt/mrtrix3/lib:$PYTHONPATH
 
 # MRtrix3 setup
 # Commitish is 3.0.2 plus relevant hotfix
-RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
-    cd mrtrix3 && \
+RUN git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && \
+    cd /opt/mrtrix3 && \
     git checkout 4ab54489f40997f7da1e1915c2adde3373cf6039 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
@@ -164,16 +155,9 @@ RUN git clone https://github.com/MRtrix3/mrtrix3.git mrtrix3 && \
     rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && \
     cd /
 
-RUN wget -q "https://osf.io/v8n5g/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
-RUN wget -q "https://osf.io/ug2ef/download" -O /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
-
-# Setup environment variables for MRtrix3
-ENV PATH /mrtrix3/bin:$PATH
-ENV PYTHONPATH /mrtrix3/lib:$PYTHONPATH
-
 # Acquire extra MRtrix3 data
-COPY Yeo2011_7N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
-COPY Yeo2011_17N_split.txt /mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
+RUN wget -q "https://osf.io/v8n5g/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt && \
+    wget -q "https://osf.io/ug2ef/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
 # Acquire script to be executed
 COPY mrtrix3_connectome.py /mrtrix3_connectome.py
