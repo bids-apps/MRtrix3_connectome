@@ -1957,7 +1957,7 @@ def run_participant(bids_dir, session, shared,
                        os.path.join('tractogram',
                                     session_label
                                     + '_space-dwi_tdi.nii.gz'))
-        output_items['tdi_t1.mif'] = \
+        output_items['tdi_T1.mif'] = \
             OutputItem(True, 3, False, '-strides +1,+2,+3',
                        os.path.join('tractogram',
                                     session_label
