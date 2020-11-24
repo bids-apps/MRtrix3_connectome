@@ -3953,17 +3953,18 @@ See the Mozilla Public License v. 2.0 for more details.''')
         condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
-        'Smith, R. E.; Calamante, F.; Connelly, A. '
-        'Mapping connectomes with diffusion MRI: Deterministic or '
-        'probabilistic tractography? '
-        'Magnetic Resonance in Medicine, 2020, 83(3), 787-790',
-        condition='If performing group-level analysis')
-    cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'SIFT2: Enabling dense quantitative assessment of brain white matter '
         'connectivity using streamlines tractography. '
         'NeuroImage, 2015b, 119, 338-351',
         condition='If performing participant-level analysis',
+        is_external=False)
+    cmdline.add_citation(
+        'Smith, R. E.; Raffelt, D.; Tournier, J.-D.; Connelly, A. '
+        'Quantitative streamlines tractography: Methods and inter-subject '
+        'normalisation. '
+        'Preprint, 2020, OSF, https://doi.org/10.31219/osf.io/c67kn',
+        condition='If performing group-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. '
