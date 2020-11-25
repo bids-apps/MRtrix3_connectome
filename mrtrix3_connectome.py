@@ -3427,8 +3427,9 @@ def get_sessions(root_dir, **kwargs):
     #   - "--session_label" can be used to remove entries from the list
     all_sessions = []
     for dir_name, subdir_list, _ in os.walk(root_dir):
-        if dir_name == 'derivatives':
-            continue
+        subdir_list[:] = [entry \
+                          for entry in subdir_list \
+                          if entry.lower() != 'derivatives']
         if 'anat' in subdir_list and 'dwi' in subdir_list:
             all_sessions.append(os.path.relpath(dir_name, start=root_dir))
             del subdir_list
