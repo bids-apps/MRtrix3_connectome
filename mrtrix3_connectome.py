@@ -3462,23 +3462,39 @@ def get_sessions(root_dir, **kwargs):
                     return False
         return True
 
+    invalid_sessions = []
     for session in all_sessions:
         session = os.path.normpath(session).split(os.sep)
-        process = True
-        if participant_labels:
-            if not find_and_flag(session,
-                                 'sub-',
-                                 participant_labels,
-                                 sub_found):
-                process = False
-        if session_labels:
-            if not find_and_flag(session,
-                                 'ses-',
-                                 session_labels,
-                                 ses_found):
-                process = False
-        if process:
-            result.append(session)
+        if all(any(subdir.startswith(prefix) for prefix in ['sub-', 'ses-'])
+               for subdir in session):
+            process = True
+            if participant_labels:
+                if not find_and_flag(session,
+                                    'sub-',
+                                    participant_labels,
+                                    sub_found):
+                    process = False
+            if session_labels:
+                if not find_and_flag(session,
+                                    'ses-',
+                                    session_labels,
+                                    ses_found):
+                    process = False
+            if process:
+                result.append(session)
+        else:
+            invalid_sessions.append(os.sep.join(session))
+
+    if invalid_sessions:
+        app.warn('Entr'
+                 + ('ies' if len(invalid_sessions) > 1 else 'y')
+                 + ' in "'
+                 + root_dir
+                 + '" found with valid anat/ and dwi/ sub-directories, '
+                 + 'but invalid directory name'
+                 + ('s' if len(invalid_sessions) > 1 else '')
+                 + ': '
+                 + str(invalid_sessions))
 
     if not result:
         raise MRtrixError('No sessions were selected for processing')
