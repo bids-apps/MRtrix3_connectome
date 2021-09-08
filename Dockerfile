@@ -1,5 +1,5 @@
 FROM ubuntu:18.04
-MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
+LABEL org.opencontainers.image.authors="Robert E. Smith <robert.smith@florey.edu.au>"
 
 # Core system capabilities required
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -148,7 +148,7 @@ ENV ANTSPATH=/usr/lib/ants \
 # Commitish is 3.0.2 plus relevant hotfix
 RUN git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && \
     cd /opt/mrtrix3 && \
-    git checkout 4ab54489f40997f7da1e1915c2adde3373cf6039 && \
+    git checkout dev && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version && \
