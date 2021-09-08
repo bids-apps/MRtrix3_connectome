@@ -20,31 +20,27 @@ First, you need to run synb0 (using e.g. https://github.com/treanus/KUL_NeuroIma
 This will read BIDS data and store the output of topup in the BIDS derivatives.
 E.g.
 
-BIDS/derivatives/
-└── synb0
-    ├── sub-iz01
-    │   ├── ses-01
-    │   │   └── topup
-    │   │       ├── topup_fieldcoef.nii.gz
-    │   │       └── topup_movpar.txt
-    │   └── ses-02
-    │       └── topup
-    │           ├── topup_fieldcoef.nii.gz
-    │           └── topup_movpar.txt
-    ├── sub-iz02
-    │   ├── ses-01
-    │   │   └── topup
-    │   │       ├── topup_fieldcoef.nii.gz
-    │   │       └── topup_movpar.txt
-    │   └── ses-02
-    │       └── topup
-    │           ├── topup_fieldcoef.nii.gz
-    │           └── topup_movpar.txt
-    └── sub-iz03
-        └── ses-01
-            └── topup
-                ├── topup_fieldcoef.nii.gz
-                └── topup_movpar.txt
+    BIDS/derivatives/
+     └── synb0
+        ├── sub-iz01
+        │   ├── ses-01
+        │   │   └── topup
+        │   │       ├── old_topup_fieldcoef.nii.gz
+        │   │       ├── topup_fieldcoef.nii.gz
+        │   │       └── topup_movpar.txt
+        │   └── ses-02
+        │       └── topup
+        │           ├── topup_fieldcoef.nii.gz
+        │           └── topup_movpar.txt
+        ├── sub-iz02
+        │   ├── ses-01
+        │   │   └── topup
+        │   │       ├── topup_fieldcoef.nii.gz
+        │   │       └── topup_movpar.txt
+        │   └── ses-02
+        │       └── topup
+        │           ├── topup_fieldcoef.nii.gz
+        │           └── topup_movpar.txt
 
 The above is then used as input to the dwifslproproc command of MRtrix3 (dev branch 3.1)
 
