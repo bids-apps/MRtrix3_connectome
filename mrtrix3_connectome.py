@@ -921,7 +921,7 @@ def get_t1w_preproc_images(import_path,
 
 
 def run_preproc(bids_dir, session, shared,
-                t1w_preproc_path, output_verbosity, output_app_dir):
+                t1w_preproc_path, topup_prefix, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
     output_subdir = os.path.join(output_app_dir,
@@ -1090,78 +1090,106 @@ def run_preproc(bids_dir, session, shared,
                     'DWI series not defined on same image grid; '
                     'script not yet capable of handling such data')
 
-    # Go hunting for reversed phase-encode data
-    #   dedicated to field map estimation
-    in_fmap_image_list = []
-    fmap_dir = os.path.join(os.path.join(bids_dir, *session), 'fmap')
-    fmap_index = 0
-    fmap_image_list = []
-    if os.path.isdir(fmap_dir):
-        app.console('Importing fmap data into scratch directory')
-        in_fmap_image_list = sorted(
-            glob.glob(os.path.join(fmap_dir, '*_dir-*_epi.nii*')))
-        for entry in in_fmap_image_list:
-            prefix = os.path.splitext(entry.rstrip('.gz'))[0]
-            json_path = prefix + '.json'
-            try:
-                with open(json_path, 'r') as f:
-                    json_elements = json.load(f)
-            except OSError:
-                app.warn('No JSON file found for image "'
-                         + entry
-                         + '"; not importing')
-                continue
-            if 'IntendedFor' in json_elements:
-                if isinstance(json_elements['IntendedFor'], list) and \
-                    not any(any(i.endswith(target) for i in in_dwi_image_list)
-                            for target in json_elements['IntendedFor']):
-                    app.console('Image \'' + entry + '\' is not intended '
-                                'for use with DWIs; skipping')
+    if topup_prefix:
+        #if a topup prefix is given then check whether the fieldcoef exists
+        app.console('Importing topup data into scratch directory')
+        in_topup_path = os.path.join(bids_dir,
+                            'derivatives',
+                            topup_prefix,
+                            *session,
+                            'topup',
+                            'topup' + '*.nii*')
+        in_topup_image_list = sorted(glob.glob(in_topup_path))
+        if not in_topup_image_list:
+            raise MRtrixError('No topup data found for session \''
+                          + session_label
+                          + '\' (search location: ' + in_topup_path)
+        
+        topup_files_prefix = os.path.join(bids_dir,
+                            'derivatives',
+                            topup_prefix,
+                            *session,
+                            'topup',
+                            'topup')
+        dwifslpreproc_topup_files = ' ' + '-topup_files ' +  str(topup_files_prefix) + ' '
+        app.console('This option will be added to dwifslpreproc: ' + str(dwifslpreproc_topup_files))
+        fmap_image_list = []
+
+    else:
+        dwifslpreproc_topup_files = ''
+
+        # Go hunting for reversed phase-encode data
+        #   dedicated to field map estimation
+        in_fmap_image_list = []
+        fmap_dir = os.path.join(os.path.join(bids_dir, *session), 'fmap')
+        fmap_index = 0
+        fmap_image_list = []
+        if os.path.isdir(fmap_dir):
+            app.console('Importing fmap data into scratch directory')
+            in_fmap_image_list = sorted(
+                glob.glob(os.path.join(fmap_dir, '*_dir-*_epi.nii*')))
+            for entry in in_fmap_image_list:
+                prefix = os.path.splitext(entry.rstrip('.gz'))[0]
+                json_path = prefix + '.json'
+                try:
+                    with open(json_path, 'r') as f:
+                        json_elements = json.load(f)
+                except OSError:
+                    app.warn('No JSON file found for image "'
+                            + entry
+                            + '"; not importing')
                     continue
-                if not any(i.endswith(json_elements['IntendedFor'])
-                           for i in in_dwi_image_list):
-                    app.console('Image \'' + entry + '\' is not intended '
-                                'for use with DWIs; skipping')
-                    continue
-            if not os.path.isfile(json_path):
-                raise MRtrixError('No sidecar JSON file found '
-                                  'for image \'' + entry + '\'')
-            # fmap files will not come with any gradient encoding in the JSON;
-            #   therefore we need to add it manually ourselves so that
-            #   mrcat / mrconvert can appropriately handle the table once
-            #   these images are concatenated with the DWIs
-            fmap_index += 1
-            fmap_image_size = image.Header(entry).size()
-            fmap_image_num_volumes = \
-                1 if len(fmap_image_size) == 3 else fmap_image_size[3]
-            fmap_dwscheme_file = 'fmap' + str(fmap_index) + '.b'
-            with open(path.to_scratch(fmap_dwscheme_file, False), 'w') as f:
-                for _ in range(0, fmap_image_num_volumes):
-                    f.write('0,0,1,0\n')
-            run.command('mrconvert '
-                        + entry + ' '
-                        + path.to_scratch('fmap' + str(fmap_index) + '.mif',
-                                          True)
-                        + ' -json_import ' + json_path
-                        + ' -grad ' + path.to_scratch(fmap_dwscheme_file,
-                                                      True))
-            app.cleanup(fmap_dwscheme_file)
+                if 'IntendedFor' in json_elements:
+                    if isinstance(json_elements['IntendedFor'], list) and \
+                        not any(any(i.endswith(target) for i in in_dwi_image_list)
+                                for target in json_elements['IntendedFor']):
+                        app.console('Image \'' + entry + '\' is not intended '
+                                    'for use with DWIs; skipping')
+                        continue
+                    if not any(i.endswith(json_elements['IntendedFor'])
+                            for i in in_dwi_image_list):
+                        app.console('Image \'' + entry + '\' is not intended '
+                                    'for use with DWIs; skipping')
+                        continue
+                if not os.path.isfile(json_path):
+                    raise MRtrixError('No sidecar JSON file found '
+                                    'for image \'' + entry + '\'')
+                # fmap files will not come with any gradient encoding in the JSON;
+                #   therefore we need to add it manually ourselves so that
+                #   mrcat / mrconvert can appropriately handle the table once
+                #   these images are concatenated with the DWIs
+                fmap_index += 1
+                fmap_image_size = image.Header(entry).size()
+                fmap_image_num_volumes = \
+                    1 if len(fmap_image_size) == 3 else fmap_image_size[3]
+                fmap_dwscheme_file = 'fmap' + str(fmap_index) + '.b'
+                with open(path.to_scratch(fmap_dwscheme_file, False), 'w') as f:
+                    for _ in range(0, fmap_image_num_volumes):
+                        f.write('0,0,1,0\n')
+                run.command('mrconvert '
+                            + entry + ' '
+                            + path.to_scratch('fmap' + str(fmap_index) + '.mif',
+                                            True)
+                            + ' -json_import ' + json_path
+                            + ' -grad ' + path.to_scratch(fmap_dwscheme_file,
+                                                        True))
+                app.cleanup(fmap_dwscheme_file)
 
-        fmap_image_list = ['fmap' + str(index) + '.mif'
-                           for index in range(1, fmap_index+1)]
+            fmap_image_list = ['fmap' + str(index) + '.mif'
+                            for index in range(1, fmap_index+1)]
 
-    # No need to explicitly check whether fmap/ images are defined
-    #   on a common image grid; these we are happy to resample
+        # No need to explicitly check whether fmap/ images are defined
+        #   on a common image grid; these we are happy to resample
 
-    # If there's no usable data in fmap/ directory,
-    #   need to check to see if there's any phase-encoding
-    #   contrast within the input DWI(s)
-    if not fmap_image_list and len(dwi_image_list) < 2:
-        raise MRtrixError('Inadequate data for pre-processing of session '
-                          '\"' + session_label + '": '
-                          'No phase-encoding contrast in input DWIs, '
-                          'and no fmap/ directory, '
-                          'so EPI distortion correction cannot be performed')
+        # If there's no usable data in fmap/ directory,
+        #   need to check to see if there's any phase-encoding
+        #   contrast within the input DWI(s)
+        if not fmap_image_list and len(dwi_image_list) < 2:
+            raise MRtrixError('Inadequate data for pre-processing of session '
+                            '\"' + session_label + '": '
+                            'No phase-encoding contrast in input DWIs, '
+                            'and no fmap/ directory, '
+                            'so EPI distortion correction cannot be performed')
 
     # Get T1-weighted image data
     #   (could be generated from raw data, or grabbed from a
@@ -1422,6 +1450,7 @@ def run_preproc(bids_dir, session, shared,
                         + dwifslpreproc_output
                         + dwifslpreproc_se_epi_option
                         + dwifslpreproc_eddy_option
+                        + dwifslpreproc_topup_files
                         + ' -rpe_header -eddyqc_text eddyqc/'
                         + ('' if app.DO_CLEANUP else
                            ' -scratch ' + app.SCRATCH_DIR + ' -nocleanup'))
@@ -1459,7 +1488,7 @@ def run_preproc(bids_dir, session, shared,
     # Step 5: Initial DWI brain mask
     dwi_mask_image = 'dwi_mask_init.mif'
     app.console('Performing intial DWI brain masking')
-    run.command('dwi2mask ' + dwifslpreproc_output + ' ' + dwi_mask_image)
+    run.command('dwi2mask fslbet -bet_f 0.2 ' + dwifslpreproc_output + ' ' + dwi_mask_image)
 
     # Step 6: Combined RF estimation / CSD / mtnormalise / mask revision
     # DWI brain masking may be inaccurate due to residual bias field.
@@ -3727,6 +3756,11 @@ See the Mozilla Public License v. 2.0 for more details.''')
         metavar='path',
         help='Provide a path by which pre-processed T1-weighted image data '
              'may be found for the processed participant(s) / session(s)')
+    preproc_participant_options.add_argument(
+        OPTION_PREFIX + 'topup_preproc',
+        metavar='prefix',
+        help='Provide a prefix by which pre-processed topup image data '
+             'may be found for the processed participant(s) / session(s)')
 
     participant_options = \
         cmdline.add_argument_group(
@@ -4111,6 +4145,10 @@ def execute(): #pylint: disable=unused-variable
         t1w_preproc_path = os.path.abspath(app.ARGS.t1w_preproc) \
                            if app.ARGS.t1w_preproc \
                            else None
+        topup_prefix = app.ARGS.topup_preproc
+        #                   if app.ARGS.topup_preproc \
+        #                   else None
+
 
     if app.ARGS.analysis_level == 'preproc':
 
@@ -4123,6 +4161,7 @@ def execute(): #pylint: disable=unused-variable
                         session_to_process,
                         preproc_shared,
                         t1w_preproc_path,
+                        topup_prefix,
                         app.ARGS.output_verbosity,
                         output_app_path)
 

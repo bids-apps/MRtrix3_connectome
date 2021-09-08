@@ -9,6 +9,46 @@ normalisation.
 **NOTE**: App is still under development; script is not guaranteed to be operational
 for all use cases.
 
+## Changes relative to the original (this is a fork)
+
+We try to adapt the code to incorporate synb0 processing an approach described in:
+https://www.sciencedirect.com/science/article/pii/S0730725X18306179
+
+See also: https://github.com/BIDS-Apps/MRtrix3_connectome/issues/81
+
+First, you need to run synb0 (using e.g. https://github.com/treanus/KUL_NeuroImaging_Tools/blob/master/KUL_synb0.sh).
+This will read BIDS data and store the output of topup in the BIDS derivatives.
+E.g.
+BIDS/derivatives/
+└── synb0
+    ├── sub-iz01
+    │   ├── ses-01
+    │   │   └── topup
+    │   │       ├── topup_fieldcoef.nii.gz
+    │   │       └── topup_movpar.txt
+    │   └── ses-02
+    │       └── topup
+    │           ├── topup_fieldcoef.nii.gz
+    │           └── topup_movpar.txt
+    ├── sub-iz02
+    │   ├── ses-01
+    │   │   └── topup
+    │   │       ├── topup_fieldcoef.nii.gz
+    │   │       └── topup_movpar.txt
+    │   └── ses-02
+    │       └── topup
+    │           ├── topup_fieldcoef.nii.gz
+    │           └── topup_movpar.txt
+    └── sub-iz03
+        └── ses-01
+            └── topup
+                ├── topup_fieldcoef.nii.gz
+                └── topup_movpar.txt
+
+The above is then used as input to the dwifslproproc command of MRtrix3 (dev branch 3.1)
+
+
+
 ## Requirements
 
 Due to use of the Anatomically-Constrained Tractography (ACT) framework, correction of
