@@ -19,14 +19,11 @@ See also: https://github.com/BIDS-Apps/MRtrix3_connectome/issues/81
 First, you need to run synb0 (using e.g. https://github.com/treanus/KUL_NeuroImaging_Tools/blob/master/KUL_synb0.sh).
 This will read BIDS data and store the output of topup in the BIDS derivatives.
 E.g.
+
 BIDS/derivatives/
-
 └── synb0
-
     ├── sub-iz01
-
     │   ├── ses-01
-    
     │   │   └── topup
     │   │       ├── topup_fieldcoef.nii.gz
     │   │       └── topup_movpar.txt
