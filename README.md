@@ -11,7 +11,7 @@ for all use cases.
 
 ## Changes relative to the original (this is a fork)
 
-We try to adapt the code to incorporate synb0 processing an approach described in:
+We tried to adapt the code to incorporate synb0 processing an approach described in:
 https://www.sciencedirect.com/science/article/pii/S0730725X18306179
 
 See also: https://github.com/BIDS-Apps/MRtrix3_connectome/issues/81
@@ -25,7 +25,6 @@ E.g.
         ├── sub-iz01
         │   ├── ses-01
         │   │   └── topup
-        │   │       ├── old_topup_fieldcoef.nii.gz
         │   │       ├── topup_fieldcoef.nii.gz
         │   │       └── topup_movpar.txt
         │   └── ses-02
@@ -44,6 +43,10 @@ E.g.
 
 The above is then used as input to the dwifslproproc command of MRtrix3 (dev branch 3.1)
 
+An new option was created:
++ **--topup_prefix prefix**<br>Provide a path by which fieldcoef image data and movpar.txt may be found for the processed participant(s) / session(s)
+
+**-topup_prefix synb0** means that thees data are in /BIDS/derivatives/synb0 and organised according to participant(s) / session(s)
 
 
 ## Requirements
