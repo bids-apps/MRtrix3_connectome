@@ -11,14 +11,13 @@ for all use cases.
 
 ## Changes relative to the original (this is a fork)
 
-We tried to adapt the code to incorporate synb0 processing an approach described in:
+We tried to adapt the code to incorporate synb0 processing, an approach described in:
 https://www.sciencedirect.com/science/article/pii/S0730725X18306179
 
 See also: https://github.com/BIDS-Apps/MRtrix3_connectome/issues/81
 
-First, you need to run synb0 (using e.g. https://github.com/treanus/KUL_NeuroImaging_Tools/blob/master/KUL_synb0.sh).
-This will read BIDS data and store the output of topup in the BIDS derivatives.
-E.g.
+First, you need to run synb0 (e.g. using https://github.com/treanus/KUL_NeuroImaging_Tools/blob/master/KUL_synb0.sh).
+This will use BIDS data is input, run synb0 with topup and store the relevant output in the BIDS derivatives as follows:
 
     BIDS/derivatives/
      └── synb0
@@ -41,12 +40,25 @@ E.g.
         │           ├── topup_fieldcoef.nii.gz
         │           └── topup_movpar.txt
 
-The above is then used as input to the dwifslproproc command of MRtrix3 (dev branch 3.1)
-
+The above is then used as input to the mrtrix3_connectome.py command. 
 An new option was created:
-+ **--topup_prefix prefix**<br>Provide a path by which fieldcoef image data and movpar.txt may be found for the processed participant(s) / session(s)
++ **--topup_preproc prefix**<br>Provide a prefix by which pre-processed topup image data may be found for the processed participant(s) / session(s)
 
-**-topup_prefix synb0** means that thees data are in /BIDS/derivatives/synb0 and organised according to participant(s) / session(s)
+Using 'mrtrix3_connectome.py bids_dir output_dir preproc [ options ] **-topup_preproc synb0**' means that the synb0 data in /BIDS/derivatives/synb0 will be used.
+
+Internally this works since the dwifslpreproc command of MRtrix3 dev branch (3.1) has a new option '-topup_files'. See https://github.com/MRtrix3/mrtrix3/blob/dev/bin/dwifslpreproc
+
+You thus need to have the dev branch of MRtrix3 installed:
+
+    git pull
+    git checkout dev
+    ./configure
+    ./build
+
+
+Note:
+For now this only works command line. There is no docker nor singularity container.
+
 
 
 ## Requirements
