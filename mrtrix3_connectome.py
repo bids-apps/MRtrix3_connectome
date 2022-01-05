@@ -704,7 +704,7 @@ def get_t1w_preproc_images(import_path,
         run.command('mrconvert '
                     + preproc_image_path
                     + ' '
-                    + path.to_scratch('T1_masked.mif' \
+                    + path.to_scratch('T1_premasked.mif' \
                                       if preproc_image_is_masked \
                                       else 'T1.mif'))
 
@@ -1957,7 +1957,7 @@ def run_participant(bids_dir, session, shared,
                        os.path.join('tractogram',
                                     session_label
                                     + '_space-dwi_tdi.nii.gz'))
-        output_items['tdi_t1.mif'] = \
+        output_items['tdi_T1.mif'] = \
             OutputItem(True, 3, False, '-strides +1,+2,+3',
                        os.path.join('tractogram',
                                     session_label
@@ -3424,10 +3424,12 @@ def get_sessions(root_dir, **kwargs):
     #   of analysis
     # From there:
     #   - "--participant_label" can be used to remove entries from the list
-    #   - Other options can be added to restrict processing targets;
-    #     e.g. "--session_label" to remove based on "ses-*/"
+    #   - "--session_label" can be used to remove entries from the list
     all_sessions = []
     for dir_name, subdir_list, _ in os.walk(root_dir):
+        subdir_list[:] = [entry \
+                          for entry in subdir_list \
+                          if entry.lower() != 'derivatives']
         if 'anat' in subdir_list and 'dwi' in subdir_list:
             all_sessions.append(os.path.relpath(dir_name, start=root_dir))
             del subdir_list
@@ -3460,23 +3462,39 @@ def get_sessions(root_dir, **kwargs):
                     return False
         return True
 
+    invalid_sessions = []
     for session in all_sessions:
         session = os.path.normpath(session).split(os.sep)
-        process = True
-        if participant_labels:
-            if not find_and_flag(session,
-                                 'sub-',
-                                 participant_labels,
-                                 sub_found):
-                process = False
-        if session_labels:
-            if not find_and_flag(session,
-                                 'ses-',
-                                 session_labels,
-                                 ses_found):
-                process = False
-        if process:
-            result.append(session)
+        if all(any(subdir.startswith(prefix) for prefix in ['sub-', 'ses-'])
+               for subdir in session):
+            process = True
+            if participant_labels:
+                if not find_and_flag(session,
+                                    'sub-',
+                                    participant_labels,
+                                    sub_found):
+                    process = False
+            if session_labels:
+                if not find_and_flag(session,
+                                    'ses-',
+                                    session_labels,
+                                    ses_found):
+                    process = False
+            if process:
+                result.append(session)
+        else:
+            invalid_sessions.append(os.sep.join(session))
+
+    if invalid_sessions:
+        app.warn('Entr'
+                 + ('ies' if len(invalid_sessions) > 1 else 'y')
+                 + ' in "'
+                 + root_dir
+                 + '" found with valid anat/ and dwi/ sub-directories, '
+                 + 'but invalid directory name'
+                 + ('s' if len(invalid_sessions) > 1 else '')
+                 + ': '
+                 + str(invalid_sessions))
 
     if not result:
         raise MRtrixError('No sessions were selected for processing')
@@ -3952,17 +3970,18 @@ See the Mozilla Public License v. 2.0 for more details.''')
         condition='If performing participant-level analysis',
         is_external=False)
     cmdline.add_citation(
-        'Smith, R. E.; Calamante, F.; Connelly, A. '
-        'Mapping connectomes with diffusion MRI: Deterministic or '
-        'probabilistic tractography? '
-        'Magnetic Resonance in Medicine, 2020, 83(3), 787-790',
-        condition='If performing group-level analysis')
-    cmdline.add_citation(
         'Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. '
         'SIFT2: Enabling dense quantitative assessment of brain white matter '
         'connectivity using streamlines tractography. '
         'NeuroImage, 2015b, 119, 338-351',
         condition='If performing participant-level analysis',
+        is_external=False)
+    cmdline.add_citation(
+        'Smith, R. E.; Raffelt, D.; Tournier, J.-D.; Connelly, A. '
+        'Quantitative streamlines tractography: Methods and inter-subject '
+        'normalisation. '
+        'Preprint, 2020, OSF, https://doi.org/10.31219/osf.io/c67kn',
+        condition='If performing group-level analysis',
         is_external=False)
     cmdline.add_citation(
         'Tournier, J.-D.; Calamante, F., Gadian, D.G. & Connelly, A. '
