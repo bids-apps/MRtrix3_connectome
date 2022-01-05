@@ -76,8 +76,9 @@ RUN apt-get remove -y libegl1-mesa-dev && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
-RUN wget -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal_for_SPM8.zip | \
-    tar zx -C /opt && \
+RUN wget -q https://object.cscs.ch/v1/AUTH_4791e0a3b3de43e2840fe46d9dc2b334/ext-d000035_AAL1Atlas_pub/Release2018_SPM12/aal_for_SPM12.zip && \
+    unzip aal_for_SPM12.zip -d /opt && \
+    rm -f aal_for_SPM12.zip && \
     wget -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal2_for_SPM12.tar.gz | \
     tar zx -C /opt
 #RUN wget -q http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && \
