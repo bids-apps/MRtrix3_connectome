@@ -986,8 +986,16 @@ def run_preproc(bids_dir, session, shared,
                              + str(phase_stats.max)
                              + '); data will be rescaled automatically')
                     # Are the values stored as integers? If so, assume that
-                    #   _one greater_ than the max phase corresponds to 2pi
-                    add_to_max_phase = 1 \
+                    #   taking the maximum phase value observed in the image
+                    #   intensities, incrementing it by one, and having it
+                    #   offset + scaled based on the header properties, would
+                    #   result in a phase that is 2pi greater than the minimum
+                    # It would be better to do this rescaling based on testing
+                    #   whether the image datatype is an integer; but there
+                    #   does not yet exist a module for interpreting MRtrix3
+                    #   data types
+                    phase_header = image.Header(in_phase_image)
+                    add_to_max_phase = phase_header.intensity_scale \
                         if phase_stats.min.is_integer() \
                         and phase_stats.max.is_integer() \
                         else 0
