@@ -37,7 +37,7 @@ DWIBIASCORRECT_MAX_ITERS = 2
 class T1wShared(object): #pylint: disable=useless-object-inheritance
     def __init__(self):
         try:
-            self.fsl_anat_cmd = fsl.exe_name(find_executable('fsl_anat'))
+            self.fsl_anat_cmd = find_executable(fsl.exe_name('fsl_anat'))
         except MRtrixError:
             self.fsl_anat_cmd = None
         if find_executable('ROBEX'):
