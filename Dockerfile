@@ -146,10 +146,10 @@ ENV ANTSPATH=/usr/lib/ants \
     PYTHONPATH=/opt/mrtrix3/lib:$PYTHONPATH
 
 # MRtrix3 setup
-# Commitish is 3.0.2 plus relevant hotfix
+# Commitish is 3.0.3 plus relevant hotfix
 RUN git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && \
     cd /opt/mrtrix3 && \
-    git checkout 4ab54489f40997f7da1e1915c2adde3373cf6039 && \
+    git checkout d3941f44318112cf64ca1afd0f960f8f641da9e5 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version && \
