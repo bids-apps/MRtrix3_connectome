@@ -995,7 +995,7 @@ def run_preproc(bids_dir, session, shared,
                     #   does not yet exist a module for interpreting MRtrix3
                     #   data types
                     phase_header = image.Header(in_phase_image)
-                    add_to_max_phase = phase_header.intensity_scale \
+                    add_to_max_phase = phase_header.intensity_scale() \
                         if phase_stats.min.is_integer() \
                         and phase_stats.max.is_integer() \
                         else 0
