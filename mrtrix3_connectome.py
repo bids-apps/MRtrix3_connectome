@@ -1120,13 +1120,13 @@ def run_preproc(bids_dir, session, shared,
                          + '"; not importing')
                 continue
             if 'IntendedFor' in json_elements:
-                if isinstance(json_elements['IntendedFor'], list) and \
-                    not any(any(i.endswith(target) for i in in_dwi_image_list)
+                if isinstance(json_elements['IntendedFor'], list):
+                    if not any(any(i.endswith(target) for i in in_dwi_image_list)
                             for target in json_elements['IntendedFor']):
-                    app.console('Image \'' + entry + '\' is not intended '
-                                'for use with DWIs; skipping')
-                    continue
-                if not any(i.endswith(json_elements['IntendedFor'])
+                        app.console('Image \'' + entry + '\' is not intended '
+                                    'for use with DWIs; skipping')
+                        continue
+                elif not any(i.endswith(json_elements['IntendedFor'])
                            for i in in_dwi_image_list):
                     app.console('Image \'' + entry + '\' is not intended '
                                 'for use with DWIs; skipping')
