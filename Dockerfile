@@ -22,7 +22,9 @@ RUN apt-get update -qq && \
         tcsh \
         tzdata \
         unzip \
-    wget && \
+        ca-certificates \
+        apt-utils \
+        wget && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
