@@ -27,10 +27,14 @@ RUN apt-get update -qq && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # PPA for newer version of nodejs, which is required for bids-validator
-RUN curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && \
-    bash nodesource_setup.sh && \
-    rm -f nodesource_setup.sh && \
-    apt-get install -y --no-install-recommends nodejs
+RUN curl -sL https://deb.nodesource.com/setup_12.x | bash -
+RUN apt-get update -qq && \
+    apt-get install -y -q --no-install-recommends \
+                  nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+RUN node --version && npm --version && npm install -g bids-validator@1.5.3
+
 
 # NeuroDebian setup
 COPY neurodebian.gpg /neurodebian.gpg
@@ -74,7 +78,7 @@ RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     rm -f /fslinstaller.py
 RUN which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
-RUN npm install -gq bids-validator@1.5.3
+
 
 # apt cleanup to recover as much space as possible
 RUN apt-get remove -qq -y \
