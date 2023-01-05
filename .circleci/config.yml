@@ -19,13 +19,14 @@ jobs:
           no_output_timeout: 6h
       - run:
           name: Save built Docker container to cache
-          command: mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" > ~/docker/image.tar
+          command:
+            mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" >
+            ~/docker/image.tar
           no_output_timeout: 6h
       - save_cache:
           key: image_cache-{{ .Revision }}-{{ epoch }}
           paths:
             - "~/docker"
-
 
   test_preproc:
     machine:
@@ -37,7 +38,11 @@ jobs:
           key: image_cache-{{ .Revision }}
       - run:
           name: Download test data
-          command: mkdir -p ${HOME}/downloads && wget -c -O ${HOME}/downloads/preproc.tar.gz "https://osf.io/d9gx7/download" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/preproc.tar.gz -C ${HOME}/data
+          command:
+            mkdir -p ${HOME}/downloads && wget -c -O
+            ${HOME}/downloads/preproc.tar.gz "https://osf.io/d9gx7/download" &&
+            mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/preproc.tar.gz -C
+            ${HOME}/data
       - run:
           name: Make scratch directory
           command: mkdir ${HOME}/scratch
@@ -46,12 +51,17 @@ jobs:
           command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp bids/${CIRCLE_PROJECT_REPONAME,,} --version
+          command:
+            docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp
+            bids/${CIRCLE_PROJECT_REPONAME,,} --version
       - run:
           name: Run preproc-level analysis for all subjects
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs preproc --scratch /scratch
+          command:
+            docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v
+            ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v
+            ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,}
+            /bids_dataset /outputs preproc --scratch /scratch
           no_output_timeout: 6h
-
 
   test_participant:
     machine:
@@ -63,7 +73,11 @@ jobs:
           key: image_cache-{{ .Revision }}
       - run:
           name: Download test data
-          command: mkdir -p ${HOME}/downloads && wget -c -O ${HOME}/downloads/participant.tar.gz "https://osf.io/skc5x/download" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/participant.tar.gz -C ${HOME}/data
+          command:
+            mkdir -p ${HOME}/downloads && wget -c -O
+            ${HOME}/downloads/participant.tar.gz "https://osf.io/skc5x/download"
+            && mkdir -p ${HOME}/data && tar xf
+            ${HOME}/downloads/participant.tar.gz -C ${HOME}/data
       - run:
           name: Make scratch directory
           command: mkdir ${HOME}/scratch
@@ -72,12 +86,18 @@ jobs:
           command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp bids/${CIRCLE_PROJECT_REPONAME,,} --version
+          command:
+            docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp
+            bids/${CIRCLE_PROJECT_REPONAME,,} --version
       - run:
           name: Run participant-level analysis for solitary subject
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs participant --scratch /scratch --parcellation aal --streamlines 100000 --output_verbosity 3
+          command:
+            docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v
+            ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v
+            ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,}
+            /bids_dataset /outputs participant --scratch /scratch --parcellation
+            aal --streamlines 100000 --output_verbosity 3
           no_output_timeout: 6h
-
 
   test_group:
     machine:
@@ -89,7 +109,11 @@ jobs:
           key: image_cache-{{ .Revision }}
       - run:
           name: Download test data
-          command: mkdir -p ${HOME}/downloads && wget -c -O ${HOME}/downloads/group.tar.gz "https://osf.io/6s8bx/download" && mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/group.tar.gz -C ${HOME}/data
+          command:
+            mkdir -p ${HOME}/downloads && wget -c -O
+            ${HOME}/downloads/group.tar.gz "https://osf.io/6s8bx/download" &&
+            mkdir -p ${HOME}/data && tar xf ${HOME}/downloads/group.tar.gz -C
+            ${HOME}/data
       - run:
           name: Make scratch directory
           command: mkdir ${HOME}/scratch
@@ -98,13 +122,18 @@ jobs:
           command: docker load -i ~/docker/image.tar
       - run:
           name: Print version
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp bids/${CIRCLE_PROJECT_REPONAME,,} --version
+          command:
+            docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp
+            bids/${CIRCLE_PROJECT_REPONAME,,} --version
       - run:
           name: Run group-level analysis
-          command: docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,} /bids_dataset /outputs group --scratch /scratch
+          command:
+            docker run -ti --rm --read-only -v /tmp:/tmp -v /var/tmp:/var/tmp -v
+            ${HOME}/data/BIDS:/bids_dataset -v ${HOME}/data:/outputs -v
+            ${HOME}/scratch:/scratch bids/${CIRCLE_PROJECT_REPONAME,,}
+            /bids_dataset /outputs group --scratch /scratch
           no_output_timeout: 6h
 
- 
   deploy:
     machine:
       image: ubuntu-2204:2022.10.2
@@ -118,11 +147,18 @@ jobs:
           command: docker load -i ~/docker/image.tar
       - run:
           name: Push "latest" tag to DockerHub
-          command: if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p $DOCKER_PASS && docker push bids/${CIRCLE_PROJECT_REPONAME,,}:latest; fi
+          command:
+            if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p
+            $DOCKER_PASS && docker push
+            bids/${CIRCLE_PROJECT_REPONAME,,}:latest; fi
           no_output_timeout: 6h
       - run:
           name: Create named tag and push to DockerHub
-          command: if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p $DOCKER_PASS && docker tag bids/${CIRCLE_PROJECT_REPONAME,,} bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG && docker push bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG; fi
+          command:
+            if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p
+            $DOCKER_PASS && docker tag bids/${CIRCLE_PROJECT_REPONAME,,}
+            bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG && docker push
+            bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG; fi
           no_output_timeout: 6h
 
 workflows:
@@ -169,5 +205,3 @@ workflows:
               ignore: /.*/
             tags:
               only: /.*/
-
-# VS Code Extension Version: 1.5.1
