@@ -11,18 +11,11 @@ jobs:
           fingerprints:
             - "f9:fc:d7:c4:a9:17:3d:09:ee:03:d7:f9:6e:0d:f5:2b"
       - run:
-          name: Write git tag name to text file "version"
-          command: git describe --tags --always > version
-      - run:
-          name: Build Docker container
-          command: docker build -t bids/${CIRCLE_PROJECT_REPONAME,,} .
-          no_output_timeout: 6h
-      - run:
-          name: Save built Docker container to cache
-          command:
-            mkdir -p ~/docker; docker save "bids/${CIRCLE_PROJECT_REPONAME,,}" >
-            ~/docker/image.tar
-          no_output_timeout: 6h
+          name: Build Docker image
+          command: |
+            wget https://raw.githubusercontent.com/bids-apps/maintenance-tools/main/circleci/build_docker.sh
+            bash build_docker.sh
+            no_output_timeout: 6h
       - save_cache:
           key: image_cache-{{ .Revision }}-{{ epoch }}
           paths:
@@ -146,20 +139,10 @@ jobs:
           name: Load Docker image
           command: docker load -i ~/docker/image.tar
       - run:
-          name: Push "latest" tag to DockerHub
-          command:
-            if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p
-            $DOCKER_PASS && docker push
-            bids/${CIRCLE_PROJECT_REPONAME,,}:latest; fi
-          no_output_timeout: 6h
-      - run:
-          name: Create named tag and push to DockerHub
-          command:
-            if [[ -n "$DOCKER_PASS" ]]; then docker login -u $DOCKER_USER -p
-            $DOCKER_PASS && docker tag bids/${CIRCLE_PROJECT_REPONAME,,}
-            bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG && docker push
-            bids/${CIRCLE_PROJECT_REPONAME,,}:$CIRCLE_TAG; fi
-          no_output_timeout: 6h
+          name: push to dockerhub
+          command: |
+            wget https://raw.githubusercontent.com/bids-apps/maintenance-tools/main/circleci/push_docker.sh
+            bash push_docker.sh
 
 workflows:
   build_test_deploy:
@@ -195,13 +178,13 @@ workflows:
             branches:
               only: /.*/
       - deploy:
+          context:
+          - dockerhub
           requires:
             - build
             - test_preproc
             - test_participant
             - test_group
           filters:
-            branches:
-              ignore: /.*/
             tags:
               only: /.*/
