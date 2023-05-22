@@ -28,10 +28,6 @@
           docker run -t --rm --read-only \
             -v /tmp:/tmp \
             -v /var/tmp:/var/tmp \
-                bids/mrtrix3_connectome:latest --help
-          docker run -t --rm --read-only \
-            -v /tmp:/tmp \
-            -v /var/tmp:/var/tmp \
                 bids/mrtrix3_connectome:latest --version
   
     test_preproc:
