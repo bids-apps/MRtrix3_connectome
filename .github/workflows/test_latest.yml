@@ -28,7 +28,7 @@
           docker run -t --rm --read-only \
             -v /tmp:/tmp \
             -v /var/tmp:/var/tmp \
-                bids/tracula:latest --help
+                bids/mrtrix3_connectome:latest --help
           docker run -t --rm --read-only \
             -v /tmp:/tmp \
             -v /var/tmp:/var/tmp \
