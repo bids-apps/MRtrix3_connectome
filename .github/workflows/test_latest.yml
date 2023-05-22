@@ -1,0 +1,68 @@
+---
+name: test latest image
+
+on:
+  push:
+    branches: ['*']
+  schedule:
+  - cron: 0 0 1 * *
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  test_latest_image:
+
+    strategy:
+      matrix:
+        dataset: ['1', '2']
+      fail-fast: false
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tree
+
+    - name: pull docker image
+      run: docker pull bids/tracula:latest
+
+    - name: print help and version
+      run: |
+        docker run -t --rm --read-only \
+              bids/tracula:latest --help
+        docker run -t --rm --read-only \
+              bids/tracula:latest -v
+
+    - name: get data
+      run: |
+        wget https://raw.githubusercontent.com/bids-apps/maintenance-tools/main/utils/get_data_from_osf.sh
+        bash get_data_from_osf.sh ds114_test${{ matrix.dataset }}
+        bash get_data_from_osf.sh ds114_test${{ matrix.dataset }}_freesurfer
+
+    - name: prepare output dir
+      run: |
+        mkdir -p ${HOME}/outputs${{ matrix.dataset }}
+
+    - name: participant level
+      run: |
+        docker run -t --rm \
+        -v ${HOME}/data/ds114_test${{ matrix.dataset }}:/bids_dataset \
+        -v ${HOME}/outputs${{ matrix.dataset }}:/outputs \
+        -v ${HOME}/data/ds114_test${{ matrix.dataset }}_freesurfer:/freesurfer \
+          bids/tracula:latest \
+            /bids_dataset /outputs participant \
+            --participant_label 01 \
+            --license_key="~/test.key" \
+            --freesurfer_dir /freesurfer \
+            --stages prep
+
+        cat ${HOME}/outputs${{ matrix.dataset }}/sub-01/scripts/trac-preproc.done
+
+    - name: check output
+      run: tree ${HOME}/outputs${{ matrix.dataset }}
