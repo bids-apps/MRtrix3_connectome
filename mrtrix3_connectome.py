@@ -977,14 +977,14 @@ def run_preproc(bids_dir, session, shared,
                 phase_stats = image.statistics(in_phase_image, allvolumes=True)
                 if abs(2.0*math.pi - (phase_stats.max - phase_stats.min)) \
                     > 0.01:
-                    app.warn('Phase image '
-                             + in_phase_image
-                             + ' is not stored in radian units '
-                             + '(values from '
-                             + str(phase_stats.min)
-                             + ' to '
-                             + str(phase_stats.max)
-                             + '); data will be rescaled automatically')
+                    app.console('Phase image '
+                                + in_phase_image
+                                + ' is not stored in radian units '
+                                + '(values from '
+                                + str(phase_stats.min)
+                                + ' to '
+                                + str(phase_stats.max)
+                                + '); data will be rescaled automatically')
                     # Are the values stored as integers? If so, assume that
                     #   taking the maximum phase value observed in the image
                     #   intensities, incrementing it by one, and having it
