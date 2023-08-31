@@ -1388,7 +1388,15 @@ def run_preproc(bids_dir, session, shared,
     #   ref index out of bounds
     #if monopolar:
     #    eddy_options.append('--b0_flm=linear')
-    #
+
+    # Make sure that MRtrix3 identifies the concatenated data as shelled
+    # (If FSL eddy complains, we can force it to comply;
+    #   but it's essential for many aspects of future processing that MRtrix3
+    #   consider the comprehensive set of data to be shelled)
+    try:
+        run.command(['mrinfo', dwifslpreproc_input, '-shell_bvalues'])
+    except MRtrixCmdError as e:
+        raise MRtrixError('Combined DWI data are not classified as shelled')
 
     shell_asymmetries = \
         [float(value) for value in
@@ -1409,6 +1417,7 @@ def run_preproc(bids_dir, session, shared,
 
     eddy_olnstd_value = 4.0 # The internal eddy default
     eddy_olnstd_option = []
+    eddy_force_shelled_option = []
 
     while not os.path.isfile(dwifslpreproc_output):
 
@@ -1419,7 +1428,9 @@ def run_preproc(bids_dir, session, shared,
             #          with no outliers in shell 0 with b-value=549.375
             # , want to progressively increase the outlier rejection threshold
             #   until this error no longer occurs.
-            eddy_all_options = eddy_options + eddy_olnstd_option
+            eddy_all_options = eddy_options \
+                + eddy_olnstd_option \
+                + eddy_force_shelled_option
             dwifslpreproc_eddy_option = \
                 ' -eddy_options " ' \
                 + ' '.join(eddy_all_options) + '"' if eddy_all_options else ''
@@ -1443,6 +1454,11 @@ def run_preproc(bids_dir, session, shared,
                 eddy_olnstd_option = ['--ol_nstd=' + str(eddy_olnstd_value)]
                 app.warn('FSL eddy failed due to outlier rejection; '
                          're-running with increased threshold')
+            elif 'Data not shelled' in str(e_dwifslpreproc):
+                eddy_force_shelled_option = ['--data_is_shelled']
+                app.warn('FSL eddy failed due to reporting DWI data as not '
+                         'being shelled; despite MRtrix3 classifying as '
+                         'shelled; re-running with --data_is_shelled option')
             else:
                 raise
 
