@@ -1026,9 +1026,7 @@ def run_preproc(bids_dir, session, shared,
         # for proper BIDS compliance, these sidecar files will be stored
         #   without the "_part-[mag|phase]" part
 
-        # os.path.split() falls over with .nii.gz extensions;
-        #   only removes the .gz
-        dwi_prefix = entry.split(os.extsep)[0] + '.'
+        dwi_prefix = os.path.splitext(entry.rstrip('.gz'))[0]
 
         sidecar_prefixes = [dwi_prefix,
                             dwi_prefix.replace('_part-mag_', '_'),
@@ -1041,13 +1039,13 @@ def run_preproc(bids_dir, session, shared,
         entry_json = None
         for prefix in sidecar_prefixes:
             if not entry_bvec and \
-                os.path.isfile(prefix + 'bval') and \
-                os.path.isfile(prefix + 'bvec'):
-                entry_bval = prefix + 'bval'
-                entry_bvec = prefix + 'bvec'
+                os.path.isfile(prefix + '.bval') and \
+                os.path.isfile(prefix + '.bvec'):
+                entry_bval = prefix + '.bval'
+                entry_bvec = prefix + '.bvec'
             if not entry_json and \
-                os.path.isfile(prefix + 'json'):
-                entry_json = prefix + 'json'
+                os.path.isfile(prefix + '.json'):
+                entry_json = prefix + '.json'
         if not entry_bvec:
             raise MRtrixError(
                 'Unable to locate valid diffusion gradient table '
