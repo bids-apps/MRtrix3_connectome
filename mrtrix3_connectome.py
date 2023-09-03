@@ -1085,17 +1085,6 @@ def run_preproc(bids_dir, session, shared,
     dwi_image_list = ['dwi' + str(index) + '.mif'
                       for index in range(1, dwi_index+1)]
 
-    if len(dwi_image_list) > 1:
-        dwi_first_header = image.Header(
-            path.to_scratch(dwi_image_list[0], False))
-        for i in dwi_image_list[1:]:
-            if not image.match(dwi_first_header,
-                               path.to_scratch(i, False),
-                               up_to_dim=3):
-                raise MRtrixError(
-                    'DWI series not defined on same image grid; '
-                    'script not yet capable of handling such data')
-
     # Go hunting for reversed phase-encode data
     #   dedicated to field map estimation
     in_fmap_image_list = []
@@ -1235,24 +1224,87 @@ def run_preproc(bids_dir, session, shared,
 
     # We need to concatenate the DWI and fmap/ data (separately)
     #   before they can be fed into dwifslpreproc
+    if len(dwi_image_list) > 1 or fmap_image_list:
+        app.console(('Concatenating' \
+                     if len(dwi_image_list) > 1 \
+                     else 'Preparing')
+                    + ' DWI'
+                    + (' and fmap ' if fmap_image_list else ' ')
+                    + 'data onto common voxel grid')
     if len(dwi_image_list) == 1:
         dwifslpreproc_input = dwi_image_list[0]
     else:
-        app.console('Concatenating DWI data')
         dwifslpreproc_input = 'dwifslpreproc_in.mif'
-        run.command('mrcat ' + ' '.join(dwi_image_list) + ' '
-                    + dwifslpreproc_input + ' -axis 3')
+        run.command(['dwicat', dwi_image_list, dwifslpreproc_input])
 
     # Some decisions regarding pre-processing depend on whether or not
     #   a twice-refocused sequence has been used: a single-refocused
     #   sequence may have residual eddy current distortions in b=0
     #   volumes
     dwifslpreproc_input_header = image.Header(dwifslpreproc_input)
-    monopolar = "DiffusionScheme" in dwifslpreproc_input_header.keyval() \
+    monopolar = 'DiffusionScheme' in dwifslpreproc_input_header.keyval() \
                 and dwifslpreproc_input_header \
-                    .keyval()["DiffusionScheme"] == "Monopolar"
+                    .keyval()['DiffusionScheme'] == 'Monopolar'
 
-    if not fmap_image_list:
+    if fmap_image_list:
+
+        fmap_transformed_image_list = []
+        for item in fmap_image_list:
+            affine_transform_filepath = os.path.splitext(item)[0] \
+                                        + '2dwi_affine.txt'
+            rigid_transform_filepath = os.path.splitext(item)[0] \
+                                       + '2dwi_rigid.txt'
+            fmap_transformed_filepath = os.path.splitext(item)[0] \
+                                        + '_transformed.mif'
+            run.command(['transformcalc',
+                         item,
+                         dwifslpreproc_input,
+                         'header',
+                         affine_transform_filepath])
+            run.command(['transformcalc',
+                         affine_transform_filepath,
+                         'rigid',
+                         rigid_transform_filepath])
+            run.command(['mrtransform',
+                         item,
+                         '-linear', rigid_transform_filepath,
+                         fmap_transformed_filepath])
+            fmap_transformed_image_list.append(fmap_transformed_filepath)
+            app.cleanup(affine_transform_filepath)
+            app.cleanup(rigid_transform_filepath)
+        if len(fmap_transformed_image_list) == 1:
+            dwifslpreproc_se_epi = fmap_transformed_image_list[0]
+        else:
+            dwifslpreproc_se_epi = 'dwifslpreproc_seepi.mif'
+            try:
+                run.command(['mrcat',
+                             fmap_transformed_image_list,
+                             '-axis', '3',
+                             dwifslpreproc_se_epi])
+            except run.MRtrixCmdError:
+                app.warn('Unable to rigidly align fmap/ images to DWI voxel grid; '
+                         'performing explicit interpolation')
+                fmap_resampled_image_list = []
+                for item in fmap_transformed_image_list:
+                    fmap_resampled_image_path = os.path.splitext(item)[0] \
+                                                + '_resampled.mif'
+                    run.command(['mrtransform',
+                                 item,
+                                 '-template', dwifslpreproc_input,
+                                 '-interp', 'sinc',
+                                 fmap_resampled_image_path])
+                    fmap_resampled_image_list.append(fmap_resampled_image_path)
+                app.cleanup(fmap_transformed_image_list)
+                run.command(['mrcat',
+                             fmap_resampled_image_list,
+                             '-axis', '3',
+                             dwifslpreproc_se_epi])
+                app.cleanup(fmap_resampled_image_list)
+        dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
+                                      + ' -align_seepi'
+
+    else: # No fmap/ images
+
         dwifslpreproc_se_epi = ''
         dwifslpreproc_se_epi_option = ''
 
@@ -1289,6 +1341,7 @@ def run_preproc(bids_dir, session, shared,
                              dwifslpreproc_se_epi,
                              '-axis',
                              '3'])
+                app.cleanup(bzero_image_list)
                 dwifslpreproc_se_epi_option = ' -se_epi ' \
                                                 + dwifslpreproc_se_epi
             except MRtrixError:
@@ -1300,36 +1353,7 @@ def run_preproc(bids_dir, session, shared,
                          'affected by eddy current distortions in b=0 '
                          'volumes')
 
-    elif len(fmap_image_list) == 1:
-        dwifslpreproc_se_epi = fmap_image_list[0]
-        dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
-                                    + ' -align_seepi'
-    else:
-        # Can we do a straight concatenation?
-        # If not, we need to resample all images onto a common voxel grid;
-        #   the DWI grid makes most sense, since dwifslpreproc will
-        #   perform that resampling itself otherwise
-        dwifslpreproc_se_epi = 'dwifslpreproc_seepi.mif'
-        try:
-            run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
-                        + dwifslpreproc_se_epi + ' -axis 3')
-            app.cleanup(fmap_image_list)
-        except run.MRtrixCmdError:
-            app.console('Unable to concatenate fmap/ data directly; '
-                        'resampling images onto DWI voxel grid')
-            for i in fmap_image_list:
-                run.command('mrtransform ' + i
-                            + ' -template ' + dwifslpreproc_input + ' '
-                            + os.path.splitext(i)[0] + '_regrid.mif'
-                            + ' -interp sinc')
-                app.cleanup(i)
-            fmap_image_list = [os.path.splitext(i)[0] + '_regrid.mif'
-                               for i in fmap_image_list]
-            run.command('mrcat ' + ' '.join(fmap_image_list) + ' '
-                        + dwifslpreproc_se_epi + ' -axis 3')
-            app.cleanup(fmap_image_list)
-        dwifslpreproc_se_epi_option = ' -se_epi ' + dwifslpreproc_se_epi \
-                                    + ' -align_seepi'
+    # If only one image, this is fed directly to dwifslpreproc as-is
     if len(dwi_image_list) > 1:
         app.cleanup(dwi_image_list)
 
@@ -1392,7 +1416,7 @@ def run_preproc(bids_dir, session, shared,
     #   but it's essential for many aspects of future processing that MRtrix3
     #   consider the comprehensive set of data to be shelled)
     try:
-        run.command(['mrinfo', dwifslpreproc_input, '-shell_bvalues'])
+        run.command(['mrinfo', dwifslpreproc_input, '-shell_bvalues'], show=False)
     except MRtrixCmdError as e:
         raise MRtrixError('Combined DWI data are not classified as shelled')
 

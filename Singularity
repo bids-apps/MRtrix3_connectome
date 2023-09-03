@@ -110,8 +110,8 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-# Commitish is 3.0.3 plus relevant hotfix
-    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout d3941f44318112cf64ca1afd0f960f8f641da9e5 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
+# Commitish is 3.0.4 plus relevant upgrade to dwicat
+    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout ad1c7442bfb6ca39c328e5c58bc518689ff703cd && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
     wget -q "https://osf.io/v8n5g/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
     wget -q "https://osf.io/ug2ef/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
