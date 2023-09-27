@@ -111,7 +111,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # MRtrix3 setup
 # Commitish is 3.0.4 plus relevant upgrade to dwicat
-    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout ad1c7442bfb6ca39c328e5c58bc518689ff703cd && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
+    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout 45085556f7962f33e9d431157c0824c5cdd204ed && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
     wget -q "https://osf.io/v8n5g/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
     wget -q "https://osf.io/ug2ef/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 

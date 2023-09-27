@@ -149,7 +149,7 @@ ENV ANTSPATH=/usr/lib/ants \
 # Commitish is 3.0.4 plus feature addition to dwicat
 RUN git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && \
     cd /opt/mrtrix3 && \
-    git checkout ad1c7442bfb6ca39c328e5c58bc518689ff703cd && \
+    git checkout 45085556f7962f33e9d431157c0824c5cdd204ed && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version && \
