@@ -1481,6 +1481,11 @@ def run_preproc(bids_dir, session, shared,
                 app.warn('FSL eddy failed due to reporting DWI data as not '
                          'being shelled; despite MRtrix3 classifying as '
                          'shelled; re-running with --data_is_shelled option')
+            elif not eddy_force_shelled_option:
+                eddy_force_shelled_option = ['--data_is_shelled']
+                app.warn('FSL eddy failed with unrecognised error; '
+                         're-running with --data_is_shelled option '
+                         'in case it resolves issue')
             else:
                 raise
 
