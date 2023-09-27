@@ -1417,7 +1417,7 @@ def run_preproc(bids_dir, session, shared,
     #   consider the comprehensive set of data to be shelled)
     try:
         run.command(['mrinfo', dwifslpreproc_input, '-shell_bvalues'], show=False)
-    except MRtrixCmdError as e:
+    except run.MRtrixCmdError as e:
         raise MRtrixError('Combined DWI data are not classified as shelled')
 
     shell_asymmetries = \
