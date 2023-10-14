@@ -1,0 +1,8 @@
+# config file for linting of Dockerfiles by hadolint
+---
+ignored:
+- DL3003
+- DL3008
+- DL4001
+- DL4006
+- SC2015
