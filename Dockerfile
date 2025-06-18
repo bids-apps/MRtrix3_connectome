@@ -1,45 +1,59 @@
 FROM ubuntu:18.04
-MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
+
+# MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
+
+ARG DEBIAN_FRONTEND="noninteractive"
 
 # Core system capabilities required
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    bc \
-    build-essential \
-    curl \
-    dc \
-    git \
-    libegl1-mesa-dev \
-    libopenblas-dev \
-    nano \
-    perl-modules-5.26 \
-    python2.7 \
-    python3 \
-    tar \
-    tcsh \
-    tzdata \
-    unzip \
-    wget
+RUN apt-get update -qq && \
+    apt-get install -qq -y --no-install-recommends \
+        bc \
+        build-essential \
+        curl \
+        dc \
+        git \
+        libegl1-mesa-dev \
+        libopenblas-dev \
+        nano \
+        perl-modules-5.26 \
+        python2.7 \
+        python3 \
+        tar \
+        tcsh \
+        tzdata \
+        unzip \
+        ca-certificates \
+        apt-utils \
+        wget && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # PPA for newer version of nodejs, which is required for bids-validator
-RUN curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && \
-    bash nodesource_setup.sh && \
-    rm -f nodesource_setup.sh && \
-    apt-get install -y nodejs
+RUN curl -sL https://deb.nodesource.com/setup_12.x | bash -
+RUN apt-get update -qq && \
+    apt-get install -y -q --no-install-recommends \
+                  nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+RUN node --version && npm --version && npm install -g bids-validator@1.5.3
+
 
 # NeuroDebian setup
 COPY neurodebian.gpg /neurodebian.gpg
 RUN wget -qO- http://neuro.debian.net/lists/bionic.au.full | \
     tee /etc/apt/sources.list.d/neurodebian.sources.list && \
-    apt-key add /neurodebian.gpg && \
-    apt-get update
+    apt-key add /neurodebian.gpg
 
 # Additional dependencies for MRtrix3 compilation
-RUN apt-get update && apt-get install -y \
-    libeigen3-dev \
-    libfftw3-dev \
-    libpng-dev \
-    libtiff5-dev \
-    zlib1g-dev
+RUN apt-get update -qq && \
+    apt-get install -qq -y --no-install-recommends \
+        libeigen3-dev \
+        libfftw3-dev \
+        libpng-dev \
+        libtiff5-dev \
+        zlib1g-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Neuroimaging software / data dependencies
 RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.1/freesurfer-linux-centos8_x86_64-7.1.1.tar.gz | \
@@ -57,20 +71,24 @@ RUN wget -qO- https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/7.1.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 RUN echo "cHJpbnRmICJyb2JlcnQuc21pdGhAZmxvcmV5LmVkdS5hdVxuMjg1NjdcbiAqQ3FLLjFwTXY4ZE5rXG4gRlNvbGRZRXRDUFZqNlxuIiA+IC9vcHQvZnJlZXN1cmZlci9saWNlbnNlLnR4dAo=" | base64 -d | sh
-RUN apt-get install -y ants=2.2.0-1ubuntu1
+RUN apt-get update -qq && \
+    apt-get install -qq -y --no-install-recommends \
+    ants=2.2.0-1ubuntu1 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 # FSL installer appears to now be ready for use with version 6
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py && \
-    python2 /fslinstaller.py -d /opt/fsl -V 6.0.4 -q && \
+    python2 /fslinstaller.py -d /opt/fsl -V 6.0.4 && \
     rm -f /fslinstaller.py
 RUN which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
-RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
-    tar zx -C /opt
-RUN npm install -gq bids-validator@1.5.3
+RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
+
 
 # apt cleanup to recover as much space as possible
-RUN apt-get remove -y libegl1-mesa-dev && \
+RUN apt-get remove -qq -y \
+        libegl1-mesa-dev && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
