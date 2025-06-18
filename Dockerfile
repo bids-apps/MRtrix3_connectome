@@ -64,10 +64,10 @@ RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py && \
     python2 /fslinstaller.py -d /opt/fsl -V 6.0.4 -q && \
     rm -f /fslinstaller.py
-RUN which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
+#RUN which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )   
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
-    tar zx -C /opt
-RUN npm install -gq bids-validator@1.5.3
+    tar zx -C /opt 
+RUN npm install -gq bids-validator@1.5.3    
 
 # apt cleanup to recover as much space as possible
 RUN apt-get remove -y libegl1-mesa-dev && \
@@ -79,7 +79,7 @@ RUN apt-get remove -y libegl1-mesa-dev && \
 RUN wget -q https://object.cscs.ch/v1/AUTH_4791e0a3b3de43e2840fe46d9dc2b334/ext-d000035_AAL1Atlas_pub/Release2018_SPM12/aal_for_SPM12.zip && \
     unzip aal_for_SPM12.zip -d /opt && \
     rm -f aal_for_SPM12.zip && \
-    wget -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal2_for_SPM12.tar.gz | \
+    wget --no-check-certificate -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal2_for_SPM12.tar.gz | \
     tar zx -C /opt
 #RUN wget -q http://www.nitrc.org/frs/download.php/4499/sri24_anatomy_nifti.zip -O sri24_anatomy_nifti.zip && \
 #    unzip -qq -o sri24_anatomy_nifti.zip -d /opt/ && \
@@ -146,10 +146,10 @@ ENV ANTSPATH=/usr/lib/ants \
     PYTHONPATH=/opt/mrtrix3/lib:$PYTHONPATH
 
 # MRtrix3 setup
-# Commitish is 3.0.4 plus feature addition to dwicat
+# Commitish is 3.0.5 plus relevant changes for dwicat and -export_grad_fsl hotfix
 RUN git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && \
     cd /opt/mrtrix3 && \
-    git checkout 45085556f7962f33e9d431157c0824c5cdd204ed && \
+    git checkout 906730011b5e21f1449cc7d60ec145375de07479 && \
     python3 configure -nogui && \
     python3 build -persistent -nopaginate && \
     git describe --tags > /mrtrix3_version && \
@@ -167,3 +167,4 @@ RUN chmod 775 /mrtrix3_connectome.py
 COPY version /version
 
 ENTRYPOINT ["/mrtrix3_connectome.py"]
+

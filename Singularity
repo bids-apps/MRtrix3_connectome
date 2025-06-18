@@ -89,7 +89,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
     wget -q https://object.cscs.ch/v1/AUTH_4791e0a3b3de43e2840fe46d9dc2b334/ext-d000035_AAL1Atlas_pub/Release2018_SPM12/aal_for_SPM12.zip && unzip aal_for_SPM12.zip -d /opt && rm -f aal_for_SPM12.zip
-    wget -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal2_for_SPM12.tar.gz | tar zx -C /opt
+    wget --no-check-certificate -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal2_for_SPM12.tar.gz | tar zx -C /opt
     wget -q https://github.com/AlistairPerry/CCA/raw/master/parcellations/512inMNI.nii -O /opt/512inMNI.nii
     wget -qO- http://www.nitrc.org/frs/download.php/5906/ADHD200_parcellations.tar.gz | tar zx -C /opt
     wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot
@@ -110,8 +110,8 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-# Commitish is 3.0.4 plus relevant upgrade to dwicat
-    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout 45085556f7962f33e9d431157c0824c5cdd204ed && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
+# Commitish is 3.0.5 plus relevant changes to dwicat and -export_grad_fsl hotfix
+    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout 906730011b5e21f1449cc7d60ec145375de07479 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
     wget -q "https://osf.io/v8n5g/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
     wget -q "https://osf.io/ug2ef/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
@@ -120,3 +120,4 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 %runscript
     exec /usr/bin/python /mrtrix3_connectome.py "$@"
+
