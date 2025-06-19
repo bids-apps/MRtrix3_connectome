@@ -1,0 +1,147 @@
+---
+  name: test latest image
+  
+  on:
+    push:
+      branches: ['*']
+    schedule:
+    - cron: 0 0 1 * *
+    workflow_dispatch:
+  
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  
+  jobs:
+  
+    test_version:
+  
+      runs-on: ubuntu-latest
+  
+      steps:
+  
+      - name: pull docker image
+        run: docker pull bids/mrtrix3_connectome:latest
+  
+      - name: print help and version
+        run: |
+          docker run -t --rm --read-only \
+            -v /tmp:/tmp \
+            -v /var/tmp:/var/tmp \
+                bids/mrtrix3_connectome:latest --version
+  
+    test_preproc:
+  
+      runs-on: ubuntu-latest
+  
+      steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tree
+  
+      - name: pull docker image
+        run: docker pull bids/mrtrix3_connectome:latest
+  
+      - name: get data
+        run: |
+          mkdir -p ${HOME}/downloads
+          wget -c -O ${HOME}/downloads/preproc.tar.gz "https://osf.io/d9gx7/download"
+          mkdir -p ${HOME}/data
+          tar xf ${HOME}/downloads/preproc.tar.gz -C ${HOME}/data
+  
+      - name: prepare output dir
+        run: |
+          mkdir -p ${HOME}/outputs
+  
+      - name: Run preproc-level analysis for all subjects
+        run: |
+          docker run -t --rm --read-only \
+            -v /tmp:/tmp -v /var/tmp:/var/tmp \
+            -v ${HOME}/data/BIDS:/bids_dataset \
+            -v ${HOME}/data/outputs:/outputs \
+            -v ${HOME}/scratch:/scratch \
+              bids/mrtrix3_connectome \
+                /bids_dataset /outputs preproc --scratch /scratch
+  
+      - name: check output
+        run: tree ${HOME}/outputs
+
+    test_participant:
+  
+      runs-on: ubuntu-latest
+
+      steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tree
+
+      - name: pull docker image
+        run: docker pull bids/mrtrix3_connectome:latest
+
+      - name: get data
+        run: |
+          mkdir -p ${HOME}/downloads
+          wget -c -O ${HOME}/downloads/participant.tar.gz "https://osf.io/skc5x/download"
+          mkdir -p ${HOME}/data
+          tar xf ${HOME}/downloads/participant.tar.gz -C ${HOME}/data
+
+      - name: prepare output dir
+        run: |
+          mkdir -p ${HOME}/outputs
+
+      - name: Run preproc-level analysis for all subjects
+        run: |
+          docker run -t --rm --read-only \
+            -v /tmp:/tmp -v /var/tmp:/var/tmp \
+            -v ${HOME}/data/BIDS:/bids_dataset \
+            -v ${HOME}/data/outputs:/outputs \
+            -v ${HOME}/scratch:/scratch \
+              bids/mrtrix3_connectome \
+                /bids_dataset /outputs participant \
+                --scratch /scratch \
+                --parcellation aal \
+                --streamlines 100000 \
+                --output_verbosity 3
+
+
+      - name: check output
+        run: tree ${HOME}/outputs
+
+    test_group:
+  
+      runs-on: ubuntu-latest
+  
+      steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tree
+  
+      - name: pull docker image
+        run: docker pull bids/mrtrix3_connectome:latest
+  
+      - name: get data
+        run: |
+          mkdir -p ${HOME}/downloads
+          wget -c -O ${HOME}/downloads/group.tar.gz "https://osf.io/6s8bx/download"
+          mkdir -p ${HOME}/data
+          tar xf ${HOME}/downloads/group.tar.gz -C ${HOME}/data
+  
+      - name: prepare output dir
+        run: |
+          mkdir -p ${HOME}/outputs
+  
+      - name: Run group-level analysis
+        run: |
+          docker run -t --rm --read-only \
+            -v /tmp:/tmp -v /var/tmp:/var/tmp \
+            -v ${HOME}/data/BIDS:/bids_dataset \
+            -v ${HOME}/data/outputs:/outputs \
+            -v ${HOME}/scratch:/scratch \
+              bids/mrtrix3_connectome \
+                /bids_dataset /outputs group --scratch /scratch
+  
+      - name: check output
+        run: tree ${HOME}/outputs
