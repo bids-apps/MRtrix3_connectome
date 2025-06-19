@@ -43,7 +43,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     PYTHONPATH=/opt/mrtrix3/lib:$PYTHONPATH
     export PYTHONPATH
 # All
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/bin:/.singularity.d/libs:/usr/lib:/opt/fsl/lib:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/bin:/.singularity.d/libs:/usr/lib:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH
     PATH=/opt/mrtrix3/bin:/usr/local/cuda/bin:/usr/lib/ants:/opt/freesurfer/bin:/opt/freesurfer/mni/bin:/opt/fsl/bin:/opt/ROBEX:$PATH
     export PATH
@@ -57,7 +57,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     apt-get update && apt-get upgrade -y
 
 # Base requirements
-    apt-get update && apt-get install -y bc build-essential curl dc git libegl1-mesa-dev libopenblas-dev nano perl-modules-5.26 python python3 tar tcsh tzdata unzip wget
+    apt-get update && apt-get install -y bc build-essential curl dc git libegl1-mesa-dev libopenblas-dev nano perl-modules-5.26 python3 tar tcsh tzdata unzip wget
 
 # PPA for newer version of nodejs, which is required for bids-validator
     curl -sL https://deb.nodesource.com/setup_12.x -o nodesource_setup.sh && bash nodesource_setup.sh && rm -f nodesource_setup.sh
@@ -77,9 +77,8 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     apt-get install -y ants=2.2.0-1ubuntu1
     wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
     chmod 775 fslinstaller.py
-    python2 /fslinstaller.py -d /opt/fsl -V 6.0.4 -q
+    /fslinstaller.py -d /opt/fsl -V 6.0.6
     rm /fslinstaller.py
-    which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )
     wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | tar zx -C /opt
     npm install -gq bids-validator@1.5.3
 
@@ -89,7 +88,7 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 # Download additional data for neuroimaging software, e.g. templates / atlases
     wget -q https://object.cscs.ch/v1/AUTH_4791e0a3b3de43e2840fe46d9dc2b334/ext-d000035_AAL1Atlas_pub/Release2018_SPM12/aal_for_SPM12.zip && unzip aal_for_SPM12.zip -d /opt && rm -f aal_for_SPM12.zip
-    wget -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal2_for_SPM12.tar.gz | tar zx -C /opt
+    wget --no-check-certificate -qO- http://www.gin.cnrs.fr/wp-content/uploads/aal2_for_SPM12.tar.gz | tar zx -C /opt
     wget -q https://github.com/AlistairPerry/CCA/raw/master/parcellations/512inMNI.nii -O /opt/512inMNI.nii
     wget -qO- http://www.nitrc.org/frs/download.php/5906/ADHD200_parcellations.tar.gz | tar zx -C /opt
     wget -q "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/5528816/lh.HCPMMP1.annot" -O /opt/freesurfer/subjects/fsaverage/label/lh.HCPMMP1.annot
@@ -110,8 +109,8 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
     rm -rf /opt/CBIG-0.11.1-Wu2017_RegistrationFusion
 
 # MRtrix3 setup
-# Commitish is 3.0.3 plus relevant hotfix
-    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout d3941f44318112cf64ca1afd0f960f8f641da9e5 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
+# Commitish is 3.0.5 plus relevant changes to dwicat and -export_grad_fsl hotfix
+    git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3 && cd /opt/mrtrix3 && git checkout 906730011b5e21f1449cc7d60ec145375de07479 && python3 configure -nogui && python3 build -persistent -nopaginate && git describe --tags > /mrtrix3_version && rm -rf .git/ cmd/ core/ src/ testing/ tmp/ && cd ../../
     wget -q "https://osf.io/v8n5g/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_7N_split.txt
     wget -q "https://osf.io/ug2ef/download" -O /opt/mrtrix3/share/mrtrix3/labelconvert/Yeo2011_17N_split.txt
 
@@ -120,3 +119,4 @@ MAINTAINER Robert E. Smith <robert.smith@florey.edu.au>
 
 %runscript
     exec /usr/bin/python /mrtrix3_connectome.py "$@"
+
