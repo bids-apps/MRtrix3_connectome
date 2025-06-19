@@ -12,7 +12,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     libopenblas-dev \
     nano \
     perl-modules-5.26 \
-    python2.7 \
     python3 \
     tar \
     tcsh \
@@ -62,7 +61,7 @@ RUN apt-get install -y ants=2.2.0-1ubuntu1
 # eddy is also now included in FSL6
 RUN wget -q http://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py && \
     chmod 775 fslinstaller.py && \
-    python2 /fslinstaller.py -d /opt/fsl -V 6.0.4 -q && \
+    /fslinstaller.py -d /opt/fsl -V 6.0.6 && \
     rm -f /fslinstaller.py
 #RUN which immv || ( echo "FSLPython not properly configured; re-running" && rm -rf /opt/fsl/fslpython && /opt/fsl/etc/fslconf/fslpython_install.sh -f /opt/fsl || ( cat /tmp/fslpython*/fslpython_miniconda_installer.log && exit 1 ) )   
 RUN wget -qO- "https://www.nitrc.org/frs/download.php/5994/ROBEXv12.linux64.tar.gz//?i_agree=1&download_now=1" | \
@@ -141,9 +140,8 @@ ENV ANTSPATH=/usr/lib/ants \
     FSLMULTIFILEQUIT=TRUE \
     FSLTCLSH=/opt/fsl/bin/fsltclsh \
     FSLWISH=/opt/fsl/bin/fslwish \
-    LD_LIBRARY_PATH=/opt/fsl/lib:$LD_LIBRARY_PATH \
     PATH=/opt/mrtrix3/bin:/usr/lib/ants:/opt/freesurfer/bin:/opt/freesurfer/mni/bin:/opt/fsl/bin:/opt/ROBEX:$PATH \
-    PYTHONPATH=/opt/mrtrix3/lib:$PYTHONPATH
+    PYTHONPATH=/opt/mrtrix3/lib
 
 # MRtrix3 setup
 # Commitish is 3.0.5 plus relevant changes for dwicat and -export_grad_fsl hotfix
