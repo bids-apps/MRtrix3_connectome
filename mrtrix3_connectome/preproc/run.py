@@ -724,181 +724,30 @@ def run_preproc(bids_dir, session, shared,
     #   Combined bias field correction,
     #   intensity normalisation,
     #   and brain mask derivation
-    if shared.have_dwibiasnormmask:
-        app.console('Running simultaneous bias field correction, '
-                    'intensity normalisation, '
-                    'and DWI brain mask derivation '
-                    'via dwibiasnormmask command')
-        dwi_biasnorm_image = pathlib.Path('dwi_biasnorm.mif')
-        dwi_mask_image = pathlib.Path('dwi_mask.mif')
-        # Note that:
-        # 1. The first of these results in the synthstrip command
-        #    being utilised in the initial dwi2mask call
-        #    to derive an initial mask prior to the first iteration
-        # 2. The second of these results in the synthstrip command
-        #    being run with the ODF sum image as input
-        #    during the iterative process
-        mask_algo_options = ['-config', 'Dwi2maskAlgo', 'synthstrip',
-                             '-mask_algo', 'synthstrip'] \
-                            if shared.dwi2mask_algo == 'synthstrip' \
-                            else []
-        run.command(['dwibiasnormmask',
-                     dwi_image,
-                     dwi_biasnorm_image,
-                     dwi_mask_image]
-                    + mask_algo_options)
-        app.cleanup(dwi_image)
-        dwi_image = dwi_biasnorm_image
-
-    else: # No dwibiasnormmask available
-
-        # TODO Strongly consider removing
-
-        # Step 5.1: Generate an image containing all voxels where the
-        #   DWI contains valid data
-        dwi_validdata_image = pathlib.Path('dwi_validdata_mask.mif')
-        run.command(f'mrmath {dwi_image} max -axis 3 - | '
-                    f'mrthreshold - {dwi_validdata_image} -abs 0.0 -comparison gt')
-
-        # Determine whether we are working with single-shell or multi-shell data
-        bvalues = [
-            int(round(float(value)))
-            for value in image.mrinfo(dwi_image, 'shell_bvalues') \
-                                     .strip().split()]
-        multishell = len(bvalues) > 2
-
-        # Step 5.2: Initial DWI brain mask
-        dwi_mask_image = pathlib.Path('dwi_mask_init.mif')
-        app.console('Performing intial DWI brain masking')
-        run.command(f'dwi2mask {shared.dwi2mask_algo} {dwi_image} {dwi_mask_image}')
-
-        # Step 5.3: Combined RF estimation / CSD / mtnormalise / mask revision
-        # DWI brain masking may be inaccurate due to residual bias field.
-        #   We want to perform:
-        #     - Response function estimation;
-        #     - Multi-tissue CSD (with a lower lmax for speed);
-        #     - Mtnormalise to remove any bias field;
-        #     - Re-calculation of brain mask;
-        #   in an iterative fashion, as all steps may influence the others.
-        class Tissue(object): #pylint: disable=useless-object-inheritance
-            def __init__(self, name, index):
-                self.name = name
-                iter_string = f'_iter{index}'
-                self.rf = pathlib.Path(f'response_{name}{iter_string}.txt')
-                self.fod_init = pathlib.Path(f'FODinit_{name}{iter_string}.mif')
-                self.fod_norm = pathlib.Path(f'FODnorm_{name}{iter_string}.mif')
-
-        app.console('Commencing iterative DWI bias field correction '
-                    'and brain masking')
-        iteration = 0
-        step = 'initialisation'
-        dice_coefficient = 0.0
-        def msg():
-            return f'Iteration {iteration}; ' \
-                   f'{step} step; ' \
-                   f'previous Dice coefficient {dice_coefficient}'
-        progress = app.ProgressBar(msg)
-        dwi_input_image = dwi_image
-        for iteration in range(0, DWIBIASNORMMASK_MAX_ITERS):
-            iter_string = f'_iter{iteration+1}'
-
-            tissues = [Tissue('WM', iteration),
-                       Tissue('GM', iteration),
-                       Tissue('CSF', iteration)]
-
-            step = 'dwi2response'
-            progress.increment()
-            run.command(['dwi2response', 'dhollander', dwi_input_image,
-                         '-mask', dwi_mask_image]
-                        + [tissue.rf for tissue in tissues])
-
-            # Remove GM if we can't deal with it
-            lmaxes = '4,0,0'
-            if not multishell:
-                app.cleanup(tissues[1].rf)
-                tissues = tissues[::2]
-                lmaxes = '4,0'
-
-            step = 'dwi2fod'
-            progress.increment()
-            run.command(f'dwi2fod msmt_csd {dwi_input_image} '
-                        f'-lmax {lmaxes} '
-                        + ' '.join(f'{tissue.rf} {tissue.fod_init}'
-                                   for tissue in tissues))
-
-            step = 'mtnormalise'
-            progress.increment()
-            field_path = pathlib.Path(f'field{iter_string}.mif')
-            factors_path = pathlib.Path(f'factors{iter_string}.txt')
-            run.command(f'maskfilter {dwi_mask_image} erode - | '
-                        'mtnormalise -mask - -balanced '
-                        f'-check_norm {field_path} '
-                        f'-check_factors {factors_path} '
-                        + ' '.join(f'{tissue.fod_init} {tissue.fod_norm}'
-                                   for tissue in tissues))
-            app.cleanup([tissue.fod_init for tissue in tissues])
-
-            # Apply both estimated bias field, and appropiate
-            #   scaling factor, to DWIs
-            step = 'mrcalc_dwi'
-            progress.increment()
-            csf_rf = matrix.load_matrix(tissues[-1].rf)
-            csf_rf_bzero_lzero = csf_rf[0][0]
-            app.cleanup([tissue.rf for tissue in tissues])
-            balance_factors = matrix.load_vector(factors_path)
-            csf_balance_factor = balance_factors[-1]
-            app.cleanup(factors_path)
-            scale_multiplier = (1000.0 * math.sqrt(4.0*math.pi)) / \
-                               (csf_rf_bzero_lzero / csf_balance_factor)
-            new_dwi_image = pathlib.Path(f'dwi{iter_string}.mif')
-            run.command(f'mrcalc {dwi_image} {field_path} -div '
-                        f'{scale_multiplier} -mult {new_dwi_image}')
-            app.cleanup(field_path)
-            app.cleanup(dwi_image)
-            dwi_image = new_dwi_image
-
-            step = 'dwi2mask'
-            progress.increment()
-            new_dwi_mask_image = pathlib.Path(f'dwi_mask{iter_string}.mif')
-            run.command(f'mrconvert {tissues[0].fod_norm} -coord 3 0 - | '
-                        f'mrmath - {" ".join(tissue.fod_norm for tissue in tissues[1:])}  sum - | '
-                        f'mrthreshold - -abs {TISSUESUM_THRESHOLD} - | '
-                        'maskfilter - connect -largest - | '
-                        'mrcalc 1 - -sub - -datatype bit | '
-                        'maskfilter - connect -largest - | '
-                        'mrcalc 1 - -sub - -datatype bit | '
-                        'maskfilter - clean - | '
-                        f'mrcalc - {dwi_validdata_image} -mult {new_dwi_mask_image}  -datatype bit')
-            app.cleanup([tissue.fod_norm for tissue in tissues])
-
-            # Compare input and output masks
-            step = 'mrcalc_mask'
-            progress.increment()
-            dwi_old_mask_count = image.statistics(dwi_mask_image,
-                                                  mask=dwi_mask_image).count
-            dwi_new_mask_count = image.statistics(new_dwi_mask_image,
-                                                  mask=new_dwi_mask_image).count
-            app.debug(f'Old mask: {dwi_old_mask_count}')
-            app.debug(f'New mask: {dwi_new_mask_count}')
-            dwi_mask_overlap_image = pathlib.Path(f'dwi_mask_overlap{iter_string}.mif')
-            run.command(['mrcalc',
-                         dwi_mask_image,
-                         new_dwi_mask_image,
-                         '-mult',
-                         dwi_mask_overlap_image])
-            app.cleanup(dwi_mask_image)
-            dwi_mask_image = new_dwi_mask_image
-            mask_overlap_count = image.statistics(dwi_mask_overlap_image,
-                                                  mask=dwi_mask_overlap_image).count
-            app.debug(f'Mask overlap: {mask_overlap_count}')
-            dice_coefficient = 2.0 * mask_overlap_count / \
-                               (dwi_old_mask_count + dwi_new_mask_count)
-            app.debug(f'Dice coefficient: {dice_coefficient}')
-            if dice_coefficient > (1.0 - 1e-3):
-                app.debug('Exiting iterative loop due to mask convergence')
-                break
-        progress.done()
-        app.cleanup(dwi_validdata_image)
+    app.console('Running simultaneous bias field correction, '
+                'intensity normalisation, '
+                'and DWI brain mask derivation '
+                'via dwibiasnormmask command')
+    dwi_biasnorm_image = pathlib.Path('dwi_biasnorm.mif')
+    dwi_mask_image = pathlib.Path('dwi_mask.mif')
+    # Note that:
+    # 1. The first of these results in the synthstrip command
+    #    being utilised in the initial dwi2mask call
+    #    to derive an initial mask prior to the first iteration
+    # 2. The second of these results in the synthstrip command
+    #    being run with the ODF sum image as input
+    #    during the iterative process
+    mask_algo_options = ['-config', 'Dwi2maskAlgo', 'synthstrip',
+                         '-mask_algo', 'synthstrip'] \
+                        if shared.dwi2mask_algo == 'synthstrip' \
+                        else []
+    run.command(['dwibiasnormmask',
+                 dwi_image,
+                 dwi_biasnorm_image,
+                 dwi_mask_image]
+                + mask_algo_options)
+    app.cleanup(dwi_image)
+    dwi_image = dwi_biasnorm_image
 
     # Step 6: Crop images to reduce storage space
     #   (but leave some padding on the sides)

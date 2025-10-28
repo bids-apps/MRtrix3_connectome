@@ -90,8 +90,3 @@ class Shared(object): #pylint: disable=useless-object-inheritance
             self.dwi2mask_algo = 'legacy'
             app.warn('FreeSurfer command mri_synthstrip not present;'
                      ' legacy dwi2mask algorithm will be used')
-
-        self.have_dwibiasnormmask = bool(shutil.which('dwibiasnormmask'))
-        if not self.have_dwibiasnormmask:
-            app.warn('MRtrix3 command dwibiasnormmask not present; '
-                     'process will be completed using manual code')
