@@ -575,19 +575,13 @@ def run_preproc(bids_dir, session, shared,
     mporder = 1 + int(math.ceil(num_slices/(mb_factor*4)))
     app.debug(f'MPorder: {mporder}')
 
-    # With Cima-X single-refocus data, cubic first-level model is required;
-    #   for homogeneity of processing, activate regardless of scanner model
-    # TODO This may no longer be required after a scanner update;
-    #   seek clarification from Siemens RE whether this can be determined from input data
-    eddy_options = ['--flm=cubic']
+    eddy_options = ['--flm=cubic'] if shared.eddy_cubicflm else []
     if shared.eddy_repol:
         eddy_options.append('--repol')
     if shared.eddy_mporder and have_slice_timing:
         eddy_options.append('--mporder=' + str(mporder))
-    # Disabled: is only necessary for cohorts with very large motion,
-    #    and significantly increases execution time
-    #if shared.eddy_mbs:
-    #    eddy_options.append('--estimate_move_by_susceptibility')
+    if shared.eddy_mbs:
+       eddy_options.append('--estimate_move_by_susceptibility')
     #
     # High b-value monopolar data still has eddy current distortions
     #   in b=0 images
@@ -602,6 +596,7 @@ def run_preproc(bids_dir, session, shared,
     #   Exception thrown
     # - eddy: msg=ECScanManager::set_slice_to_vol_reference:
     #   ref index out of bounds
+    # TODO Investigate whether this is still the case
     #if monopolar:
     #    eddy_options.append('--b0_flm=linear')
 

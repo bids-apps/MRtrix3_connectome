@@ -7,8 +7,12 @@ from mrtrix3 import run
 from ..anat.shared import Shared as T1wShared
 
 class Shared(object): #pylint: disable=useless-object-inheritance
-    def __init__(self, gdc_dir):
+    def __init__(self, gdc_dir, concat_denoise, eddy_cubicflm, eddy_mbs):
         self.gdc_dir = gdc_dir
+        self.concat_denoise = concat_denoise
+        self.eddy_cubicflm = eddy_cubicflm
+        self.eddy_mbs = eddy_mbs
+
         self.gdc_images = {}
         if self.gdc_dir is not None:
             gdc_dir_images = self.gdc_dir.glob('*.*')

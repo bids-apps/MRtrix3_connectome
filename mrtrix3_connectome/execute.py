@@ -76,7 +76,10 @@ def execute(): #pylint: disable=unused-variable
 
     if app.ARGS.analysis_level == 'preproc':
 
-        preproc_shared = PreprocShared(app.ARGS.gdc)
+        preproc_shared = PreprocShared(app.ARGS.gdc,
+                                       app.ARGS.concat_denoise,
+                                       app.ARGS.eddy_cubicflm,
+                                       app.ARGS.eddy_mbs)
 
         for session_to_process in sessions_to_analyze:
             app.console(f'Commencing execution for session: {"_".join(session_to_process)}')
@@ -84,7 +87,6 @@ def execute(): #pylint: disable=unused-variable
                         session_to_process,
                         preproc_shared,
                         app.ARGS.t1w_preproc,
-                        app.ARGS.concat_denoise,
                         app.ARGS.output_verbosity,
                         output_app_path)
 

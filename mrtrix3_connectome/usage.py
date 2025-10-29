@@ -244,6 +244,20 @@ def usage(cmdline): #pylint: disable=unused-variable
              'one prefers concatenation of those files into a single series '
              'before vs. after denoising '
              '(not guaranteed to be used depending on data)')
+    preproc_options.add_argument(
+        f'{OPTION_PREFIX}eddy_cubicflm',
+        action='store_true',
+        help='Specify that FSL eddy needs to be invoked'
+             ' with a cubic rather than default quadratic first-level eddy current model;'
+             ' this can be deemed necessary for specific datasets'
+             ' based on knowledge of the datasets beyond what is encoded in BIDS metadata')
+    preproc_options.add_argument(
+        f'{OPTION_PREFIX}eddy_mbs',
+        action='store_true',
+        help='Specify that FSL eddy should have the "movement-by-susceptibility" capability activated;'
+             ' this estimates changes in the susceptibility field that result from subject motion,'
+             ' which can improve pre-processing in non-conformant cohorts'
+             ' but comes at considerable computational expense')
 
     preproc_participant_options = \
         cmdline.add_argument_group(
