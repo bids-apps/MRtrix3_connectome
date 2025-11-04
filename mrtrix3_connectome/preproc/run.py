@@ -25,8 +25,7 @@ OUT_DWI_JSON_DATA = {'SkullStripped': False}
 # TODO Further split code across multiple files
 
 def run_preproc(bids_dir, session, shared,
-                t1w_preproc_path, concat_denoise,
-                output_verbosity, output_app_dir):
+                t1w_preproc_path, output_verbosity, output_app_dir):
 
     session_label = '_'.join(session)
     output_subdir = pathlib.Path(output_app_dir, 'MRtrix3_connectome-preproc', *session)
@@ -360,7 +359,7 @@ def run_preproc(bids_dir, session, shared,
                  'to the input DWI data')
     else:
 
-        if concat_denoise == 'before' and len(dwi_image_list) > 1:
+        if shared.concat_denoise == 'before' and len(dwi_image_list) > 1:
             # TODO We need to determine first whether these images can be trivially concatenated:
             #   if execution of dwicat would result in resampling,
             #   and that would then preclude the application of denoising / Gibbs ringing removal,
