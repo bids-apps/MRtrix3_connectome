@@ -183,6 +183,9 @@ def get_t1w_preproc_images(import_path,
         #   it's just the mask that is absent
         if preproc_image_path:
 
+            if t1w_shared.synthstrip_cmd:
+                app.console(f'Using SynthStrip for brain extraction for session {session_label}, '
+                            'operating on existing pre-processed T1-weighted image')
             if t1w_shared.robex_cmd:
                 app.console(f'Using ROBEX for brain extraction for session {session_label}, '
                             'operating on existing pre-processed T1-weighted image')
@@ -198,9 +201,18 @@ def get_t1w_preproc_images(import_path,
             run.command(['mrconvert',
                         preproc_image_path,
                         'T1w.nii',
-                        '-strides', '+1,+2,+3' if t1w_shared.robex_cmd else '-1,+2,+3'])
+                        '-strides',
+                        '+1,+2,+3' \
+                            if t1w_shared.synthstrip_cmd or t1w_shared.robex_cmd \
+                            else '-1,+2,+3'])
 
-            if t1w_shared.robex_cmd:
+            if t1w_shared.synthstrip_cmd:
+                run.command(f'{t1w_shared.synthstrip_cmd} -i T1w.nii -m T1w_mask.nii')
+                run.command(['mrconvert',
+                             'T1w_mask.nii',
+                             'T1w_mask.mif',
+                             '-datatype', 'bit'])
+            elif t1w_shared.robex_cmd:
                 run.command(f'{t1w_shared.robex_cmd} T1w.nii T1w_brain.nii T1w_mask.nii')
                 run.command(['mrconvert',
                              'T1w_mask.nii',
@@ -258,20 +270,18 @@ def get_t1w_preproc_images(import_path,
                          'will not apply this correction')
                 gdc_to_be_applied = False
 
-            if t1w_shared.robex_cmd and t1w_shared.n4_cmd:
+            if (t1w_shared.synthstrip_cmd or t1w_shared.robex_cmd) and t1w_shared.n4_cmd:
                 app.console('No pre-processed T1-weighted image '
                             f'found for session {session_label}; '
-                            'will use ROBEX and N4 for '
-                            'iterative brain extraction and bias field '
+                            f'will use {"SynthStrip" if t1w_shared.synthstrip_cmd else "ROBEX"} '
+                            'and N4 for iterative brain extraction and bias field '
                             'correction from raw T1-weighted image input')
             elif t1w_shared.fsl_anat_cmd:
                 app.console('No pre-processed T1-weighted image '
                             f'found for session {session_label}; '
                             'will use fsl_anat for brain extraction and '
-                            'bias field correction from raw T1-weighted '
-                            'image input'
-                            f'{"" if t1w_shared.robex_cmd else " (ROBEX not installed)"}'
-                            f'{"" if t1w_shared.n4_cmd else " (N4 not installed)"}')
+                            'bias field correction from raw T1-weighted image input'
+                            '(other softwares not installed)"')
             else:
                 # TODO Make this acceptable in preproc-level analysis with adequate warning
                 return
@@ -291,39 +301,50 @@ def get_t1w_preproc_images(import_path,
                 run.command(['mrconvert', raw_image_path, 'T1w_raw.nii',
                              '-strides', '+1,+2,+3'])
 
-            if t1w_shared.robex_cmd and t1w_shared.n4_cmd:
+            if (t1w_shared.synthstrip_cmd or t1w_shared.robex_cmd) and t1w_shared.n4_cmd:
 
                 # Do a semi-iterative approach here:
                 #   Get an initial brain mask, use that mask to estimate a
                 #   bias field, then re-compute the brain mask
                 # TODO Consider making this fully iterative, just like the
                 #   approach in preproc with dwi2mask and mtnormalise
-                run.command([t1w_shared.robex_cmd,
-                            'T1w_raw.nii',
-                            'T1w_initial_brain.nii',
-                            'T1w_initial_mask.nii'])
-                app.cleanup('T1w_initial_brain.nii')
+                if t1w_shared.synthstrip_cmd:
+                    run.command([t1w_shared.synthstrip_cmd,
+                                 '-i', 'T1w_raw.nii',
+                                 '-m', 'T1w_initial_mask.nii'])
+                else:
+                    run.command([t1w_shared.robex_cmd,
+                                'T1w_raw.nii',
+                                'T1w_initial_brain.nii',
+                                'T1w_initial_mask.nii'])
+                    app.cleanup('T1w_initial_brain.nii')
                 run.command([t1w_shared.n4_cmd,
                              '-i', 'T1w_raw.nii',
                              '-w', 'T1w_initial_mask.nii',
                              '-o', 'T1w_biascorr.nii'])
                 app.cleanup('T1w_initial_mask.nii')
-                run.command([t1w_shared.robex_cmd,
-                            'T1w_biascorr.nii',
-                            'T1w_biascorr_brain.nii',
-                            'T1w_biascorr_brain_mask.nii'])
-                app.cleanup('T1w_biascorr_brain.nii')
+                if t1w_shared.synthstrip_cmd:
+                    run.command([t1w_shared.synthstrip_cmd,
+                                 '-i', 'T1w_biascorr.nii',
+                                 '-m', 'T1w_biascorr_mask.nii'])
+                else:
+                    run.command([t1w_shared.robex_cmd,
+                                'T1w_biascorr.nii',
+                                'T1w_biascorr_brain.nii',
+                                'T1w_biascorr_mask.nii'])
+                    app.cleanup('T1w_biascorr_brain.nii')
                 run.command(['mrconvert',
                              'T1w_biascorr.nii',
                              'T1w.mif'])
                 app.cleanup('T1w_biascorr.nii')
                 run.command(['mrconvert',
-                             'T1w_biascorr_brain_mask.nii',
+                             'T1w_biascorr_mask.nii',
                              'T1w_mask.mif',
                              '-datatype', 'bit'])
-                app.cleanup('T1w_biascorr_brain_mask.nii')
+                app.cleanup('T1w_biascorr_mask.nii')
 
-            elif t1w_shared.fsl_anat_cmd:
+            else:
+                assert t1w_shared.fsl_anat_cmd
 
                 run.command(f'{t1w_shared.fsl_anat_cmd} -i T1w_raw.nii --noseg --nosubcortseg')
                 run.command(['mrconvert',
@@ -336,6 +357,3 @@ def get_t1w_preproc_images(import_path,
                              'T1w_mask.mif',
                              '-datatype', 'bit'])
                 app.cleanup('T1w_raw.anat')
-
-            else:
-                assert False
