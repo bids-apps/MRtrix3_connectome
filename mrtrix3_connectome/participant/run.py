@@ -577,40 +577,42 @@ def run_participant(bids_dir, session, shared,
             # Use ANTs SyN for registration to template
             # From Klein and Avants, Frontiers in Neuroinformatics 2013:
             ants_prefix = 'template_to_t1_'
-            run.command(['antsRegistration',
-                         '--dimensionality', '3',
-                         '--output', ants_prefix,
-                         '--use-histogram-matching', '1',
-                         '--initial-moving-transform',
-                         f'[{t1w_histmatched_path},{shared.template_image_path},1]',
-                         '--transform', 'Rigid[0.1]',
-                         '--metric',
-                         f'MI[{t1w_histmatched_path},{shared.template_image_path},1,32,Regular,0.25]',
-                         '--convergence', '1000x500x250x100',
-                         '--smoothing-sigmas', '3x2x1x0',
-                         '--shrink-factors', '8x4x2x1',
-                         '--transform', 'Affine[0.1]',
-                         '--metric',
-                         f'MI[{t1w_histmatched_path},{shared.template_image_path},1,32,Regular,0.25]',
-                         '--convergence', '1000x500x250x100',
-                         '--smoothing-sigmas', '3x2x1x0',
-                         '--shrink-factors', '8x4x2x1',
-                         '--transform', 'BSplineSyN[0.1,26,0,3]',
-                         '--metric',
-                         f'CC[{t1w_histmatched_path},{shared.template_image_path},1,4]',
-                         '--convergence', '100x70x50x20',
-                         '--smoothing-sigmas', '3x2x1x0',
-                         '--shrink-factors', '6x4x2x1'])
+            run.command([
+                'antsRegistration',
+                '--dimensionality', '3',
+                '--output', ants_prefix,
+                '--use-histogram-matching', '1',
+                '--initial-moving-transform',
+                f'[{t1w_histmatched_path},{shared.template_image_path},1]',
+                '--transform', 'Rigid[0.1]',
+                '--metric',
+                f'MI[{t1w_histmatched_path},{shared.template_image_path},1,32,Regular,0.25]',
+                '--convergence', '1000x500x250x100',
+                '--smoothing-sigmas', '3x2x1x0',
+                '--shrink-factors', '8x4x2x1',
+                '--transform', 'Affine[0.1]',
+                '--metric',
+                f'MI[{t1w_histmatched_path},{shared.template_image_path},1,32,Regular,0.25]',
+                '--convergence', '1000x500x250x100',
+                '--smoothing-sigmas', '3x2x1x0',
+                '--shrink-factors', '8x4x2x1',
+                '--transform', 'BSplineSyN[0.1,26,0,3]',
+                '--metric',
+                f'CC[{t1w_histmatched_path},{shared.template_image_path},1,4]',
+                '--convergence', '100x70x50x20',
+                '--smoothing-sigmas', '3x2x1x0',
+                '--shrink-factors', '6x4x2x1'])
             transformed_atlas_path = 'atlas_transformed.nii'
-            run.command(['antsApplyTransforms',
-                         '--dimensionality', '3',
-                         '--input', shared.parc_image_path,
-                         '--reference-image', t1w_histmatched_path,
-                         '--output', transformed_atlas_path,
-                         '--n', 'GenericLabel',
-                         '--transform', f'{ants_prefix}1Warp.nii.gz',
-                         '--transform', f'{ants_prefix}0GenericAffine.mat',
-                         '--default-value', '0'])
+            run.command([
+                'antsApplyTransforms',
+                '--dimensionality', '3',
+                '--input', shared.parc_image_path,
+                '--reference-image', t1w_histmatched_path,
+                '--output', transformed_atlas_path,
+                '--n', 'GenericLabel',
+                '--transform', f'{ants_prefix}1Warp.nii.gz',
+                '--transform', f'{ants_prefix}0GenericAffine.mat',
+                '--default-value', '0'])
             app.cleanup(glob.glob(f'{ants_prefix}*'))
 
         elif shared.template_registration_software == 'fsl':
@@ -655,14 +657,15 @@ def run_participant(bids_dir, session, shared,
                 run.command(f'maskfilter {shared.template_mask_path} dilate {fnirt_ref_mask_path}'
                             ' -npass 3')
 
-            run.command([shared.fnirt_cmd,
-                         f'--config={shared.fnirt_config_basename}',
-                         f'--ref={fnirt_ref_path}',
-                         f'--in={fnirt_in_path}',
-                         '--aff=T1w_to_template.mat',
-                         f'--refmask={fnirt_ref_mask_path}',
-                         f'--inmask={fnirt_in_mask_path}',
-                         '--cout=T1w_to_template_warpcoef.nii'])
+            run.command([
+                shared.fnirt_cmd,
+                f'--config={shared.fnirt_config_basename}',
+                f'--ref={fnirt_ref_path}',
+                f'--in={fnirt_in_path}',
+                '--aff=T1w_to_template.mat',
+                f'--refmask={fnirt_ref_mask_path}',
+                f'--inmask={fnirt_in_mask_path}',
+                '--cout=T1w_to_template_warpcoef.nii'])
             app.cleanup(fnirt_in_mask_path)
             if not t1w_is_premasked:
                 app.cleanup(fnirt_ref_mask_path)
@@ -672,19 +675,21 @@ def run_participant(bids_dir, session, shared,
 
             # Use result of registration to transform atlas
             #   parcellation to subject space
-            run.command([shared.invwarp_cmd,
-                         f'--ref={t1w_histmatched_path}',
-                         f'--warp={fnirt_warp_subject2template_path}',
-                         '--out=template_to_T1w_warpcoef.nii'])
+            run.command([
+                shared.invwarp_cmd,
+                f'--ref={t1w_histmatched_path}',
+                f'--warp={fnirt_warp_subject2template_path}',
+                '--out=template_to_T1w_warpcoef.nii'])
             app.cleanup(fnirt_warp_subject2template_path)
             fnirt_warp_template2subject_path = \
                 fsl.find_image('template_to_T1w_warpcoef')
-            run.command([shared.applywarp_cmd,
-                         f'--ref={t1w_histmatched_path}',
-                         f'--in={shared.parc_image_path}',
-                         f'--warp={fnirt_warp_template2subject_path}',
-                         '--out=atlas_transformed.nii',
-                         '--interp=nn'])
+            run.command([
+                shared.applywarp_cmd,
+                f'--ref={t1w_histmatched_path}',
+                f'--in={shared.parc_image_path}',
+                f'--warp={fnirt_warp_template2subject_path}',
+                '--out=atlas_transformed.nii',
+                '--interp=nn'])
             app.cleanup(fnirt_warp_template2subject_path)
             transformed_atlas_path = fsl.find_image('atlas_transformed')
 

@@ -7,7 +7,6 @@ import shutil
 from mrtrix3 import MRtrixError
 from mrtrix3 import app
 from mrtrix3 import image
-from mrtrix3 import matrix
 from mrtrix3 import run
 from ..anat.get import get_t1w_preproc_images
 
@@ -221,18 +220,21 @@ def run_preproc(bids_dir, session, shared,
             elif json_data['ManufacturersModelName'] != scanner_name:
                 raise MRtrixError('Inconsistent "ManufacturersModelName" value in input DWI data')
         elif scanner_name is not None:
-            raise MRtrixError('Inconsistent appearance of "ManufacturersModelName" in input DWI data')
+            raise MRtrixError('Inconsistent appearance of "ManufacturersModelName"'
+                              ' in input DWI data')
         else:
             gdc_to_be_applied = False
 
 
     if gdc_already_applied:
-        app.warn('Gradient non-linearity distortion correction already applied to input DWI data; '
-                 'some pre-processing steps will need to be omitted accordingly')
+        app.warn('Gradient non-linearity distortion correction already applied to input DWI data;'
+                 ' some pre-processing steps will need to be omitted accordingly')
         gdc_to_be_applied = False
     if gdc_to_be_applied:
-        app.console(f'Scanner model "{scanner_name}" matches file "{shared.gdc_images[scanner_name]}",'
-                    ' and no prior application of gradient non-linearity distortion correction indicated in image metadata;'
+        app.console(f'Scanner model "{scanner_name}"'
+                    f' matches file "{shared.gdc_images[scanner_name]}",'
+                    ' and no prior application of gradient non-linearity distortion correction'
+                    ' indicated in image metadata;'
                     ' correction to be applied after dwifslpreproc')
 
     dwi_image_list = [pathlib.Path(f'dwi{index}.mif') for index in range(1, dwi_index+1)]
@@ -360,7 +362,7 @@ def run_preproc(bids_dir, session, shared,
     else:
 
         if shared.concat_denoise == 'before' and len(dwi_image_list) > 1:
-            # TODO We need to determine first whether these images can be trivially concatenated:
+            # We need to determine first whether these images can be trivially concatenated:
             #   if execution of dwicat would result in resampling,
             #   and that would then preclude the application of denoising / Gibbs ringing removal,
             #   then we should override this and do the concatenation after these steps
@@ -480,7 +482,8 @@ def run_preproc(bids_dir, session, shared,
                          'performing explicit interpolation')
                 fmap_resampled_image_list = []
                 for item in fmap_transformed_image_list:
-                    fmap_resampled_image_path = pathlib.Path(f'{item.with_suffix("")}_resampled.mif')
+                    fmap_resampled_image_path = \
+                        pathlib.Path(f'{item.with_suffix("")}_resampled.mif')
                     run.command(['mrtransform',
                                  item,
                                  '-template', dwifslpreproc_input,
@@ -580,7 +583,7 @@ def run_preproc(bids_dir, session, shared,
     if shared.eddy_mporder and have_slice_timing:
         eddy_options.append('--mporder=' + str(mporder))
     if shared.eddy_mbs:
-       eddy_options.append('--estimate_move_by_susceptibility')
+        eddy_options.append('--estimate_move_by_susceptibility')
     #
     # High b-value monopolar data still has eddy current distortions
     #   in b=0 images

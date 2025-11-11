@@ -254,7 +254,8 @@ def usage(cmdline): #pylint: disable=unused-variable
     preproc_options.add_argument(
         f'{OPTION_PREFIX}eddy_mbs',
         action='store_true',
-        help='Specify that FSL eddy should have the "movement-by-susceptibility" capability activated;'
+        help='Specify that FSL eddy should have'
+             ' the "movement-by-susceptibility" capability activated;'
              ' this estimates changes in the susceptibility field that result from subject motion,'
              ' which can improve pre-processing in non-conformant cohorts'
              ' but comes at considerable computational expense')

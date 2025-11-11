@@ -39,7 +39,7 @@ def get_t1w_preproc_images(import_path,
         if t1w_preproc.is_file():
             preproc_image_path = t1w_preproc
         else:
-            expected_image_basename = session_label + '*_T1w.nii*'
+            expected_image_basename = f'{session_label}*_T1w.nii*'
             for candidate in [
                     pathlib.Path(''),
                     pathlib.Path('anat'),
@@ -135,8 +135,8 @@ def get_t1w_preproc_images(import_path,
                      'T1w_premasked.mif' if preproc_image_is_masked else 'T1w.mif'])
 
         # If we have been provided with a pre-processed T1-weighted image
-        #   (regardless of where it has come from), check to see if there
-        #   is a corresponding mask image
+        #   (regardless of where it has come from),
+        #   check to see if there is a corresponding mask image
         preproc_mask_path = preproc_image_path.parent / \
                             preproc_image_path.name \
                             .replace('_desc-preproc', '_desc-brain') \
@@ -220,7 +220,7 @@ def get_t1w_preproc_images(import_path,
         #   do everything based on the raw T1-weighted image
         else:
 
-            # TODO If we're doing pre-processing of the T1w from scratch,
+            # If we're doing pre-processing of the T1w from scratch,
             #   check to see if GDC has already been applied to the raw data,
             #   and if not, whether we have the right warp field available;
             #   if we do, then we'll perform GDC before anything else
@@ -275,12 +275,10 @@ def get_t1w_preproc_images(import_path,
             else:
                 # TODO Make this acceptable in preproc-level analysis with adequate warning
                 return
-                #raise MRtrixError('Cannot complete processing for session '
-                #                  + session_label
-                #                  + ': no pre-processed T1-weighted image '
-                #                  + 'available, and software tools for '
-                #                  + 'processing raw T1-weighted image '
-                #                  + 'not installed')
+                #raise MRtrixError(f'Cannot complete processing for session {session_label}:'
+                #                  'no pre-processed T1-weighted image available,'
+                #                  ' and software tools for processing raw T1-weighted image'
+                #                  ' not installed')
 
             if gdc_to_be_applied:
                 run.command(['mrtransform', raw_image_path, 'T1w_raw.nii',
