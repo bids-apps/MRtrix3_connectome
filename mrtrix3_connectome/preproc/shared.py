@@ -7,11 +7,10 @@ from mrtrix3 import run
 from ..anat.shared import Shared as T1wShared
 
 class Shared(object): #pylint: disable=useless-object-inheritance
-    def __init__(self, gdc_dir, concat_denoise, eddy_cubicflm, eddy_mbs):
+    def __init__(self, gdc_dir, concat_denoise, eddy_cubicflm, want_eddy_mbs):
         self.gdc_dir = gdc_dir
         self.concat_denoise = concat_denoise
         self.eddy_cubicflm = eddy_cubicflm
-        self.eddy_mbs = eddy_mbs
 
         self.gdc_images = {}
         if self.gdc_dir is not None:
@@ -72,7 +71,7 @@ class Shared(object): #pylint: disable=useless-object-inheritance
 
         self.eddy_repol = False
         self.eddy_mporder = False
-        self.eddy_mbs = False
+        eddy_has_mbs = False
         for line in eddy_help.splitlines():
             line = line.lstrip()
             if line.startswith('--repol'):
@@ -80,7 +79,15 @@ class Shared(object): #pylint: disable=useless-object-inheritance
             elif line.startswith('--mporder') and self.eddy_cuda:
                 self.eddy_mporder = True
             elif line.startswith('--estimate_move_by_susceptibility'):
+                eddy_has_mbs = True
+        if want_eddy_mbs:
+            if eddy_has_mbs:
                 self.eddy_mbs = True
+            else:
+                app.warn("eddy movement-by-susceptibility requested,"
+                         " but not available in installed version of eddy")
+        else:
+            self.eddy_mbs = False
 
         self.dwibiascorrect_algo = 'ants'
         if not self.t1w_shared.n4_cmd:
