@@ -392,21 +392,8 @@ def run_preproc(bids_dir, session, shared,
         dwi_image_list = [pathlib.Path(f'{entry.with_suffix("")}_denoised.mif') \
                           for entry in dwi_image_list]
 
-        # If data are complex, take the magnitude
-        new_dwi_image_list = []
-        for entry in dwi_image_list:
-            if image.Header(entry).datatype().startswith('CFloat'):
-                mag_entry = pathlib.Path(f'{entry.with_suffix("")}_mag.mif')
-                run.command(f'mrcalc {entry} -abs {mag_entry}')
-                app.cleanup(entry)
-                new_dwi_image_list.append(mag_entry)
-            else:
-                new_dwi_image_list.append(entry)
-        dwi_image_list = new_dwi_image_list
-
         # Step 2: Gibbs ringing removal
-        # TODO Can newer implementations use complex data
-        #   for 2D Gibbs ringing removal?
+        # Note: Will run on complex data if available
         app.console('Performing Gibbs ringing removal for DWI'
                     f'{" and fmap" if fmap_image_list else ""} data')
         for i in dwi_image_list:
@@ -421,6 +408,18 @@ def run_preproc(bids_dir, session, shared,
             app.cleanup(i)
         fmap_image_list = [pathlib.Path(f'{i.with_suffix("")}_degibbs.mif') \
                            for i in fmap_image_list]
+
+        # If DWI data are complex, take the magnitude
+        new_dwi_image_list = []
+        for entry in dwi_image_list:
+            if image.Header(entry).datatype().startswith('CFloat'):
+                mag_entry = pathlib.Path(f'{entry.with_suffix("")}_mag.mif')
+                run.command(f'mrcalc {entry} -abs {mag_entry}')
+                app.cleanup(entry)
+                new_dwi_image_list.append(mag_entry)
+            else:
+                new_dwi_image_list.append(entry)
+        dwi_image_list = new_dwi_image_list
 
     # We need to concatenate the DWI and fmap/ data (separately)
     #   before they can be fed into dwifslpreproc
