@@ -209,9 +209,13 @@ def get_t1w_preproc_images(import_path,
             elif t1w_shared.fsl_anat_cmd:
                 run.command(f'{t1w_shared.fsl_anat_cmd} -i T1w.nii'
                             ' --noseg --nosubcortseg --nobias')
-                run.command(['mrconvert',
+                run.command(['mrgrid',
                              fsl.find_image(pathlib.PurePath('T1w.anat', 'T1_brain_mask')),
+                             'regrid',
                              'T1w_mask.mif',
+                             '-interp', 'nearest',
+                             '-template', 'T1w.nii',
+                             '-fill', '0',
                              '-datatype', 'bit'])
             else:
                 assert False
