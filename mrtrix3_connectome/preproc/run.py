@@ -84,7 +84,7 @@ def run_preproc(bids_dir, session, shared,
             assert complex_part in ['mag', 'phase']
             if complex_part == 'mag':
                 # Find corresponding phase image
-                in_phase_image = entry.replace('_part-mag_', '_part-phase_')
+                in_phase_image = entry.parent / entry.name.replace('_part-mag_', '_part-phase_')
                 if in_phase_image not in in_dwi_image_list:
                     raise MRtrixError(
                         f'Image {entry} does not have corresponding phase image')
@@ -118,10 +118,10 @@ def run_preproc(bids_dir, session, shared,
 
             else:
                 # Make sure we also have the corresponding magnitude image
-                if entry.replace('_part-phase_',
-                                 '_part-mag_') not in in_dwi_image_list:
+                if not any(item == entry.parent / entry.name.replace('_part-phase_', '_part-mag_') \
+                           for item in in_dwi_image_list):
                     raise MRtrixError(
-                        f'Image {entry} does not have corresponding mag image')
+                        f'Phase image {entry} does not have corresponding magnitude image')
                 # Do nothing for the second image in the pair
                 continue
         else:
