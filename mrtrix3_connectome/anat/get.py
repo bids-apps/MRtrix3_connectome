@@ -51,9 +51,7 @@ def get_t1w_preproc_images(import_path,
                     if len(glob_result) == 1:
                         preproc_image_path = glob_result[0]
                         break
-                    glob_refined_result = \
-                        [item for item in glob_result \
-                            if not '_space-' in item]
+                    glob_refined_result = list(filter(lambda x: '_space-' not in x.name, glob_result))
                     if len(glob_refined_result) == 1:
                         preproc_image_path = glob_refined_result[0]
                         break
@@ -62,7 +60,7 @@ def get_t1w_preproc_images(import_path,
                         'pre-processed T1-weighted image '
                         'due to multiple candidates '
                         f'in location "{t1w_preproc / candidate}": '
-                        f'{";".join(glob_result)}')
+                        f'{";".join(map(str, glob_result))}')
 
             if preproc_image_path is None:
                 raise MRtrixError(
@@ -189,7 +187,7 @@ def get_t1w_preproc_images(import_path,
             if t1w_shared.robex_cmd:
                 app.console(f'Using ROBEX for brain extraction for session {session_label}, '
                             'operating on existing pre-processed T1-weighted image')
-            elif t1w_shared.fsl_anat_path:
+            elif t1w_shared.fsl_anat_cmd:
                 app.console(f'Using fsl_anat for brain extraction for session {session_label} '
                             '(due to ROBEX not being installed), '
                             'operating on existing pre-processed T1-weighted image')
@@ -222,7 +220,7 @@ def get_t1w_preproc_images(import_path,
                 run.command(f'{t1w_shared.fsl_anat_cmd} -i T1w.nii'
                             ' --noseg --nosubcortseg --nobias')
                 run.command(['mrgrid',
-                             fsl.find_image(pathlib.PurePath('T1w.anat', 'T1_brain_mask')),
+                             fsl.find_image(pathlib.PurePath('T1w.anat', 'T1_biascorr_brain_mask')),
                              'regrid',
                              'T1w_mask.mif',
                              '-interp', 'nearest',
