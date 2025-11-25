@@ -153,10 +153,10 @@ RUN apt-get install -y \
 # Committish is tip of MRtrix3 #3029 as at 2025-10-21
 RUN git clone https://github.com/MRtrix3/mrtrix3.git . && \
     git checkout 26965d57b374a733ac0c583d3b92bad17923128a
-# Main tip as at 2025-10-21
+# Main tip as at 2025-11-25
 RUN git clone https://github.com/Lestropie/dwidenoise2.git dwidenoise2 && \
     cd dwidenoise2 && \
-    git checkout 37c9b70cf7e1c67ac846311ddd0df925424797f5 && \
+    git checkout a2da5b32876256499a383a52494ca6564009ca85 && \
     cd ../ && \
     cp -r dwidenoise2/cpp .
 # Since external project compilation may not yet be working on 3.1.0,
