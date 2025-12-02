@@ -88,9 +88,11 @@ def get_t1w_preproc_images(import_path,
     if preproc_image_path:
 
         if '_desc-preproc' not in preproc_image_path.name:
-            raise MRtrixError(
+            app.warn(
                 f'Selected T1-weighted image "{preproc_image_path}" '
-                'not flagged as pre-processed')
+                'not explicitly flagged as pre-processed in file name; '
+                'but proceeding on presumption that it is '
+                '(ie. no GDC or bias field correction will be applied)')
 
         # Check to see if there's a JSON file along with the T1-weighted
         #   image; if they is, parse it to find out whether or not the
