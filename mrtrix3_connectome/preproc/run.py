@@ -553,34 +553,53 @@ def run_preproc(bids_dir, session, shared,
     dwifslpreproc_input_header = image.Header(dwifslpreproc_input)
     have_slice_timing = 'SliceTiming' in dwifslpreproc_input_header.keyval()
     app.debug(f'Have slice timing: {have_slice_timing}')
-    mb_factor = int(dwifslpreproc_input_header.keyval()
-                    .get('MultibandAccelerationFactor', '1'))
-    app.debug(f'Multiband factor: {mb_factor}')
-    if 'SliceDirection' in dwifslpreproc_input_header.keyval():
-        slice_direction_code = \
-            dwifslpreproc_input_header.keyval()['SliceDirection']
-        if 'i' in slice_direction_code:
-            num_slices = dwifslpreproc_input_header.size()[0]
-        elif 'j' in slice_direction_code:
-            num_slices = dwifslpreproc_input_header.size()[1]
-        elif 'k' in slice_direction_code:
+    mporder = None
+    if have_slice_timing:
+        # If "MultibandAccelerationFactor" is defined,
+        #   use that and the number of slices to compute an appropriate MPorder;
+        #   otherwise, use the number of slice groups
+        #   (as inferred by the contents of SliceTiming)
+        #   to perform the same computation
+        try:
+            slice_direction_code = \
+                dwifslpreproc_input_header.keyval()['SliceDirection']
+            if 'i' in slice_direction_code:
+                num_slices = dwifslpreproc_input_header.size()[0]
+            elif 'j' in slice_direction_code:
+                num_slices = dwifslpreproc_input_header.size()[1]
+            elif 'k' in slice_direction_code:
+                num_slices = dwifslpreproc_input_header.size()[2]
+            else:
+                num_slices = dwifslpreproc_input_header.size()[2]
+                app.warn('Error in contents of BIDS field "SliceDirection" '
+                        f'(value: "{slice_direction_code}"); '
+                        'assuming third axis')
+        except KeyError:
             num_slices = dwifslpreproc_input_header.size()[2]
-        else:
-            num_slices = dwifslpreproc_input_header.size()[2]
-            app.warn('Error reading BIDS field "SliceDirection" '
-                     f'(value: "{slice_direction_code}"); '
-                     'assuming third axis')
-    else:
-        num_slices = dwifslpreproc_input_header.size()[2]
-    app.debug(f'Number of slices: {num_slices}')
-    mporder = 1 + int(math.ceil(num_slices/(mb_factor*4)))
-    app.debug(f'MPorder: {mporder}')
+        app.debug(f'Number of slices: {num_slices}')
+        try:
+            mb_factor = int(dwifslpreproc_input_header.keyval()['MultibandAccelerationFactor'])
+            app.debug(f'Multi-band acceleration factor (from header metadata): {mb_factor}')
+            mporder = 1 + int(math.ceil(num_slices/(mb_factor*4.0)))
+        except KeyError:
+            num_slice_groups = len(set(dwifslpreproc_input_header.keyval()["SliceTiming"]))
+            app.debug(f'Number of slice groups (from SliceTiming): {num_slice_groups}')
+            mb_factor = num_slices / num_slice_groups
+            if mb_factor * num_slice_groups == num_slices:
+                app.debug(f'Inferred multiband acceleration factor: {mb_factor}')
+            else:
+                app.warn('Potential issues in SliceTiming:'
+                         f' found {num_slice_groups} unique slice timings'
+                         f' in content of SliceTiming,'
+                         f' which is incompatible with {num_slices} slices')
+            mporder = 1 + int(math.ceil(num_slice_groups/4.0))
+        app.debug(f'MPorder: {mporder}')
 
     eddy_options = ['--flm=cubic'] if shared.eddy_cubicflm else []
     if shared.eddy_repol:
         eddy_options.append('--repol')
-    if shared.eddy_mporder and have_slice_timing:
-        eddy_options.append('--mporder=' + str(mporder))
+    if shared.eddy_mporder and mporder is not None:
+        eddy_options.append(f'--mporder={mporder}')
     if shared.eddy_mbs:
         eddy_options.append('--estimate_move_by_susceptibility')
     #
