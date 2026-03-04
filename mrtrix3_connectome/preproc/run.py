@@ -387,9 +387,9 @@ def run_preproc(bids_dir, session, shared,
         for entry in dwi_image_list:
             run.command([shared.dwidenoise_cmd,
                          entry,
-                         f'{entry.with_suffix("")}_denoised.mif'])
+                         f'{entry.stem}_denoised.mif'])
             app.cleanup(entry)
-        dwi_image_list = [pathlib.Path(f'{entry.with_suffix("")}_denoised.mif') \
+        dwi_image_list = [pathlib.Path(f'{entry.stem}_denoised.mif') \
                           for entry in dwi_image_list]
 
         # Step 2: Gibbs ringing removal
@@ -397,23 +397,23 @@ def run_preproc(bids_dir, session, shared,
         app.console('Performing Gibbs ringing removal for DWI'
                     f'{" and fmap" if fmap_image_list else ""} data')
         for i in dwi_image_list:
-            run.command(f'mrdegibbs {i} {i.with_suffix("")}_degibbs.mif'
+            run.command(f'mrdegibbs {i} {i.stem}_degibbs.mif'
                         ' -nshifts 50')
             app.cleanup(i)
-        dwi_image_list = [pathlib.Path(f'{i.with_suffix("")}_degibbs.mif') \
+        dwi_image_list = [pathlib.Path(f'{i.stem}_degibbs.mif') \
                           for i in dwi_image_list]
         for i in fmap_image_list:
-            run.command(f'mrdegibbs {i} {i.with_suffix("")}_degibbs.mif'
+            run.command(f'mrdegibbs {i} {i.stem}_degibbs.mif'
                         ' -nshifts 50')
             app.cleanup(i)
-        fmap_image_list = [pathlib.Path(f'{i.with_suffix("")}_degibbs.mif') \
+        fmap_image_list = [pathlib.Path(f'{i.stem}_degibbs.mif') \
                            for i in fmap_image_list]
 
         # If DWI data are complex, take the magnitude
         new_dwi_image_list = []
         for entry in dwi_image_list:
             if image.Header(entry).datatype().startswith('CFloat'):
-                mag_entry = pathlib.Path(f'{entry.with_suffix("")}_mag.mif')
+                mag_entry = pathlib.Path(f'{entry.stem}_mag.mif')
                 run.command(f'mrcalc {entry} -abs {mag_entry}')
                 app.cleanup(entry)
                 new_dwi_image_list.append(mag_entry)
@@ -446,9 +446,9 @@ def run_preproc(bids_dir, session, shared,
 
         fmap_transformed_image_list = []
         for item in fmap_image_list:
-            affine_transform_filepath = pathlib.Path(f'{item.with_suffix("")}2dwi_affine.txt')
-            rigid_transform_filepath = pathlib.Path(f'{item.with_suffix("")}2dwi_rigid.txt')
-            fmap_transformed_filepath = pathlib.Path(f'{item.with_suffix("")}_transformed.mif')
+            affine_transform_filepath = pathlib.Path(f'{item.stem}2dwi_affine.txt')
+            rigid_transform_filepath = pathlib.Path(f'{item.stem}2dwi_rigid.txt')
+            fmap_transformed_filepath = pathlib.Path(f'{item.stem}_transformed.mif')
             run.command(['transformcalc',
                          item,
                          dwifslpreproc_input,
@@ -482,7 +482,7 @@ def run_preproc(bids_dir, session, shared,
                 fmap_resampled_image_list = []
                 for item in fmap_transformed_image_list:
                     fmap_resampled_image_path = \
-                        pathlib.Path(f'{item.with_suffix("")}_resampled.mif')
+                        pathlib.Path(f'{item.stem}_resampled.mif')
                     run.command(['mrtransform',
                                  item,
                                  '-template', dwifslpreproc_input,
@@ -520,7 +520,7 @@ def run_preproc(bids_dir, session, shared,
                         raise MRtrixError('First DWI volume is not b=0; '
                                           'cannot utilise b=0 volumes '
                                           'prior to DWI volumes only')
-                    bzero_image = pathlib.Path(f'{dwi_image.with_suffix("")}_bzero.mif')
+                    bzero_image = pathlib.Path(f'{dwi_image.stem}_bzero.mif')
                     run.command(['mrconvert',
                                  dwi_image,
                                  bzero_image,
@@ -644,7 +644,7 @@ def run_preproc(bids_dir, session, shared,
     dwifslpreproc_output = pathlib.Path(
                                'dwifslpreproc_out.mif' \
                                if dwifslpreproc_input == 'dwifslpreproc_in.mif' \
-                               else (f'{dwifslpreproc_input.with_suffix("")}_preproc.mif'))
+                               else (f'{dwifslpreproc_input.stem}_preproc.mif'))
 
     eddy_olnstd_value = 4.0 # The internal eddy default
     eddy_olnstd_option = []
@@ -724,7 +724,7 @@ def run_preproc(bids_dir, session, shared,
         assert scanner_name is not None
         assert scanner_name in shared.gdc_images
         app.console('Applying gradient non-linearity distortion correction')
-        dwi_gdc_image = pathlib.Path('dwi_gdc.mif')
+        dwi_gdc_image = pathlib.Path(f'{dwi_image.stem}_gdc.mif')
         run.command(['mrtransform', dwifslpreproc_output, dwi_gdc_image,
                     '-template', dwifslpreproc_output,
                     '-warp', shared.gdc_images[scanner_name],
@@ -743,7 +743,7 @@ def run_preproc(bids_dir, session, shared,
                 'intensity normalisation, '
                 'and DWI brain mask derivation '
                 'via dwibiasnormmask command')
-    dwi_biasnorm_image = pathlib.Path('dwi_biasnorm.mif')
+    dwi_biasnorm_image = pathlib.Path(f'{dwi_image.stem}_biasnorm.mif')
     dwi_mask_image = pathlib.Path('dwi_mask.mif')
     # Note that:
     # 1. The first of these results in the synthstrip command
@@ -766,8 +766,8 @@ def run_preproc(bids_dir, session, shared,
 
     # Step 6: Crop images to reduce storage space
     #   (but leave some padding on the sides)
-    dwi_cropped_image = pathlib.Path('dwi_crop.mif')
-    dwi_cropped_mask_image = pathlib.Path('mask_crop.mif')
+    dwi_cropped_image = pathlib.Path(f'{dwi_image.stem}_crop.mif')
+    dwi_cropped_mask_image = pathlib.Path('dwi_mask_crop.mif')
     run.command(f'mrgrid {dwi_image} crop {dwi_cropped_image} '
                 f'-mask {dwi_mask_image} -uniform -3')
     app.cleanup(dwi_image)
@@ -779,24 +779,44 @@ def run_preproc(bids_dir, session, shared,
 
     # Step 7: DWI->T1 registration
     if t1w_image:
-
-        # Step 7.1: Generate target images for T1w->DWI registration
         app.console('Generating contrast-matched images for '
                     'inter-modal registration between DWIs and T1w')
+
+        # Step 7.1: Use eroded masks for both DWI and T1w images:
+        #   in both cases, voxels at the periphery of the brain
+        #   are typically hypointense,
+        #   leading to a hyper-intense ring around the periphery of the mask
+        #   once the contrast inversion is applied
+        dwi_mask_eroded_image = f'{dwi_mask_image.stem}_eroded.mif'
+        run.command(f'maskfilter {dwi_mask_image} erode {dwi_mask_eroded_image}')
+        run.command('maskfilter T1w_mask.mif erode T1w_mask_eroded.mif')
+
+        # Step 7.2: Generate target images for T1w->DWI registration
         run.command(f'dwiextract {dwi_image} -bzero - | '
                     'mrcalc - 0.0 -max - | '
                     'mrmath - mean -axis 3 dwi_meanbzero.mif')
-        run.command(f'mrcalc 1 dwi_meanbzero.mif -div {dwi_mask_image} -mult - | '
+        # Reworked contrast inversion
+        # Rather than a reciprocal as in the INVERSE publication,
+        #   which can behave badly in the presence of negatives / zeroes / small positive values
+        #   (which can be introduced even in the T1w due to GDC)
+        #   instead do a linear transform so that the minimum value maps to 1.0
+        #   and the maximum value maps to 0.0;
+        #   any non-linear distribution of intensities within that range
+        #   is best dealt with by the histogram matching algorithm
+        dwi_meanbzero_stats = image.statistics('dwi_meanbzero.mif', mask=dwi_mask_eroded_image)
+        t1w_stats = image.statistics(t1w_image, mask='T1w_mask_eroded.mif')
+        run.command(f'mrcalc {dwi_meanbzero_stats.max} dwi_meanbzero.mif -sub '
+                    f'{dwi_meanbzero_stats.max - dwi_meanbzero_stats.min} -div - | '
                     f'mrhistmatch nonlinear - {t1w_image} dwi_pseudoT1w.mif '
-                    f'-mask_input {dwi_mask_image} '
-                    '-mask_target T1w_mask.mif')
-        run.command(f'mrcalc 1 {t1w_image} -div '
-                    f'{"" if t1w_is_premasked else "T1w_mask.mif -mult "}- | '
+                    f'-mask_input {dwi_mask_eroded_image} '
+                    '-mask_target T1w_mask_eroded.mif')
+        run.command(f'mrcalc {t1w_stats.max} {t1w_image} -sub '
+                    f'{t1w_stats.max - t1w_stats.min} -div - | '
                     'mrhistmatch nonlinear - dwi_meanbzero.mif T1w_pseudobzero.mif '
-                    '-mask_input T1w_mask.mif '
-                    f'-mask_target {dwi_mask_image}')
+                    '-mask_input T1w_mask_eroded.mif '
+                    f'-mask_target {dwi_mask_eroded_image}')
 
-        # Step 7.2: Perform DWI->T1w registration
+        # Step 7.3: Perform DWI->T1w *registration*
         #   Note that two registrations are performed:
         #   Even though we have a symmetric registration, generation of the
         #   two histogram-matched images means that you will get slightly
@@ -807,17 +827,19 @@ def run_preproc(bids_dir, session, shared,
         transform_b0_pb0 = pathlib.Path('rigid_bzero_to_pseudobzero.txt')
         run.command(f'mrregister dwi_pseudoT1w.mif {t1w_image}'
                     ' -type rigid'
-                    f' -mask1 {dwi_mask_image}'
-                    ' -mask2 T1w_mask.mif'
+                    f' -mask1 {dwi_mask_eroded_image}'
+                    ' -mask2 T1w_mask_eroded.mif'
                     f' -rigid {transform_pt1w_t1w}')
         run.command('mrregister dwi_meanbzero.mif T1w_pseudobzero.mif'
                     ' -type rigid'
-                    f' -mask1 {dwi_mask_image}'
-                    ' -mask2 T1w_mask.mif'
+                    f' -mask1 {dwi_mask_eroded_image}'
+                    ' -mask2 T1w_mask_eroded.mif'
                     f' -rigid {transform_b0_pb0}')
         app.cleanup('dwi_meanbzero.mif')
+        app.cleanup('T1w_mask_eroded.mif')
+        app.cleanup(dwi_mask_eroded_image)
 
-        # Step 7.3: Perform DWI->T1w transformation
+        # Step 7.4: Perform DWI->T1w *transformation*
         # In this scenario, we're going to transform the DWI data to the T1w
         #   rather than the other way around, since the T1w is more likely to
         #   be used as a common reference across multiple analysis pipelines,
@@ -830,8 +852,8 @@ def run_preproc(bids_dir, session, shared,
                      transform_average])
         app.cleanup(transform_pt1w_t1w)
         app.cleanup(transform_b0_pb0)
-        transformed_dwi_image = pathlib.Path(f'{dwi_image.with_suffix("")}_transform.mif')
-        transformed_dwi_mask_image = pathlib.Path(f'{dwi_mask_image.with_suffix("")}_transform.mif')
+        transformed_dwi_image = pathlib.Path(f'{dwi_image.stem}_transformed.mif')
+        transformed_dwi_mask_image = pathlib.Path(f'{dwi_mask_image.stem}_transformed.mif')
         run.command(['mrtransform',
                      dwi_image,
                      transformed_dwi_image,
