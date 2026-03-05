@@ -724,7 +724,7 @@ def run_preproc(bids_dir, session, shared,
         assert scanner_name is not None
         assert scanner_name in shared.gdc_images
         app.console('Applying gradient non-linearity distortion correction')
-        dwi_gdc_image = pathlib.Path(f'{dwi_image.stem}_gdc.mif')
+        dwi_gdc_image = pathlib.Path(f'{dwifslpreproc_output.stem}_gdc.mif')
         run.command(['mrtransform', dwifslpreproc_output, dwi_gdc_image,
                     '-template', dwifslpreproc_output,
                     '-warp', shared.gdc_images[scanner_name],
