@@ -16,12 +16,14 @@ class Shared(object): #pylint: disable=useless-object-inheritance
         if self.gdc_dir is not None:
             gdc_dir_images = self.gdc_dir.glob('*.*')
             for item in gdc_dir_images:
-                scanner_name = item.name.split('.')[0]
+                scanner_name = item
+                while scanner_name.suffix in ('.gz', '.mif', '.nii'):
+                    scanner_name = scanner_name.with_suffix('')
                 if scanner_name in self.gdc_images:
                     raise MRtrixError(
                         f'Duplicate images for scanner "{scanner_name}" '
                         f'in GDC directory {self.gdc_dir}')
-                self.gdc_images[item.name.split('.')[0]] = item
+                self.gdc_images[scanner_name] = item
             app.debug(f'{len(self.gdc_images)} gradient non-linearity warp '
                       f'field images found in directory {self.gdc_dir}:'
                       f'{self.gdc_images}')
